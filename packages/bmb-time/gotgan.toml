@@ -1,0 +1,9 @@
+[package]
+name = "bmb-time"
+version = "0.1.0"
+description = "Time and duration utilities for BMB"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

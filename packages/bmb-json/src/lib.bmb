@@ -1,0 +1,134 @@
+-- bmb-json: JSON parsing and serialization for BMB
+-- Provides JSON value representation and parsing utilities
+
+-- JSON value types as integer codes
+fn json_null() -> i64 = 0;
+fn json_bool() -> i64 = 1;
+fn json_number() -> i64 = 2;
+fn json_string() -> i64 = 3;
+fn json_array() -> i64 = 4;
+fn json_object() -> i64 = 5;
+
+-- Character constants
+fn char_quote() -> i64 = 34;     -- "
+fn char_colon() -> i64 = 58;     -- :
+fn char_comma() -> i64 = 44;     -- ,
+fn char_lbrace() -> i64 = 123;   -- {
+fn char_rbrace() -> i64 = 125;   -- }
+fn char_lbracket() -> i64 = 91;  -- [
+fn char_rbracket() -> i64 = 93;  -- ]
+fn char_backslash() -> i64 = 92; -- \
+
+-- Whitespace checking
+fn is_json_ws(c: i64) -> bool =
+    c == 32 or c == 9 or c == 10 or c == 13;
+
+-- Skip whitespace in JSON string
+fn skip_json_ws(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else if is_json_ws(s.char_at(pos)) then skip_json_ws(s, pos + 1)
+    else pos;
+
+-- Check if character is digit
+fn is_json_digit(c: i64) -> bool = c >= 48 and c <= 57;
+
+-- Parse JSON number (integer only for simplicity)
+fn parse_number_iter(s: String, pos: i64, acc: i64, neg: bool) -> i64 =
+    if pos >= s.len() then acc
+    else let c = s.char_at(pos);
+    if is_json_digit(c) then parse_number_iter(s, pos + 1, acc * 10 + (c - 48), neg)
+    else acc;
+
+fn parse_number(s: String, pos: i64) -> i64 =
+    let p = skip_json_ws(s, pos);
+    if p >= s.len() then 0
+    else let c = s.char_at(p);
+    if c == 45 then 0 - parse_number_iter(s, p + 1, 0, true)
+    else parse_number_iter(s, p, 0, false);
+
+-- Find end of number
+fn find_number_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else let c = s.char_at(pos);
+    if is_json_digit(c) or c == 45 or c == 46 or c == 101 or c == 69
+    then find_number_end(s, pos + 1)
+    else pos;
+
+-- Find end of string (after opening quote)
+fn find_string_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() then pos
+    else let c = s.char_at(pos);
+    if c == char_quote() then pos
+    else if c == char_backslash() then find_string_end(s, pos + 2)
+    else find_string_end(s, pos + 1);
+
+-- Detect JSON value type at position
+fn detect_type(s: String, pos: i64) -> i64 =
+    let p = skip_json_ws(s, pos);
+    if p >= s.len() then json_null()
+    else let c = s.char_at(p);
+    if c == char_lbrace() then json_object()
+    else if c == char_lbracket() then json_array()
+    else if c == char_quote() then json_string()
+    else if c == 116 or c == 102 then json_bool()  -- t(rue) or f(alse)
+    else if c == 110 then json_null()  -- n(ull)
+    else if is_json_digit(c) or c == 45 then json_number()
+    else json_null();
+
+-- Count array elements (simplified - assumes well-formed JSON)
+fn count_array_elements_iter(s: String, pos: i64, depth: i64, count: i64) -> i64 =
+    if pos >= s.len() then count
+    else let c = s.char_at(pos);
+    if c == char_rbracket() and depth == 0 then count
+    else if c == char_lbracket() or c == char_lbrace()
+         then count_array_elements_iter(s, pos + 1, depth + 1, count)
+    else if c == char_rbracket() or c == char_rbrace()
+         then count_array_elements_iter(s, pos + 1, depth - 1, count)
+    else if c == char_comma() and depth == 0
+         then count_array_elements_iter(s, pos + 1, depth, count + 1)
+    else count_array_elements_iter(s, pos + 1, depth, count);
+
+fn count_array_elements(s: String, pos: i64) -> i64 =
+    let p = skip_json_ws(s, pos);
+    if p >= s.len() then 0
+    else if s.char_at(p) != char_lbracket() then 0
+    else let p2 = skip_json_ws(s, p + 1);
+    if p2 >= s.len() then 0
+    else if s.char_at(p2) == char_rbracket() then 0
+    else count_array_elements_iter(s, p2, 0, 1);
+
+-- JSON output helpers
+fn print_json_null() -> i64 = {
+    let u0 = print_string("null");
+    0
+};
+
+fn print_json_bool(value: bool) -> i64 = {
+    let u0 = if value then print_string("true") else print_string("false");
+    0
+};
+
+fn print_json_number(value: i64) -> i64 = {
+    let u0 = print_i64(value);
+    0
+};
+
+fn print_json_string(value: String) -> i64 = {
+    let u0 = print_string("\"");
+    let u1 = print_string(value);
+    let u2 = print_string("\"");
+    0
+};
+
+-- Pretty print with indentation
+fn print_indent(level: i64) -> i64 =
+    if level <= 0 then 0
+    else {
+        let u0 = print_string("  ");
+        print_indent(level - 1)
+    };
+
+-- Validate JSON syntax (simplified)
+fn is_valid_json(s: String) -> bool =
+    let t = detect_type(s, 0);
+    t != json_null() or (s.len() >= 4 and s.slice(0, 4) == "null");

@@ -1,0 +1,9 @@
+[package]
+name = "bmb-fmt"
+version = "0.1.0"
+description = "String formatting utilities for BMB"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

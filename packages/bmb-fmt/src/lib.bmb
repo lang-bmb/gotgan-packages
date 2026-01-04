@@ -1,0 +1,115 @@
+-- bmb-fmt: String formatting utilities for BMB
+-- Provides number formatting and text manipulation
+
+-- Digit to character (0-9)
+fn digit_char(d: i64) -> i64
+  pre d >= 0 and d <= 9
+  post ret >= 48 and ret <= 57
+= d + 48;
+
+-- Count digits in a number
+fn count_digits_iter(n: i64, count: i64) -> i64 =
+    if n < 10 then count + 1
+    else count_digits_iter(n / 10, count + 1);
+
+fn count_digits(n: i64) -> i64
+  pre n >= 0
+  post ret >= 1
+= count_digits_iter(n, 0);
+
+-- Get nth digit from right (0-indexed)
+fn get_digit(n: i64, pos: i64) -> i64
+  pre n >= 0 and pos >= 0
+  post ret >= 0 and ret <= 9
+= let shifted = n / pow_simple(10, pos);
+  shifted - (shifted / 10) * 10;
+
+-- Simple power for formatting
+fn pow_simple_iter(base: i64, exp: i64, acc: i64) -> i64 =
+    if exp <= 0 then acc
+    else pow_simple_iter(base, exp - 1, acc * base);
+
+fn pow_simple(base: i64, exp: i64) -> i64
+  pre exp >= 0
+= pow_simple_iter(base, exp, 1);
+
+-- Format integer with padding
+fn pad_left_count(n: i64, width: i64) -> i64 =
+    let digits = count_digits(n);
+    if width > digits then width - digits else 0;
+
+-- Print padding spaces
+fn print_spaces(count: i64) -> i64 =
+    if count <= 0 then 0
+    else {
+        let u0 = print_string(" ");
+        print_spaces(count - 1)
+    };
+
+-- Format with minimum width (right-aligned)
+fn print_padded(n: i64, width: i64) -> i64 = {
+    let padding = pad_left_count(n, width);
+    let u0 = print_spaces(padding);
+    let u1 = print_i64(n);
+    0
+};
+
+-- Format with leading zeros
+fn print_zero_padded_iter(n: i64, remaining_zeros: i64) -> i64 =
+    if remaining_zeros <= 0 then print_i64(n)
+    else {
+        let u0 = print_string("0");
+        print_zero_padded_iter(n, remaining_zeros - 1)
+    };
+
+fn print_zero_padded(n: i64, width: i64) -> i64 = {
+    let digits = count_digits(n);
+    let zeros_needed = if width > digits then width - digits else 0;
+    print_zero_padded_iter(n, zeros_needed)
+};
+
+-- Format as hexadecimal (simplified, 0-15 only)
+fn hex_digit(d: i64) -> String
+  pre d >= 0 and d <= 15
+= if d < 10 then "0123456789".slice(d, 1)
+  else if d == 10 then "a"
+  else if d == 11 then "b"
+  else if d == 12 then "c"
+  else if d == 13 then "d"
+  else if d == 14 then "e"
+  else "f";
+
+-- Format as binary (limited precision)
+fn print_binary_iter(n: i64, pos: i64) -> i64 =
+    if pos < 0 then 0
+    else {
+        let bit = (n / pow_simple(2, pos)) - (n / pow_simple(2, pos + 1)) * 2;
+        let u0 = print_i64(bit);
+        print_binary_iter(n, pos - 1)
+    };
+
+fn print_binary(n: i64, bits: i64) -> i64
+  pre bits > 0 and bits <= 32
+= print_binary_iter(n, bits - 1);
+
+-- Format thousands separator (conceptual)
+fn format_with_separator(n: i64, group_size: i64) -> i64
+  pre group_size > 0
+= let digits = count_digits(n);
+  let groups = (digits - 1) / group_size;
+  digits + groups;  -- returns formatted length
+
+-- Percentage formatting
+fn format_percent(numerator: i64, denominator: i64) -> i64
+  pre denominator > 0
+= (numerator * 100) / denominator;
+
+-- Print percentage
+fn print_percent(numerator: i64, denominator: i64) -> i64
+  pre denominator > 0
+= {
+    let pct = format_percent(numerator, denominator);
+    let u0 = print_i64(pct);
+    let u1 = print_string("%");
+    pct
+};

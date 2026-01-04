@@ -1,0 +1,9 @@
+[package]
+name = "bmb-math"
+version = "0.1.0"
+description = "Mathematical functions and constants for BMB"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]
