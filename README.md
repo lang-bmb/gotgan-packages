@@ -129,6 +129,14 @@ Packages follow [Semantic Versioning](https://semver.org/):
 - `1.0.0+`: Stable API, breaking changes increment major
 - Use `bmb-semver` package for version operations
 
+## Development Roadmap
+
+See [MODULE_ROADMAP.md](MODULE_ROADMAP.md) for the comprehensive development plan including:
+- Package-to-benchmark mapping
+- Feature gap analysis (f64, collections, etc.)
+- Phased development timeline
+- API specifications for planned enhancements
+
 ## Relationship to gotgan
 
 These packages are extracted from or designed to support [gotgan](https://github.com/lang-bmb/gotgan) (the BMB package manager). Core gotgan functionality like semver parsing, TOML handling, and archive management becomes reusable packages here.
