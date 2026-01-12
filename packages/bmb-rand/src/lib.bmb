@@ -1,62 +1,60 @@
--- bmb-rand: Pseudo-random number generation for BMB
--- Implements Linear Congruential Generator (LCG)
+// bmb-rand: Pseudo-random number generation for BMB
+// Implements Linear Congruential Generator (LCG)
 
--- LCG parameters (same as glibc)
+// LCG parameters (same as glibc)
 fn lcg_a() -> i64 = 1103515245;
 fn lcg_c() -> i64 = 12345;
-fn lcg_m() -> i64 = 2147483648;  -- 2^31
+fn lcg_m() -> i64 = 2147483648;  // 2^31
 
--- Generate next random state
+// Generate next random state
 fn next_state(state: i64) -> i64
   post ret >= 0
 = let raw = state * lcg_a() + lcg_c();
-  let result = if raw < 0 then 0 - raw else raw;
+  let result = if raw < 0 { 0 - raw } else { raw };
   result - (result / lcg_m()) * lcg_m();
 
--- Get random value in range [0, max)
+// Get random value in range [0, max)
 fn rand_range(state: i64, max_val: i64) -> i64
   pre max_val > 0
   post ret >= 0 and ret < max_val
 = state - (state / max_val) * max_val;
 
--- Generate random boolean
+// Generate random boolean
 fn rand_bool(state: i64) -> bool =
     rand_range(state, 2) == 1;
 
--- Shuffle helper: swap conceptually by returning new positions
+// Shuffle helper: swap conceptually by returning new positions
 fn should_swap(state: i64, i: i64, n: i64) -> bool =
     let j = rand_range(next_state(state), n - i);
     j > 0;
 
--- Simple hash function for seed generation
+// Simple hash function for seed generation
 fn hash_seed(x: i64) -> i64 =
     let h1 = x * 2654435761;
-    let h2 = if h1 < 0 then 0 - h1 else h1;
+    let h2 = if h1 < 0 { 0 - h1 } else { h1 };
     h2 - (h2 / lcg_m()) * lcg_m();
 
--- XorShift parameters for alternative RNG
+// XorShift parameters for alternative RNG
 fn xorshift_next(state: i64) -> i64 =
     let x1 = state;
-    let x2 = x1 * 2;  -- simplified xor with left shift
-    let x3 = x2 / 8;  -- simplified xor with right shift
-    let x4 = x3 * 16; -- simplified xor with left shift
-    if x4 < 0 then 0 - x4 else x4;
+    let x2 = x1 * 2;  // simplified xor with left shift
+    let x3 = x2 / 8;  // simplified xor with right shift
+    let x4 = x3 * 16; // simplified xor with left shift
+    if x4 < 0 { 0 - x4 } else { x4 };
 
--- Multiple iterations for better randomness
+// Multiple iterations for better randomness
 fn rand_n(state: i64, n: i64) -> i64 =
-    if n <= 0 then state
-    else rand_n(next_state(state), n - 1);
+    if n <= 0 { state } else { rand_n(next_state(state), n - 1) };
 
--- Generate random value in range [min, max]
+// Generate random value in range [min, max]
 fn rand_between(state: i64, min_val: i64, max_val: i64) -> i64
   pre min_val <= max_val
   post ret >= min_val and ret <= max_val
 = min_val + rand_range(state, max_val - min_val + 1);
 
--- Test entropy by checking distribution
+// Test entropy by checking distribution
 fn test_distribution(state: i64, samples: i64, bucket: i64) -> i64 =
-    if samples <= 0 then bucket
-    else let new_state = next_state(state);
+    if samples <= 0 { bucket } else { let new_state = next_state(state) };
          let val = rand_range(new_state, 10);
-         let new_bucket = if val < 5 then bucket + 1 else bucket;
+         let new_bucket = if val < 5 { bucket + 1 } else { bucket };
          test_distribution(new_state, samples - 1, new_bucket);
