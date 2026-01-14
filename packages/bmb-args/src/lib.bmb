@@ -1,0 +1,157 @@
+// bmb-args: Command-line argument parsing for BMB
+// Provides utilities for parsing command-line arguments
+
+// ============================================================================
+// Basic Argument Access
+// ============================================================================
+
+// Get the number of command-line arguments (including program name)
+fn argc() -> i64
+  post ret >= 0
+= arg_count();
+
+// Get argument at index (0 = program name, 1+ = user args)
+fn argv(idx: i64) -> String
+  pre idx >= 0 and idx < arg_count()
+= get_arg(idx);
+
+// Get program name (argv[0])
+fn program_name() -> String = get_arg(0);
+
+// Check if an argument exists at given index
+fn has_arg(idx: i64) -> bool
+  pre idx >= 0
+= idx < arg_count();
+
+// ============================================================================
+// Simple Argument Parsing
+// ============================================================================
+
+// Check if a flag exists (e.g., "-v", "--verbose")
+fn has_flag_at(flag: String, idx: i64) -> bool =
+    if idx >= arg_count() { false }
+    else if get_arg(idx) == flag { true }
+    else { has_flag_at(flag, idx + 1) };
+
+fn has_flag(flag: String) -> bool = has_flag_at(flag, 1);
+
+// Find index of a flag, returns -1 if not found
+fn find_flag_at(flag: String, idx: i64) -> i64 =
+    if idx >= arg_count() { 0 - 1 }
+    else if get_arg(idx) == flag { idx }
+    else { find_flag_at(flag, idx + 1) };
+
+fn find_flag(flag: String) -> i64 = find_flag_at(flag, 1);
+
+// Get value after a flag (e.g., "--file input.txt" returns "input.txt")
+fn get_flag_value(flag: String) -> String =
+    let idx = find_flag(flag);
+    if idx < 0 { "" }
+    else if idx + 1 >= arg_count() { "" }
+    else { get_arg(idx + 1) };
+
+// Check if flag has a value following it
+fn flag_has_value(flag: String) -> bool =
+    let idx = find_flag(flag);
+    if idx < 0 { false }
+    else { idx + 1 < arg_count() };
+
+// ============================================================================
+// Positional Arguments (non-flag arguments)
+// ============================================================================
+
+// Check if argument is a flag (starts with -)
+fn is_flag_arg(arg: String) -> bool =
+    if arg.len() == 0 { false }
+    else { arg.byte_at(0) == 45 };
+
+// Count positional arguments (arguments not starting with -)
+fn count_positional_rec(idx: i64, count: i64) -> i64 =
+    if idx >= arg_count() { count }
+    else {
+        let arg = get_arg(idx);
+        let new_count = if is_flag_arg(arg) { count } else { count + 1 };
+        count_positional_rec(idx + 1, new_count)
+    };
+
+fn count_positional() -> i64 = count_positional_rec(1, 0);
+
+// Get nth positional argument (0-indexed, skips flags)
+fn get_positional_rec(n: i64, idx: i64, current: i64) -> String =
+    if idx >= arg_count() { "" }
+    else {
+        let arg = get_arg(idx);
+        if is_flag_arg(arg) { get_positional_rec(n, idx + 1, current) }
+        else if current == n { arg }
+        else { get_positional_rec(n, idx + 1, current + 1) }
+    };
+
+fn get_positional(n: i64) -> String
+  pre n >= 0
+= get_positional_rec(n, 1, 0);
+
+// ============================================================================
+// Integer Parsing Helpers
+// ============================================================================
+
+// Parse a single digit character to int
+fn digit_char_to_int(c: i64) -> i64
+  pre c >= 48 and c <= 57
+= c - 48;
+
+// Check if character is a digit
+fn is_digit_char(c: i64) -> bool = c >= 48 and c <= 57;
+
+// Parse positive integer from string at position
+fn parse_int_rec(s: String, pos: i64, acc: i64) -> i64 =
+    if pos >= s.len() { acc }
+    else {
+        let c = s.byte_at(pos);
+        if is_digit_char(c) { parse_int_rec(s, pos + 1, acc * 10 + digit_char_to_int(c)) }
+        else { acc }
+    };
+
+// Parse integer from string (supports negative numbers)
+fn parse_int(s: String) -> i64 =
+    if s.len() == 0 { 0 }
+    else if s.byte_at(0) == 45 { 0 - parse_int_rec(s, 1, 0) }
+    else { parse_int_rec(s, 0, 0) };
+
+// Get flag value as integer (e.g., "--count 42")
+fn get_flag_int(flag: String, default_val: i64) -> i64 =
+    if flag_has_value(flag) { parse_int(get_flag_value(flag)) }
+    else { default_val };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_argc() -> i64 = {
+    let count = argc();
+    if count < 1 { let e = println(901); 0 }
+    else { let ok = println(777); 1 }
+};
+
+fn test_program_name() -> i64 = {
+    let name = program_name();
+    if name.len() == 0 { let e = println(902); 0 }
+    else { let ok = println(888); 1 }
+};
+
+fn test_parse_int() -> i64 = {
+    let r1 = parse_int("123");
+    let r2 = parse_int("-456");
+    let r3 = parse_int("0");
+
+    if r1 != 123 { let e = println(903); 0 }
+    else if r2 != 0 - 456 { let e = println(904); 0 }
+    else if r3 != 0 { let e = println(905); 0 }
+    else { let ok = println(999); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = test_argc();
+    let t2 = test_program_name();
+    let t3 = test_parse_int();
+    t1 + t2 + t3
+};
