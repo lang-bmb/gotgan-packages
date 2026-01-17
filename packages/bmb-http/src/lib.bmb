@@ -1,7 +1,7 @@
--- bmb-http: HTTP client and server utilities for BMB
--- Provides HTTP message parsing and building
+// bmb-http: HTTP client and server utilities for BMB
+// Provides HTTP message parsing and building
 
--- HTTP Methods
+// HTTP Methods
 fn method_get() -> i64 = 1;
 fn method_post() -> i64 = 2;
 fn method_put() -> i64 = 3;
@@ -10,7 +10,7 @@ fn method_patch() -> i64 = 5;
 fn method_head() -> i64 = 6;
 fn method_options() -> i64 = 7;
 
--- HTTP Status Codes
+// HTTP Status Codes
 fn status_ok() -> i64 = 200;
 fn status_created() -> i64 = 201;
 fn status_no_content() -> i64 = 204;
@@ -26,44 +26,30 @@ fn status_not_implemented() -> i64 = 501;
 fn status_bad_gateway() -> i64 = 502;
 fn status_unavailable() -> i64 = 503;
 
--- Status code categories
+// Status code categories
 fn is_informational(status: i64) -> bool = status >= 100 and status < 200;
 fn is_success(status: i64) -> bool = status >= 200 and status < 300;
 fn is_redirect(status: i64) -> bool = status >= 300 and status < 400;
 fn is_client_error(status: i64) -> bool = status >= 400 and status < 500;
 fn is_server_error(status: i64) -> bool = status >= 500 and status < 600;
 
--- Status code reason phrases
+// Status code reason phrases
 fn status_reason(status: i64) -> String =
-    if status == 200 then "OK"
-    else if status == 201 then "Created"
-    else if status == 204 then "No Content"
-    else if status == 301 then "Moved Permanently"
-    else if status == 302 then "Found"
-    else if status == 400 then "Bad Request"
-    else if status == 401 then "Unauthorized"
-    else if status == 403 then "Forbidden"
-    else if status == 404 then "Not Found"
-    else if status == 405 then "Method Not Allowed"
-    else if status == 500 then "Internal Server Error"
-    else if status == 501 then "Not Implemented"
-    else if status == 502 then "Bad Gateway"
-    else if status == 503 then "Service Unavailable"
-    else "Unknown";
+    if status == 200 { "OK" } else if status == 201 { "Created" } else if status == 204 { "No Content" } else if status == 301 { "Moved Permanently" } else if status == 302 { "Found" } else if status == 400 { "Bad Request" } else if status == 401 { "Unauthorized" } else if status == 403 { "Forbidden" } else if status == 404 { "Not Found" } else if status == 405 { "Method Not Allowed" } else if status == 500 { "Internal Server Error" } else if status == 501 { "Not Implemented" } else if status == 502 { "Bad Gateway" } else if status == 503 { "Service Unavailable" } else { "Unknown" };
 
--- HTTP version
+// HTTP version
 fn http_1_0() -> String = "HTTP/1.0";
 fn http_1_1() -> String = "HTTP/1.1";
 fn http_2_0() -> String = "HTTP/2";
 
--- Content types
+// Content types
 fn content_json() -> String = "application/json";
 fn content_html() -> String = "text/html";
 fn content_text() -> String = "text/plain";
 fn content_xml() -> String = "application/xml";
 fn content_form() -> String = "application/x-www-form-urlencoded";
 
--- Header constants
+// Header constants
 fn header_content_type() -> String = "Content-Type";
 fn header_content_length() -> String = "Content-Length";
 fn header_host() -> String = "Host";
@@ -73,48 +59,28 @@ fn header_authorization() -> String = "Authorization";
 fn header_cache_control() -> String = "Cache-Control";
 fn header_connection() -> String = "Connection";
 
--- Method string conversion
+// Method string conversion
 fn method_to_string(method: i64) -> String =
-    if method == method_get() then "GET"
-    else if method == method_post() then "POST"
-    else if method == method_put() then "PUT"
-    else if method == method_delete() then "DELETE"
-    else if method == method_patch() then "PATCH"
-    else if method == method_head() then "HEAD"
-    else if method == method_options() then "OPTIONS"
-    else "UNKNOWN";
+    if method == method_get() { "GET" } else if method == method_post() { "POST" } else if method == method_put() { "PUT" } else if method == method_delete() { "DELETE" } else if method == method_patch() { "PATCH" } else if method == method_head() { "HEAD" } else if method == method_options() { "OPTIONS" } else { "UNKNOWN" };
 
--- Parse HTTP request line
-fn is_http_method_char(c: i64) -> bool = c >= 65 and c <= 90;  -- A-Z
+// Parse HTTP request line
+fn is_http_method_char(c: i64) -> bool = c >= 65 and c <= 90;  // A-Z
 
 fn find_space(s: String, pos: i64) -> i64 =
-    if pos >= s.len() then pos
-    else if s.char_at(pos) == 32 then pos
-    else find_space(s, pos + 1);
+    if pos >= s.len() { pos } else if s.char_at(pos) == 32 { pos } else { find_space(s, pos + 1) };
 
 fn find_newline(s: String, pos: i64) -> i64 =
-    if pos >= s.len() then pos
-    else if s.char_at(pos) == 10 then pos
-    else if s.char_at(pos) == 13 then pos
-    else find_newline(s, pos + 1);
+    if pos >= s.len() { pos } else if s.char_at(pos) == 10 { pos } else if s.char_at(pos) == 13 { pos } else { find_newline(s, pos + 1) };
 
--- Extract method from request line
+// Extract method from request line
 fn parse_method(request: String) -> i64 =
-    if request.len() >= 3 and request.slice(0, 3) == "GET" then method_get()
-    else if request.len() >= 4 and request.slice(0, 4) == "POST" then method_post()
-    else if request.len() >= 3 and request.slice(0, 3) == "PUT" then method_put()
-    else if request.len() >= 6 and request.slice(0, 6) == "DELETE" then method_delete()
-    else if request.len() >= 5 and request.slice(0, 5) == "PATCH" then method_patch()
-    else if request.len() >= 4 and request.slice(0, 4) == "HEAD" then method_head()
-    else if request.len() >= 7 and request.slice(0, 7) == "OPTIONS" then method_options()
-    else 0;
+    if request.len() >= 3 and request.slice(0, 3) == "GET" { method_get() } else if request.len() >= 4 and request.slice(0, 4) == "POST" { method_post() } else if request.len() >= 3 and request.slice(0, 3) == "PUT" { method_put() } else if request.len() >= 6 and request.slice(0, 6) == "DELETE" { method_delete() } else if request.len() >= 5 and request.slice(0, 5) == "PATCH" { method_patch() } else if request.len() >= 4 and request.slice(0, 4) == "HEAD" { method_head() } else if request.len() >= 7 and request.slice(0, 7) == "OPTIONS" { method_options() } else { 0 };
 
--- URL encoding check (% followed by two hex digits)
+// URL encoding check (% followed by two hex digits)
 fn is_url_encoded_char(s: String, pos: i64) -> bool =
-    if pos + 2 >= s.len() then false
-    else s.char_at(pos) == 37;  -- %
+    if pos + 2 >= s.len() { false } else { s.char_at(pos) == 37 };  // %
 
--- Build response status line
+// Build response status line
 fn print_status_line(version: String, status: i64) -> i64 = {
     let u0 = print_string(version);
     let u1 = print_string(" ");
@@ -125,7 +91,7 @@ fn print_status_line(version: String, status: i64) -> i64 = {
     0
 };
 
--- Build request line
+// Build request line
 fn print_request_line(method: i64, path: String, version: String) -> i64 = {
     let u0 = print_string(method_to_string(method));
     let u1 = print_string(" ");
@@ -136,7 +102,7 @@ fn print_request_line(method: i64, path: String, version: String) -> i64 = {
     0
 };
 
--- Print header
+// Print header
 fn print_header(name: String, value: String) -> i64 = {
     let u0 = print_string(name);
     let u1 = print_string(": ");
@@ -145,6 +111,6 @@ fn print_header(name: String, value: String) -> i64 = {
     0
 };
 
--- Validate URL path
+// Validate URL path
 fn is_valid_path(path: String) -> bool =
-    path.len() > 0 and path.char_at(0) == 47;  -- starts with /
+    path.len() > 0 and path.char_at(0) == 47;  // starts with /

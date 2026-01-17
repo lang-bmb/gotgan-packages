@@ -1,7 +1,7 @@
--- bmb-log: Structured logging utilities for BMB
--- Provides leveled logging with context
+// bmb-log: Structured logging utilities for BMB
+// Provides leveled logging with context
 
--- Log levels as integers
+// Log levels as integers
 fn level_trace() -> i64 = 0;
 fn level_debug() -> i64 = 1;
 fn level_info() -> i64 = 2;
@@ -9,35 +9,29 @@ fn level_warn() -> i64 = 3;
 fn level_error() -> i64 = 4;
 fn level_fatal() -> i64 = 5;
 
--- Level name lookup
+// Level name lookup
 fn level_name(level: i64) -> String =
-    if level == 0 then "TRACE"
-    else if level == 1 then "DEBUG"
-    else if level == 2 then "INFO"
-    else if level == 3 then "WARN"
-    else if level == 4 then "ERROR"
-    else if level == 5 then "FATAL"
-    else "UNKNOWN";
+    if level == 0 { "TRACE" } else if level == 1 { "DEBUG" } else if level == 2 { "INFO" } else if level == 3 { "WARN" } else if level == 4 { "ERROR" } else if level == 5 { "FATAL" } else { "UNKNOWN" };
 
--- Check if level should be logged
+// Check if level should be logged
 fn should_log(current_level: i64, min_level: i64) -> bool
   pre current_level >= 0 and min_level >= 0
 = current_level >= min_level;
 
--- Format timestamp (simplified as counter)
+// Format timestamp (simplified as counter)
 fn format_timestamp(counter: i64) -> i64 = counter;
 
--- Core logging functions
+// Core logging functions
 fn log_at_level(level: i64, message: i64, min_level: i64) -> i64 =
-    if should_log(level, min_level) then {
+    if should_log(level, min_level) { {
         let u0 = print_string("[");
         let u1 = print_string(level_name(level));
         let u2 = print_string("] ");
         let u3 = println(message);
         1
-    } else 0;
+    } } else { 0 };
 
--- Convenience logging functions (with default min_level = INFO)
+// Convenience logging functions (with default min_level = INFO)
 fn trace(message: i64) -> i64 = log_at_level(level_trace(), message, level_info());
 fn debug(message: i64) -> i64 = log_at_level(level_debug(), message, level_info());
 fn info(message: i64) -> i64 = log_at_level(level_info(), message, level_info());
@@ -45,16 +39,16 @@ fn warn(message: i64) -> i64 = log_at_level(level_warn(), message, level_info())
 fn error(message: i64) -> i64 = log_at_level(level_error(), message, level_info());
 fn fatal(message: i64) -> i64 = log_at_level(level_fatal(), message, level_info());
 
--- Verbose logging (min_level = DEBUG)
+// Verbose logging (min_level = DEBUG)
 fn trace_v(message: i64) -> i64 = log_at_level(level_trace(), message, level_debug());
 fn debug_v(message: i64) -> i64 = log_at_level(level_debug(), message, level_debug());
 
--- Full verbose logging (min_level = TRACE)
+// Full verbose logging (min_level = TRACE)
 fn trace_vv(message: i64) -> i64 = log_at_level(level_trace(), message, level_trace());
 
--- Structured logging helpers
+// Structured logging helpers
 fn log_with_code(level: i64, code: i64, message: i64, min_level: i64) -> i64 =
-    if should_log(level, min_level) then {
+    if should_log(level, min_level) { {
         let u0 = print_string("[");
         let u1 = print_string(level_name(level));
         let u2 = print_string(":E");
@@ -62,17 +56,16 @@ fn log_with_code(level: i64, code: i64, message: i64, min_level: i64) -> i64 =
         let u4 = print_string("] ");
         let u5 = println(message);
         1
-    } else 0;
+    } } else { 0 };
 
--- Assert with logging
+// Assert with logging
 fn assert_log(condition: bool, message: i64) -> bool =
-    if condition then true
-    else {
+    if condition { true } else { {
         let u0 = error(message);
         false
-    };
+    } };
 
--- Performance timing placeholder
+// Performance timing placeholder
 fn log_timing(operation: i64, duration_ms: i64) -> i64 = {
     let u0 = print_string("[TIMING] ");
     let u1 = print_i64(operation);

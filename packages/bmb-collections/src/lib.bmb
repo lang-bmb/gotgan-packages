@@ -1,0 +1,376 @@
+// bmb-collections: Collection data structures for BMB
+// Provides ergonomic wrappers around builtin collection primitives
+
+// ============================================================================
+// HashMap<i64, i64> - Key-value store with O(1) average access
+// ============================================================================
+
+// Create a new empty HashMap
+fn hashmap_create() -> i64
+  post ret != 0
+= hashmap_new();
+
+// Insert a key-value pair into the map
+fn hashmap_put(map: i64, key: i64, value: i64) -> i64
+  pre map != 0
+= hashmap_insert(map, key, value);
+
+// Get value for a key (returns 0 if not found)
+fn hashmap_value(map: i64, key: i64) -> i64
+  pre map != 0
+= hashmap_get(map, key);
+
+// Check if key exists in map
+fn hashmap_has(map: i64, key: i64) -> i64
+  pre map != 0
+  post ret == 0 || ret == 1
+= hashmap_contains(map, key);
+
+// Remove a key from the map
+fn hashmap_delete(map: i64, key: i64) -> i64
+  pre map != 0
+  post ret == 0 || ret == 1
+= hashmap_remove(map, key);
+
+// Get number of entries in map
+fn hashmap_size(map: i64) -> i64
+  pre map != 0
+  post ret >= 0
+= hashmap_len(map);
+
+// Check if map is empty
+fn hashmap_is_empty(map: i64) -> bool
+  pre map != 0
+= hashmap_len(map) == 0;
+
+// Free the hashmap memory
+fn hashmap_destroy(map: i64) -> i64
+  pre map != 0
+= {
+    let r = hashmap_free(map);
+    0
+};
+
+// ============================================================================
+// VecDeque<i64> - Double-ended queue with O(1) push/pop at both ends
+// ============================================================================
+
+// Helper: initialize deque header
+fn deque_init_header(ptr: i64, capacity: i64) -> i64 = {
+    let s1 = store_i64(ptr, capacity);
+    let s2 = store_i64(ptr + 8, 0);
+    let s3 = store_i64(ptr + 16, 0);
+    0
+};
+
+// Create a new VecDeque with given capacity
+fn deque_new(capacity: i64) -> i64
+  pre capacity > 0
+  post ret != 0
+= {
+    let total_size = 3 + capacity;
+    let ptr = malloc(total_size * 8);
+    if ptr == 0 { 0 }
+    else {
+        let init = deque_init_header(ptr, capacity);
+        ptr
+    }
+};
+
+// Get capacity of deque
+fn deque_capacity(deque: i64) -> i64
+  pre deque != 0
+  post ret > 0
+= load_i64(deque);
+
+// Get number of elements in deque
+fn deque_len(deque: i64) -> i64
+  pre deque != 0
+  post ret >= 0
+= {
+    let capacity = load_i64(deque);
+    let head = load_i64(deque + 8);
+    let tail = load_i64(deque + 16);
+    if tail >= head { tail - head }
+    else { capacity - head + tail }
+};
+
+// Check if deque is empty
+fn deque_is_empty(deque: i64) -> bool
+  pre deque != 0
+= deque_len(deque) == 0;
+
+// Check if deque is full
+fn deque_is_full(deque: i64) -> bool
+  pre deque != 0
+= deque_len(deque) == deque_capacity(deque);
+
+// Helper: store value and update tail
+fn deque_store_at_tail(deque: i64, tail: i64, value: i64, capacity: i64) -> i64 = {
+    let data_offset = 24 + tail * 8;
+    let s1 = store_i64(deque + data_offset, value);
+    let new_tail = if tail + 1 >= capacity { 0 } else { tail + 1 };
+    let s2 = store_i64(deque + 16, new_tail);
+    1
+};
+
+// Push element to back of deque
+fn deque_push_back(deque: i64, value: i64) -> i64
+  pre deque != 0
+  post ret == 0 || ret == 1
+= {
+    if deque_is_full(deque) { 0 }
+    else {
+        let capacity = load_i64(deque);
+        let tail = load_i64(deque + 16);
+        deque_store_at_tail(deque, tail, value, capacity)
+    }
+};
+
+// Helper: store value at head position
+fn deque_store_at_front(deque: i64, new_head: i64, value: i64) -> i64 = {
+    let data_offset = 24 + new_head * 8;
+    let s1 = store_i64(deque + data_offset, value);
+    let s2 = store_i64(deque + 8, new_head);
+    1
+};
+
+// Push element to front of deque
+fn deque_push_front(deque: i64, value: i64) -> i64
+  pre deque != 0
+  post ret == 0 || ret == 1
+= {
+    if deque_is_full(deque) { 0 }
+    else {
+        let capacity = load_i64(deque);
+        let head = load_i64(deque + 8);
+        let new_head = if head == 0 { capacity - 1 } else { head - 1 };
+        deque_store_at_front(deque, new_head, value)
+    }
+};
+
+// Helper: pop from back and return value
+fn deque_do_pop_back(deque: i64, capacity: i64, tail: i64) -> i64 = {
+    let new_tail = if tail == 0 { capacity - 1 } else { tail - 1 };
+    let data_offset = 24 + new_tail * 8;
+    let value = load_i64(deque + data_offset);
+    let s1 = store_i64(deque + 16, new_tail);
+    value
+};
+
+// Pop element from back of deque
+fn deque_pop_back(deque: i64) -> i64
+  pre deque != 0
+= {
+    if deque_is_empty(deque) { 0 }
+    else {
+        let capacity = load_i64(deque);
+        let tail = load_i64(deque + 16);
+        deque_do_pop_back(deque, capacity, tail)
+    }
+};
+
+// Helper: pop from front and return value
+fn deque_do_pop_front(deque: i64, capacity: i64, head: i64) -> i64 = {
+    let data_offset = 24 + head * 8;
+    let value = load_i64(deque + data_offset);
+    let new_head = if head + 1 >= capacity { 0 } else { head + 1 };
+    let s1 = store_i64(deque + 8, new_head);
+    value
+};
+
+// Pop element from front of deque
+fn deque_pop_front(deque: i64) -> i64
+  pre deque != 0
+= {
+    if deque_is_empty(deque) { 0 }
+    else {
+        let capacity = load_i64(deque);
+        let head = load_i64(deque + 8);
+        deque_do_pop_front(deque, capacity, head)
+    }
+};
+
+// Peek at front element without removing
+fn deque_front(deque: i64) -> i64
+  pre deque != 0
+= {
+    if deque_is_empty(deque) { 0 }
+    else {
+        let head = load_i64(deque + 8);
+        let data_offset = 24 + head * 8;
+        load_i64(deque + data_offset)
+    }
+};
+
+// Peek at back element without removing
+fn deque_back(deque: i64) -> i64
+  pre deque != 0
+= {
+    if deque_is_empty(deque) { 0 }
+    else {
+        let capacity = load_i64(deque);
+        let tail = load_i64(deque + 16);
+        let back_idx = if tail == 0 { capacity - 1 } else { tail - 1 };
+        let data_offset = 24 + back_idx * 8;
+        load_i64(deque + data_offset)
+    }
+};
+
+// Helper: clear deque state
+fn deque_do_clear(deque: i64) -> i64 = {
+    let s1 = store_i64(deque + 8, 0);
+    let s2 = store_i64(deque + 16, 0);
+    0
+};
+
+// Clear all elements from deque
+fn deque_clear(deque: i64) -> i64
+  pre deque != 0
+= deque_do_clear(deque);
+
+// Free deque memory
+fn deque_destroy(deque: i64) -> i64
+  pre deque != 0
+= {
+    let r = free(deque);
+    0
+};
+
+// ============================================================================
+// Stack<i64> - LIFO stack using Vec
+// ============================================================================
+
+// Create new stack with given capacity
+fn stack_new(capacity: i64) -> i64
+  pre capacity > 0
+  post ret != 0
+= vec_with_capacity(capacity);
+
+// Push value onto stack
+fn stack_push(stack: i64, value: i64) -> i64
+  pre stack != 0
+= {
+    let r = vec_push(stack, value);
+    0
+};
+
+// Pop value from stack
+fn stack_pop(stack: i64) -> i64
+  pre stack != 0
+= vec_pop(stack);
+
+// Peek at top without removing
+fn stack_peek(stack: i64) -> i64
+  pre stack != 0
+= {
+    let len = vec_len(stack);
+    if len == 0 { 0 }
+    else { vec_get(stack, len - 1) }
+};
+
+// Get stack size
+fn stack_size(stack: i64) -> i64
+  pre stack != 0
+  post ret >= 0
+= vec_len(stack);
+
+// Check if stack is empty
+fn stack_is_empty(stack: i64) -> bool
+  pre stack != 0
+= vec_len(stack) == 0;
+
+// Free stack memory
+fn stack_free(stack: i64) -> i64
+  pre stack != 0
+= {
+    let r = vec_free(stack);
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_hashmap() -> i64 = {
+    let map = hashmap_create();
+    let r1 = hashmap_put(map, 1, 100);
+    let r2 = hashmap_put(map, 2, 200);
+    let r3 = hashmap_put(map, 3, 300);
+
+    if hashmap_size(map) != 3 { let e = println(901); 0 }
+    else if hashmap_value(map, 1) != 100 { let e = println(902); 0 }
+    else if hashmap_value(map, 2) != 200 { let e = println(903); 0 }
+    else if hashmap_has(map, 4) != 0 { let e = println(904); 0 }
+    else {
+        let r4 = hashmap_put(map, 2, 250);
+        if hashmap_value(map, 2) != 250 { let e = println(905); 0 }
+        else {
+            let r5 = hashmap_delete(map, 1);
+            if hashmap_has(map, 1) != 0 { let e = println(906); 0 }
+            else if hashmap_size(map) != 2 { let e = println(907); 0 }
+            else {
+                let r6 = hashmap_destroy(map);
+                let ok = println(777);
+                1
+            }
+        }
+    }
+};
+
+fn test_deque() -> i64 = {
+    let dq = deque_new(10);
+    let r1 = deque_push_back(dq, 1);
+    let r2 = deque_push_back(dq, 2);
+    let r3 = deque_push_back(dq, 3);
+
+    if deque_len(dq) != 3 { let e = println(911); 0 }
+    else if deque_front(dq) != 1 { let e = println(912); 0 }
+    else if deque_back(dq) != 3 { let e = println(913); 0 }
+    else {
+        let r4 = deque_push_front(dq, 0);
+        if deque_front(dq) != 0 { let e = println(914); 0 }
+        else if deque_len(dq) != 4 { let e = println(915); 0 }
+        else {
+            let back_val = deque_pop_back(dq);
+            if back_val != 3 { let e = println(916); 0 }
+            else {
+                let front_val = deque_pop_front(dq);
+                if front_val != 0 { let e = println(917); 0 }
+                else if deque_len(dq) != 2 { let e = println(918); 0 }
+                else {
+                    let r5 = deque_destroy(dq);
+                    let ok = println(888);
+                    1
+                }
+            }
+        }
+    }
+};
+
+fn test_stack() -> i64 = {
+    let s = stack_new(10);
+    let r1 = stack_push(s, 10);
+    let r2 = stack_push(s, 20);
+    let r3 = stack_push(s, 30);
+
+    if stack_size(s) != 3 { let e = println(921); 0 }
+    else if stack_peek(s) != 30 { let e = println(922); 0 }
+    else {
+        let top = stack_pop(s);
+        if top != 30 { let e = println(923); 0 }
+        else if stack_size(s) != 2 { let e = println(924); 0 }
+        else {
+            let r4 = stack_free(s);
+            let ok = println(999);
+            1
+        }
+    }
+};
+
+fn main() -> i64 = {
+    let t1 = test_hashmap();
+    let t2 = test_deque();
+    let t3 = test_stack();
+    t1 + t2 + t3
+};

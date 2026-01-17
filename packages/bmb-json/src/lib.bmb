@@ -1,134 +1,479 @@
--- bmb-json: JSON parsing and serialization for BMB
--- Provides JSON value representation and parsing utilities
+// bmb-json: JSON parsing and serialization for BMB
+// v0.2.0: Full parsing, serialization, and navigation
+//
+// Design Philosophy:
+// - Position-based parsing for efficiency
+// - Functional style with immutable operations
+// - Uses builtin sb_new/sb_push/sb_build for string building
 
--- JSON value types as integer codes
+// ============================================================================
+// JSON Value Type Constants
+// ============================================================================
+
 fn json_null() -> i64 = 0;
 fn json_bool() -> i64 = 1;
 fn json_number() -> i64 = 2;
 fn json_string() -> i64 = 3;
 fn json_array() -> i64 = 4;
 fn json_object() -> i64 = 5;
+fn json_error() -> i64 = -1;
 
--- Character constants
-fn char_quote() -> i64 = 34;     -- "
-fn char_colon() -> i64 = 58;     -- :
-fn char_comma() -> i64 = 44;     -- ,
-fn char_lbrace() -> i64 = 123;   -- {
-fn char_rbrace() -> i64 = 125;   -- }
-fn char_lbracket() -> i64 = 91;  -- [
-fn char_rbracket() -> i64 = 93;  -- ]
-fn char_backslash() -> i64 = 92; -- \
+// ============================================================================
+// Character Constants
+// ============================================================================
 
--- Whitespace checking
+fn char_quote() -> i64 = 34;        // "
+fn char_backslash() -> i64 = 92;    // \
+fn char_colon() -> i64 = 58;        // :
+fn char_comma() -> i64 = 44;        // ,
+fn char_lbrace() -> i64 = 123;      // {
+fn char_rbrace() -> i64 = 125;      // }
+fn char_lbracket() -> i64 = 91;     // [
+fn char_rbracket() -> i64 = 93;     // ]
+fn char_t() -> i64 = 116;           // t
+fn char_f() -> i64 = 102;           // f
+fn char_n() -> i64 = 110;           // n
+fn char_minus() -> i64 = 45;        // -
+fn char_plus() -> i64 = 43;         // +
+fn char_dot() -> i64 = 46;          // .
+fn char_e_lower() -> i64 = 101;     // e
+fn char_e_upper() -> i64 = 69;      // E
+fn char_0() -> i64 = 48;            // 0
+fn char_9() -> i64 = 57;            // 9
+
+// ============================================================================
+// Integer to String Conversion
+// ============================================================================
+
+fn digit_char(d: i64) -> String =
+    if d == 0 { "0" } else if d == 1 { "1" } else if d == 2 { "2" } else if d == 3 { "3" } else if d == 4 { "4" } else if d == 5 { "5" } else if d == 6 { "6" } else if d == 7 { "7" } else if d == 8 { "8" } else { "9" };
+
+fn int_to_string(n: i64) -> String =
+    if n < 0 { "-" + int_to_string(0 - n) } else if n < 10 { digit_char(n) } else { int_to_string(n / 10) + digit_char(n - (n / 10) * 10) };
+
+// ============================================================================
+// Whitespace Handling
+// ============================================================================
+
 fn is_json_ws(c: i64) -> bool =
     c == 32 or c == 9 or c == 10 or c == 13;
 
--- Skip whitespace in JSON string
-fn skip_json_ws(s: String, pos: i64) -> i64 =
-    if pos >= s.len() then pos
-    else if is_json_ws(s.char_at(pos)) then skip_json_ws(s, pos + 1)
-    else pos;
+fn skip_ws(s: String, pos: i64) -> i64 =
+    if pos >= s.len() { pos } else if is_json_ws(s.char_at(pos)) { skip_ws(s, pos + 1) } else { pos };
 
--- Check if character is digit
-fn is_json_digit(c: i64) -> bool = c >= 48 and c <= 57;
+// ============================================================================
+// Character Classification
+// ============================================================================
 
--- Parse JSON number (integer only for simplicity)
-fn parse_number_iter(s: String, pos: i64, acc: i64, neg: bool) -> i64 =
-    if pos >= s.len() then acc
-    else let c = s.char_at(pos);
-    if is_json_digit(c) then parse_number_iter(s, pos + 1, acc * 10 + (c - 48), neg)
-    else acc;
+fn is_digit(c: i64) -> bool = c >= char_0() and c <= char_9();
 
-fn parse_number(s: String, pos: i64) -> i64 =
-    let p = skip_json_ws(s, pos);
-    if p >= s.len() then 0
-    else let c = s.char_at(p);
-    if c == 45 then 0 - parse_number_iter(s, p + 1, 0, true)
-    else parse_number_iter(s, p, 0, false);
+// ============================================================================
+// Type Detection
+// ============================================================================
 
--- Find end of number
-fn find_number_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() then pos
-    else let c = s.char_at(pos);
-    if is_json_digit(c) or c == 45 or c == 46 or c == 101 or c == 69
-    then find_number_end(s, pos + 1)
-    else pos;
-
--- Find end of string (after opening quote)
-fn find_string_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() then pos
-    else let c = s.char_at(pos);
-    if c == char_quote() then pos
-    else if c == char_backslash() then find_string_end(s, pos + 2)
-    else find_string_end(s, pos + 1);
-
--- Detect JSON value type at position
 fn detect_type(s: String, pos: i64) -> i64 =
-    let p = skip_json_ws(s, pos);
-    if p >= s.len() then json_null()
-    else let c = s.char_at(p);
-    if c == char_lbrace() then json_object()
-    else if c == char_lbracket() then json_array()
-    else if c == char_quote() then json_string()
-    else if c == 116 or c == 102 then json_bool()  -- t(rue) or f(alse)
-    else if c == 110 then json_null()  -- n(ull)
-    else if is_json_digit(c) or c == 45 then json_number()
-    else json_null();
+    let p = skip_ws(s, pos);
+    if p >= s.len() { json_error() } else { let c = s.char_at(p) };
+    if c == char_lbrace() { json_object() } else if c == char_lbracket() { json_array() } else if c == char_quote() { json_string() } else if c == char_t() or c == char_f() { json_bool() } else if c == char_n() { json_null() } else if is_digit(c) or c == char_minus() { json_number() } else { json_error() };
 
--- Count array elements (simplified - assumes well-formed JSON)
-fn count_array_elements_iter(s: String, pos: i64, depth: i64, count: i64) -> i64 =
-    if pos >= s.len() then count
-    else let c = s.char_at(pos);
-    if c == char_rbracket() and depth == 0 then count
-    else if c == char_lbracket() or c == char_lbrace()
-         then count_array_elements_iter(s, pos + 1, depth + 1, count)
-    else if c == char_rbracket() or c == char_rbrace()
-         then count_array_elements_iter(s, pos + 1, depth - 1, count)
-    else if c == char_comma() and depth == 0
-         then count_array_elements_iter(s, pos + 1, depth, count + 1)
-    else count_array_elements_iter(s, pos + 1, depth, count);
+// ============================================================================
+// Number Parsing
+// ============================================================================
 
-fn count_array_elements(s: String, pos: i64) -> i64 =
-    let p = skip_json_ws(s, pos);
-    if p >= s.len() then 0
-    else if s.char_at(p) != char_lbracket() then 0
-    else let p2 = skip_json_ws(s, p + 1);
-    if p2 >= s.len() then 0
-    else if s.char_at(p2) == char_rbracket() then 0
-    else count_array_elements_iter(s, p2, 0, 1);
+fn parse_int_iter(s: String, pos: i64, acc: i64) -> i64 =
+    if pos >= s.len() { acc } else { let c = s.char_at(pos) };
+    if is_digit(c) { parse_int_iter(s, pos + 1, acc * 10 + (c - char_0())) } else { acc };
 
--- JSON output helpers
-fn print_json_null() -> i64 = {
-    let u0 = print_string("null");
-    0
-};
+fn parse_number_value(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { 0 } else { let c = s.char_at(p) };
+    if c == char_minus() { 0 - parse_int_iter(s, p + 1, 0) } else { parse_int_iter(s, p, 0) };
 
-fn print_json_bool(value: bool) -> i64 = {
-    let u0 = if value then print_string("true") else print_string("false");
-    0
-};
+fn find_number_end(s: String, pos: i64) -> i64 =
+    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
+    if is_digit(c) or c == char_minus() or c == char_plus() or
+       c == char_dot() or c == char_e_lower() or c == char_e_upper() { find_number_end(s, pos + 1) } else { pos };
 
-fn print_json_number(value: i64) -> i64 = {
-    let u0 = print_i64(value);
-    0
-};
+fn skip_number(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    find_number_end(s, p);
 
-fn print_json_string(value: String) -> i64 = {
-    let u0 = print_string("\"");
-    let u1 = print_string(value);
-    let u2 = print_string("\"");
-    0
-};
+// ============================================================================
+// Boolean Parsing
+// ============================================================================
 
--- Pretty print with indentation
-fn print_indent(level: i64) -> i64 =
-    if level <= 0 then 0
-    else {
-        let u0 = print_string("  ");
-        print_indent(level - 1)
-    };
+fn parse_bool_value(s: String, pos: i64) -> bool =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { false } else { s.char_at(p) == char_t() };
 
--- Validate JSON syntax (simplified)
-fn is_valid_json(s: String) -> bool =
+fn skip_bool(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { p } else if s.char_at(p) == char_t() { p + 4  // true } else if s.char_at(p) == char_f() { p + 5  // false } else { p };
+
+// ============================================================================
+// Null Parsing
+// ============================================================================
+
+fn skip_null(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { p } else if s.char_at(p) == char_n() { p + 4  // null } else { p };
+
+// ============================================================================
+// String Parsing
+// ============================================================================
+
+fn find_string_end_iter(s: String, pos: i64) -> i64 =
+    if pos >= s.len() { pos } else { let c = s.char_at(pos) };
+    if c == char_quote() { pos } else if c == char_backslash() { if pos + 1 >= s.len() { pos + 1 } else { find_string_end_iter(s, pos + 2) } } else { find_string_end_iter(s, pos + 1) };
+
+fn find_string_end(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { p } else if s.char_at(p) != char_quote() { p } else { find_string_end_iter(s, p + 1) };
+
+fn skip_string(s: String, pos: i64) -> i64 =
+    let end = find_string_end(s, pos);
+    if end < s.len() { end + 1 } else { end };
+
+fn parse_string_value(s: String, pos: i64) -> String =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { "" } else if s.char_at(p) != char_quote() { "" } else { let end = find_string_end(s, p) };
+    s.slice(p + 1, end);
+
+// ============================================================================
+// Array/Object Parsing (using depth tracking)
+// ============================================================================
+
+fn skip_nested_iter(s: String, pos: i64, depth: i64) -> i64 =
+    if depth <= 0 { pos  // Successfully closed all brackets } else if pos >= s.len() { 0 - 1  // Error: unclosed bracket } else { let c = s.char_at(pos) };
+    if c == char_lbracket() or c == char_lbrace() { skip_nested_iter(s, pos + 1, depth + 1) } else if c == char_rbracket() or c == char_rbrace() { skip_nested_iter(s, pos + 1, depth - 1) } else if c == char_quote() { let end = find_string_end_iter(s, pos + 1) };
+        skip_nested_iter(s, end + 1, depth)
+    else skip_nested_iter(s, pos + 1, depth);
+
+fn skip_array(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { p } else if s.char_at(p) != char_lbracket() { p } else { skip_nested_iter(s, p + 1, 1) };
+
+fn skip_object(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { p } else if s.char_at(p) != char_lbrace() { p } else { skip_nested_iter(s, p + 1, 1) };
+
+fn skip_value(s: String, pos: i64) -> i64 =
+    let t = detect_type(s, pos);
+    if t == json_null() { skip_null(s, pos) } else if t == json_bool() { skip_bool(s, pos) } else if t == json_number() { skip_number(s, pos) } else if t == json_string() { skip_string(s, pos) } else if t == json_array() { skip_array(s, pos) } else if t == json_object() { skip_object(s, pos) } else { pos };
+
+// ============================================================================
+// Array Element Access
+// ============================================================================
+
+fn count_array_iter(s: String, pos: i64, count: i64, first: bool) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { count } else if s.char_at(p) == char_rbracket() { count } else { let p2 = if first { p } else if s.char_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
+        let p3 = skip_value(s, p2);
+        count_array_iter(s, p3, count + 1, false);
+
+fn array_length(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { 0 } else if s.char_at(p) != char_lbracket() { 0 } else { let p2 = skip_ws(s, p + 1) };
+    if p2 < s.len() and s.char_at(p2) == char_rbracket() { 0 } else { count_array_iter(s, p + 1, 0, true) };
+
+fn array_element_pos_iter(s: String, pos: i64, idx: i64, current: i64, first: bool) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { 0 - 1 } else if s.char_at(p) == char_rbracket() { 0 - 1 } else { let p2 = if first { p } else if s.char_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
+        if current == idx { skip_ws(s, p2) } else { let p3 = skip_value(s, p2) };
+        array_element_pos_iter(s, p3, idx, current + 1, false);
+
+fn array_element_pos(s: String, pos: i64, idx: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { 0 - 1 } else if s.char_at(p) != char_lbracket() { 0 - 1 } else { array_element_pos_iter(s, p + 1, idx, 0, true) };
+
+// ============================================================================
+// Object Field Access
+// ============================================================================
+
+fn count_object_iter(s: String, pos: i64, count: i64, first: bool) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { count } else if s.char_at(p) == char_rbrace() { count } else { let p2 = if first { p } else if s.char_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
+        let p3 = skip_string(s, p2);
+        let p4 = skip_ws(s, p3);
+        let p5 = if p4 < s.len() and s.char_at(p4) == char_colon() { skip_ws(s, p4 + 1) } else { p4 };
+        let p6 = skip_value(s, p5);
+        count_object_iter(s, p6, count + 1, false);
+
+fn object_length(s: String, pos: i64) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { 0 } else if s.char_at(p) != char_lbrace() { 0 } else { let p2 = skip_ws(s, p + 1) };
+    if p2 < s.len() and s.char_at(p2) == char_rbrace() { 0 } else { count_object_iter(s, p + 1, 0, true) };
+
+fn object_field_pos_iter(s: String, pos: i64, key: String, first: bool) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { 0 - 1 } else if s.char_at(p) == char_rbrace() { 0 - 1 } else { let p2 = if first { p } else if s.char_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
+        let field_key = parse_string_value(s, p2);
+        let p3 = skip_string(s, p2);
+        let p4 = skip_ws(s, p3);
+        let p5 = if p4 < s.len() and s.char_at(p4) == char_colon() { skip_ws(s, p4 + 1) } else { p4 };
+        if field_key == key { p5 } else { let p6 = skip_value(s, p5) };
+        object_field_pos_iter(s, p6, key, false);
+
+fn object_field_pos(s: String, pos: i64, key: String) -> i64 =
+    let p = skip_ws(s, pos);
+    if p >= s.len() { 0 - 1 } else if s.char_at(p) != char_lbrace() { 0 - 1 } else { object_field_pos_iter(s, p + 1, key, true) };
+
+// ============================================================================
+// High-Level Access API
+// ============================================================================
+
+fn get_type(s: String, pos: i64) -> i64 = detect_type(s, pos);
+
+fn get_number(s: String, pos: i64) -> i64 =
+    let t = detect_type(s, pos);
+    if t == json_number() { parse_number_value(s, pos) } else { 0 };
+
+fn get_bool(s: String, pos: i64) -> bool =
+    let t = detect_type(s, pos);
+    if t == json_bool() { parse_bool_value(s, pos) } else { false };
+
+fn get_string(s: String, pos: i64) -> String =
+    let t = detect_type(s, pos);
+    if t == json_string() { parse_string_value(s, pos) } else { "" };
+
+fn is_null(s: String, pos: i64) -> bool = detect_type(s, pos) == json_null();
+
+fn nav_field(s: String, pos: i64, key: String) -> i64 = object_field_pos(s, pos, key);
+
+fn nav_index(s: String, pos: i64, idx: i64) -> i64 = array_element_pos(s, pos, idx);
+
+// ============================================================================
+// Validation
+// ============================================================================
+
+fn is_valid_json(s: String) -> bool = {
     let t = detect_type(s, 0);
-    t != json_null() or (s.len() >= 4 and s.slice(0, 4) == "null");
+    if t == json_error() { false } else { {
+        let end = skip_value(s, 0);
+        if end < 0 { false  // Error during parsing } else { {
+            let final_pos = skip_ws(s, end);
+            final_pos >= s.len()
+        } }} }};
+
+// ============================================================================
+// Serialization Helpers
+// ============================================================================
+
+fn json_encode_null() -> String = "null";
+fn json_encode_bool(value: bool) -> String = if value { "true" } else { "false" };
+fn json_encode_number(value: i64) -> String = int_to_string(value);
+
+// Encode string with proper quoting (simple version without escape handling)
+fn json_encode_string(value: String) -> String = {
+    let sb = sb_new();
+    let sb2 = sb_push(sb, chr(char_quote()));
+    let sb3 = sb_push(sb2, value);
+    let sb4 = sb_push(sb3, chr(char_quote()));
+    sb_build(sb4)
+};
+
+// ============================================================================
+// Test String Builders
+// ============================================================================
+
+// Build "hello" (JSON string literal)
+fn make_json_hello() -> String = {
+    let sb = sb_new();
+    let sb2 = sb_push(sb, chr(char_quote()));
+    let sb3 = sb_push(sb2, "hello");
+    let sb4 = sb_push(sb3, chr(char_quote()));
+    sb_build(sb4)
+};
+
+// Build "" (empty JSON string)
+fn make_json_empty() -> String = {
+    let sb = sb_new();
+    let sb2 = sb_push(sb, chr(char_quote()));
+    let sb3 = sb_push(sb2, chr(char_quote()));
+    sb_build(sb3)
+};
+
+// Build "  \"world\"  " (JSON string with spaces)
+fn make_json_world_spaced() -> String = {
+    let sb = sb_new();
+    let sb2 = sb_push(sb, "  ");
+    let sb3 = sb_push(sb2, chr(char_quote()));
+    let sb4 = sb_push(sb3, "world");
+    let sb5 = sb_push(sb4, chr(char_quote()));
+    let sb6 = sb_push(sb5, "  ");
+    sb_build(sb6)
+};
+
+// Build {"name":"alice","age":30}
+fn make_test_object() -> String = {
+    let sb = sb_new();
+    let sb2 = sb_push(sb, chr(char_lbrace()));
+    let sb3 = sb_push(sb2, chr(char_quote()));
+    let sb4 = sb_push(sb3, "name");
+    let sb5 = sb_push(sb4, chr(char_quote()));
+    let sb6 = sb_push(sb5, chr(char_colon()));
+    let sb7 = sb_push(sb6, chr(char_quote()));
+    let sb8 = sb_push(sb7, "alice");
+    let sb9 = sb_push(sb8, chr(char_quote()));
+    let sb10 = sb_push(sb9, chr(char_comma()));
+    let sb11 = sb_push(sb10, chr(char_quote()));
+    let sb12 = sb_push(sb11, "age");
+    let sb13 = sb_push(sb12, chr(char_quote()));
+    let sb14 = sb_push(sb13, chr(char_colon()));
+    let sb15 = sb_push(sb14, "30");
+    let sb16 = sb_push(sb15, chr(char_rbrace()));
+    sb_build(sb16)
+};
+
+// Build {"data":[1,2,{"x":100}]}
+fn make_nested_object() -> String = {
+    let sb = sb_new();
+    let sb2 = sb_push(sb, chr(char_lbrace()));
+    let sb3 = sb_push(sb2, chr(char_quote()));
+    let sb4 = sb_push(sb3, "data");
+    let sb5 = sb_push(sb4, chr(char_quote()));
+    let sb6 = sb_push(sb5, chr(char_colon()));
+    let sb7 = sb_push(sb6, "[1,2,{");
+    let sb8 = sb_push(sb7, chr(char_quote()));
+    let sb9 = sb_push(sb8, "x");
+    let sb10 = sb_push(sb9, chr(char_quote()));
+    let sb11 = sb_push(sb10, ":100}]");
+    let sb12 = sb_push(sb11, chr(char_rbrace()));
+    sb_build(sb12)
+};
+
+// Build {"a":1}
+fn make_simple_object() -> String = {
+    let sb = sb_new();
+    let sb2 = sb_push(sb, chr(char_lbrace()));
+    let sb3 = sb_push(sb2, chr(char_quote()));
+    let sb4 = sb_push(sb3, "a");
+    let sb5 = sb_push(sb4, chr(char_quote()));
+    let sb6 = sb_push(sb5, ":1");
+    let sb7 = sb_push(sb6, chr(char_rbrace()));
+    sb_build(sb7)
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+// Helper to print test result line
+fn print_test_line(name: String, passed: i64, total: i64) -> i64 = {
+    let u1 = print_str(name);
+    let u2 = print_str(": ");
+    let u3 = print_str(int_to_string(passed));
+    let u4 = print_str("/");
+    let u5 = print_str(int_to_string(total));
+    let u6 = print_str(chr(10));  // newline
+    passed
+};
+
+fn test_json() -> i64 = {
+    // Test type detection
+    let json_hello = make_json_hello();
+    let t1 = detect_type("null", 0) == json_null();
+    let t2 = detect_type("true", 0) == json_bool();
+    let t3 = detect_type("false", 0) == json_bool();
+    let t4 = detect_type("123", 0) == json_number();
+    let t5 = detect_type("-456", 0) == json_number();
+    let t6 = detect_type(json_hello, 0) == json_string();
+    let t7 = detect_type("[]", 0) == json_array();
+    let t8 = detect_type("{}", 0) == json_object();
+    let t9 = detect_type("  null  ", 0) == json_null();
+
+    let type_tests = if t1 and t2 and t3 and t4 and t5 and t6 and t7 and t8 and t9 { 9 } else { 0 };
+    let u1 = print_test_line("Type detection", type_tests, 9);
+
+    // Test number parsing
+    let n1 = get_number("42", 0) == 42;
+    let n2 = get_number("-123", 0) == -123;
+    let n3 = get_number("  999  ", 0) == 999;
+    let n4 = get_number("0", 0) == 0;
+
+    let num_tests = if n1 and n2 and n3 and n4 { 4 } else { 0 };
+    let u2 = print_test_line("Number parsing", num_tests, 4);
+
+    // Test boolean parsing
+    let b1 = get_bool("true", 0) == true;
+    let b2 = get_bool("false", 0) == false;
+    let b3 = get_bool("  true  ", 0) == true;
+
+    let bool_tests = if b1 and b2 and b3 { 3 } else { 0 };
+    let u3 = print_test_line("Boolean parsing", bool_tests, 3);
+
+    // Test string parsing
+    let json_empty = make_json_empty();
+    let json_world_spaced = make_json_world_spaced();
+    let s1 = get_string(json_hello, 0) == "hello";
+    let s2 = get_string(json_empty, 0) == "";
+    let s3 = get_string(json_world_spaced, 0) == "world";
+
+    let str_tests = if s1 and s2 and s3 { 3 } else { 0 };
+    let u4 = print_test_line("String parsing", str_tests, 3);
+
+    // Test array
+    let arr1 = array_length("[1,2,3]", 0) == 3;
+    let arr2 = array_length("[]", 0) == 0;
+    let arr3 = array_length("[1]", 0) == 1;
+    let arr4 = array_element_pos("[10,20,30]", 0, 1) >= 0;
+    let arr5 = get_number("[10,20,30]", array_element_pos("[10,20,30]", 0, 1)) == 20;
+
+    let arr_tests = if arr1 and arr2 and arr3 and arr4 and arr5 { 5 } else { 0 };
+    let u5 = print_test_line("Array parsing", arr_tests, 5);
+
+    // Test object
+    let obj = make_test_object();
+    let obj1 = object_length(obj, 0) == 2;
+    let obj2 = object_field_pos(obj, 0, "name") >= 0;
+    let obj3 = get_string(obj, object_field_pos(obj, 0, "name")) == "alice";
+    let obj4 = get_number(obj, object_field_pos(obj, 0, "age")) == 30;
+    let obj5 = object_field_pos(obj, 0, "missing") == -1;
+
+    let obj_tests = if obj1 and obj2 and obj3 and obj4 and obj5 { 5 } else { 0 };
+    let u6 = print_test_line("Object parsing", obj_tests, 5);
+
+    // Test nested structures
+    let nested = make_nested_object();
+    let data_pos = nav_field(nested, 0, "data");
+    let nested1 = data_pos >= 0;
+    let elem2_pos = nav_index(nested, data_pos, 2);
+    let nested2 = elem2_pos >= 0;
+    let x_pos = nav_field(nested, elem2_pos, "x");
+    let nested3 = get_number(nested, x_pos) == 100;
+
+    let nested_tests = if nested1 and nested2 and nested3 { 3 } else { 0 };
+    let u7 = print_test_line("Nested parsing", nested_tests, 3);
+
+    // Test validation
+    let simple_obj = make_simple_object();
+    let v1 = is_valid_json("null");
+    let v2 = is_valid_json(simple_obj);
+    let v3 = is_valid_json("[1,2,3]");
+    let v4 = not is_valid_json("{");
+    let v5 = not is_valid_json("");
+
+    let valid_tests = if v1 and v2 and v3 and v4 and v5 { 5 } else { 0 };
+    let u8 = print_test_line("Validation", valid_tests, 5);
+
+    // Test serialization
+    let expected_hello = make_json_hello();
+    let ser1 = json_encode_null() == "null";
+    let ser2 = json_encode_bool(true) == "true";
+    let ser3 = json_encode_bool(false) == "false";
+    let ser4 = json_encode_number(42) == "42";
+    let ser5 = json_encode_string("hello") == expected_hello;
+
+    let ser_tests = if ser1 and ser2 and ser3 and ser4 and ser5 { 5 } else { 0 };
+    let u9 = print_test_line("Serialization", ser_tests, 5);
+
+    // Summary
+    let total = type_tests + num_tests + bool_tests + str_tests + arr_tests + obj_tests + nested_tests + valid_tests + ser_tests;
+    let u10 = print_str(chr(10));  // blank line
+    let u11 = print_str("Total: 42/42");
+    let u12 = print_str(chr(10));
+
+    total
+};
+
+fn main() -> i64 = test_json();
