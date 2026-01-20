@@ -29,7 +29,7 @@ fn match_char(c: i64, pat_type: i64, pat_char: i64) -> bool =
 
 // Simple literal string match
 fn match_literal(text: String, pos: i64, pattern: String, pat_pos: i64) -> bool =
-    if pat_pos >= pattern.len() { true } else if pos >= text.len() { false } else if text.char_at(pos) == pattern.char_at(pat_pos) { match_literal(text, pos + 1, pattern, pat_pos + 1) } else { false };
+    if pat_pos >= pattern.len() { true } else if pos >= text.len() { false } else if text.byte_at(pos) == pattern.byte_at(pat_pos) { match_literal(text, pos + 1, pattern, pat_pos + 1) } else { false };
 
 // Find literal pattern in text
 fn find_literal(text: String, pos: i64, pattern: String) -> i64 =
@@ -57,15 +57,15 @@ fn count_matches(text: String, pattern: String) -> i64
 
 // Match digit sequence (\d+)
 fn match_digits(text: String, pos: i64) -> i64 =
-    if pos >= text.len() { pos } else if is_digit(text.char_at(pos)) { match_digits(text, pos + 1) } else { pos };
+    if pos >= text.len() { pos } else if is_digit(text.byte_at(pos)) { match_digits(text, pos + 1) } else { pos };
 
 // Match word characters (\w+)
 fn match_word(text: String, pos: i64) -> i64 =
-    if pos >= text.len() { pos } else if is_word(text.char_at(pos)) { match_word(text, pos + 1) } else { pos };
+    if pos >= text.len() { pos } else if is_word(text.byte_at(pos)) { match_word(text, pos + 1) } else { pos };
 
 // Match whitespace (\s+)
 fn match_spaces(text: String, pos: i64) -> i64 =
-    if pos >= text.len() { pos } else if is_space(text.char_at(pos)) { match_spaces(text, pos + 1) } else { pos };
+    if pos >= text.len() { pos } else if is_space(text.byte_at(pos)) { match_spaces(text, pos + 1) } else { pos };
 
 // Extract digits from text starting at pos
 fn extract_number(text: String, pos: i64) -> i64 =
@@ -74,7 +74,7 @@ fn extract_number(text: String, pos: i64) -> i64 =
 
 // Parse integer from substring
 fn parse_int_iter(text: String, pos: i64, end: i64, acc: i64) -> i64 =
-    if pos >= end { acc } else { let c = text.char_at(pos) };
+    if pos >= end { acc } else { let c = text.byte_at(pos) };
     if is_digit(c) { parse_int_iter(text, pos + 1, end, acc * 10 + (c - 48)) } else { acc };
 
 fn parse_int(text: String, pos: i64, end: i64) -> i64 =
@@ -85,8 +85,8 @@ fn count_split(text: String, sep: i64) -> i64 =
     count_split_iter(text, 0, sep, 1);
 
 fn count_split_iter(text: String, pos: i64, sep: i64, count: i64) -> i64 =
-    if pos >= text.len() { count } else if text.char_at(pos) == sep { count_split_iter(text, pos + 1, sep, count + 1) } else { count_split_iter(text, pos + 1, sep, count) };
+    if pos >= text.len() { count } else if text.byte_at(pos) == sep { count_split_iter(text, pos + 1, sep, count + 1) } else { count_split_iter(text, pos + 1, sep, count) };
 
 // Validate pattern is well-formed (simplified)
 fn is_valid_pattern(pattern: String) -> bool =
-    pattern.len() > 0 and not (pattern.char_at(0) == 42 or pattern.char_at(0) == 43);
+    pattern.len() > 0 and not (pattern.byte_at(0) == 42 or pattern.byte_at(0) == 43);

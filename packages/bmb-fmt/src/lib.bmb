@@ -39,7 +39,7 @@ fn pad_left_count(n: i64, width: i64) -> i64 =
 // Print padding spaces
 fn print_spaces(count: i64) -> i64 =
     if count <= 0 { 0 } else { {
-        let u0 = print_string(" ");
+        let u0 = print_str(" ");
         print_spaces(count - 1)
     } };
 
@@ -47,14 +47,14 @@ fn print_spaces(count: i64) -> i64 =
 fn print_padded(n: i64, width: i64) -> i64 = {
     let padding = pad_left_count(n, width);
     let u0 = print_spaces(padding);
-    let u1 = print_i64(n);
+    let u1 = print(n);
     0
 };
 
 // Format with leading zeros
 fn print_zero_padded_iter(n: i64, remaining_zeros: i64) -> i64 =
-    if remaining_zeros <= 0 { print_i64(n) } else { {
-        let u0 = print_string("0");
+    if remaining_zeros <= 0 { let u0 = print(n); 0 } else { {
+        let u0 = print_str("0");
         print_zero_padded_iter(n, remaining_zeros - 1)
     } };
 
@@ -73,7 +73,7 @@ fn hex_digit(d: i64) -> String
 fn print_binary_iter(n: i64, pos: i64) -> i64 =
     if pos < 0 { 0 } else { {
         let bit = (n / pow_simple(2, pos)) - (n / pow_simple(2, pos + 1)) * 2;
-        let u0 = print_i64(bit);
+        let u0 = print(bit);
         print_binary_iter(n, pos - 1)
     } };
 
@@ -98,7 +98,7 @@ fn print_percent(numerator: i64, denominator: i64) -> i64
   pre denominator > 0
 = {
     let pct = format_percent(numerator, denominator);
-    let u0 = print_i64(pct);
-    let u1 = print_string("%");
+    let u0 = print(pct);
+    let u1 = print_str("%");
     pct
 };

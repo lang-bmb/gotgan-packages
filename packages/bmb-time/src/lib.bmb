@@ -70,19 +70,19 @@ fn format_duration(ms: i64) -> i64 = {
     let mins = duration_minutes(ms);
     let secs = duration_seconds(ms);
     let u0 = if days > 0 { {
-        let u1 = print_i64(days);
-        let u2 = print_string("d ");
+        let u1 = print(days);
+        let u2 = print_str("d ");
         0
     } } else { 0 };
     let u3 = if hours > 0 { {
-        let u4 = print_i64(hours);
-        let u5 = print_string("h ");
+        let u4 = print(hours);
+        let u5 = print_str("h ");
         0
     } } else { 0 };
-    let u6 = print_i64(mins);
-    let u7 = print_string("m ");
-    let u8 = print_i64(secs);
-    let u9 = print_string("s");
+    let u6 = print(mins);
+    let u7 = print_str("m ");
+    let u8 = print(secs);
+    let u9 = print_str("s");
     ms
 };
 

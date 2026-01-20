@@ -54,7 +54,9 @@ fn rand_between(state: i64, min_val: i64, max_val: i64) -> i64
 
 // Test entropy by checking distribution
 fn test_distribution(state: i64, samples: i64, bucket: i64) -> i64 =
-    if samples <= 0 { bucket } else { let new_state = next_state(state) };
-         let val = rand_range(new_state, 10);
-         let new_bucket = if val < 5 { bucket + 1 } else { bucket };
-         test_distribution(new_state, samples - 1, new_bucket);
+    if samples <= 0 { bucket } else {
+        let new_state = next_state(state);
+        let val = rand_range(new_state, 10);
+        let new_bucket = if val < 5 { bucket + 1 } else { bucket };
+        test_distribution(new_state, samples - 1, new_bucket)
+    };

@@ -9,9 +9,9 @@ fn result_skip() -> i64 = 2;
 // Assertion: check equality
 fn assert_eq(actual: i64, expected: i64) -> bool =
     if actual == expected { true } else { {
-        let u0 = print_string("FAIL: expected ");
-        let u1 = print_i64(expected);
-        let u2 = print_string(" but got ");
+        let u0 = print_str("FAIL: expected ");
+        let u1 = print(expected);
+        let u2 = print_str(" but got ");
         let u3 = println(actual);
         false
     } };
@@ -19,7 +19,7 @@ fn assert_eq(actual: i64, expected: i64) -> bool =
 // Assertion: check not equal
 fn assert_ne(actual: i64, unexpected: i64) -> bool =
     if actual != unexpected { true } else { {
-        let u0 = print_string("FAIL: expected different from ");
+        let u0 = print_str("FAIL: expected different from ");
         let u1 = println(unexpected);
         false
     } };
@@ -27,23 +27,23 @@ fn assert_ne(actual: i64, unexpected: i64) -> bool =
 // Assertion: check true
 fn assert_true(condition: bool) -> bool =
     if condition { true } else { {
-        let u0 = println_string("FAIL: expected true");
+        let u0 = println_str("FAIL: expected true");
         false
     } };
 
 // Assertion: check false
 fn assert_false(condition: bool) -> bool =
     if not condition { true } else { {
-        let u0 = println_string("FAIL: expected false");
+        let u0 = println_str("FAIL: expected false");
         false
     } };
 
 // Assertion: check greater than
 fn assert_gt(actual: i64, threshold: i64) -> bool =
     if actual > threshold { true } else { {
-        let u0 = print_string("FAIL: expected ");
-        let u1 = print_i64(actual);
-        let u2 = print_string(" > ");
+        let u0 = print_str("FAIL: expected ");
+        let u1 = print(actual);
+        let u2 = print_str(" > ");
         let u3 = println(threshold);
         false
     } };
@@ -51,9 +51,9 @@ fn assert_gt(actual: i64, threshold: i64) -> bool =
 // Assertion: check greater than or equal
 fn assert_gte(actual: i64, threshold: i64) -> bool =
     if actual >= threshold { true } else { {
-        let u0 = print_string("FAIL: expected ");
-        let u1 = print_i64(actual);
-        let u2 = print_string(" >= ");
+        let u0 = print_str("FAIL: expected ");
+        let u1 = print(actual);
+        let u2 = print_str(" >= ");
         let u3 = println(threshold);
         false
     } };
@@ -61,9 +61,9 @@ fn assert_gte(actual: i64, threshold: i64) -> bool =
 // Assertion: check less than
 fn assert_lt(actual: i64, threshold: i64) -> bool =
     if actual < threshold { true } else { {
-        let u0 = print_string("FAIL: expected ");
-        let u1 = print_i64(actual);
-        let u2 = print_string(" < ");
+        let u0 = print_str("FAIL: expected ");
+        let u1 = print(actual);
+        let u2 = print_str(" < ");
         let u3 = println(threshold);
         false
     } };
@@ -71,9 +71,9 @@ fn assert_lt(actual: i64, threshold: i64) -> bool =
 // Assertion: check less than or equal
 fn assert_lte(actual: i64, threshold: i64) -> bool =
     if actual <= threshold { true } else { {
-        let u0 = print_string("FAIL: expected ");
-        let u1 = print_i64(actual);
-        let u2 = print_string(" <= ");
+        let u0 = print_str("FAIL: expected ");
+        let u1 = print(actual);
+        let u2 = print_str(" <= ");
         let u3 = println(threshold);
         false
     } };
@@ -82,13 +82,13 @@ fn assert_lte(actual: i64, threshold: i64) -> bool =
 fn assert_in_range(actual: i64, min_val: i64, max_val: i64) -> bool
   pre min_val <= max_val
 = if actual >= min_val and actual <= max_val { true } else { {
-      let u0 = print_string("FAIL: expected ");
-      let u1 = print_i64(actual);
-      let u2 = print_string(" in range [");
-      let u3 = print_i64(min_val);
-      let u4 = print_string(", ");
-      let u5 = print_i64(max_val);
-      let u6 = println_string("]");
+      let u0 = print_str("FAIL: expected ");
+      let u1 = print(actual);
+      let u2 = print_str(" in range [");
+      let u3 = print(min_val);
+      let u4 = print_str(", ");
+      let u5 = print(max_val);
+      let u6 = println_str("]");
       false
   } };
 
@@ -96,19 +96,19 @@ fn assert_in_range(actual: i64, min_val: i64, max_val: i64) -> bool
 fn count_passed(results: i64, total: i64) -> i64 = results;
 
 fn report_summary(passed: i64, total: i64) -> i64 = {
-    let u0 = print_string("\n--- Test Summary ---\n");
-    let u1 = print_string("Passed: ");
-    let u2 = print_i64(passed);
-    let u3 = print_string("/");
+    let u0 = print_str("\n--- Test Summary ---\n");
+    let u1 = print_str("Passed: ");
+    let u2 = print(passed);
+    let u3 = print_str("/");
     let u4 = println(total);
-    let u5 = if passed == total { println_string("All tests passed!") } else { println_string("Some tests failed.") };
+    let u5 = if passed == total { println_str("All tests passed!") } else { println_str("Some tests failed.") };
     if passed == total { 0 } else { 1 }};
 
 // Simple test runner helper
 fn run_test(name_code: i64, result: bool) -> i64 = {
     let status = if result { "PASS" } else { "FAIL" };
-    let u0 = print_string("[");
-    let u1 = print_string(status);
-    let u2 = print_string("] Test ");
+    let u0 = print_str("[");
+    let u1 = print_str(status);
+    let u2 = print_str("] Test ");
     let u3 = println(name_code);
     if result { 1 } else { 0 }};

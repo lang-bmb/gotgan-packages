@@ -67,10 +67,10 @@ fn method_to_string(method: i64) -> String =
 fn is_http_method_char(c: i64) -> bool = c >= 65 and c <= 90;  // A-Z
 
 fn find_space(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 32 { pos } else { find_space(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 32 { pos } else { find_space(s, pos + 1) };
 
 fn find_newline(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.char_at(pos) == 10 { pos } else if s.char_at(pos) == 13 { pos } else { find_newline(s, pos + 1) };
+    if pos >= s.len() { pos } else if s.byte_at(pos) == 10 { pos } else if s.byte_at(pos) == 13 { pos } else { find_newline(s, pos + 1) };
 
 // Extract method from request line
 fn parse_method(request: String) -> i64 =
@@ -78,39 +78,39 @@ fn parse_method(request: String) -> i64 =
 
 // URL encoding check (% followed by two hex digits)
 fn is_url_encoded_char(s: String, pos: i64) -> bool =
-    if pos + 2 >= s.len() { false } else { s.char_at(pos) == 37 };  // %
+    if pos + 2 >= s.len() { false } else { s.byte_at(pos) == 37 };  // %
 
 // Build response status line
 fn print_status_line(version: String, status: i64) -> i64 = {
-    let u0 = print_string(version);
-    let u1 = print_string(" ");
-    let u2 = print_i64(status);
-    let u3 = print_string(" ");
-    let u4 = print_string(status_reason(status));
-    let u5 = print_string("\r\n");
+    let u0 = print_str(version);
+    let u1 = print_str(" ");
+    let u2 = print(status);
+    let u3 = print_str(" ");
+    let u4 = print_str(status_reason(status));
+    let u5 = print_str("\r\n");
     0
 };
 
 // Build request line
 fn print_request_line(method: i64, path: String, version: String) -> i64 = {
-    let u0 = print_string(method_to_string(method));
-    let u1 = print_string(" ");
-    let u2 = print_string(path);
-    let u3 = print_string(" ");
-    let u4 = print_string(version);
-    let u5 = print_string("\r\n");
+    let u0 = print_str(method_to_string(method));
+    let u1 = print_str(" ");
+    let u2 = print_str(path);
+    let u3 = print_str(" ");
+    let u4 = print_str(version);
+    let u5 = print_str("\r\n");
     0
 };
 
 // Print header
 fn print_header(name: String, value: String) -> i64 = {
-    let u0 = print_string(name);
-    let u1 = print_string(": ");
-    let u2 = print_string(value);
-    let u3 = print_string("\r\n");
+    let u0 = print_str(name);
+    let u1 = print_str(": ");
+    let u2 = print_str(value);
+    let u3 = print_str("\r\n");
     0
 };
 
 // Validate URL path
 fn is_valid_path(path: String) -> bool =
-    path.len() > 0 and path.char_at(0) == 47;  // starts with /
+    path.len() > 0 and path.byte_at(0) == 47;  // starts with /
