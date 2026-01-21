@@ -96,13 +96,15 @@ fn assert_in_range(actual: i64, min_val: i64, max_val: i64) -> bool
 fn count_passed(results: i64, total: i64) -> i64 = results;
 
 fn report_summary(passed: i64, total: i64) -> i64 = {
-    let u0 = print_str("\n--- Test Summary ---\n");
-    let u1 = print_str("Passed: ");
-    let u2 = print(passed);
-    let u3 = print_str("/");
-    let u4 = println(total);
-    let u5 = if passed == total { println_str("All tests passed!") } else { println_str("Some tests failed.") };
-    if passed == total { 0 } else { 1 }};
+    let u0 = println_str("");
+    let u1 = println_str("--- Test Summary ---");
+    let u2 = print_str("Passed: ");
+    let u3 = print(passed);
+    let u4 = print_str("/");
+    let u5 = println(total);
+    let u6 = if passed == total { println_str("All tests passed!") } else { println_str("Some tests failed.") };
+    if passed == total { 0 } else { 1 }
+};
 
 // Simple test runner helper
 fn run_test(name_code: i64, result: bool) -> i64 = {

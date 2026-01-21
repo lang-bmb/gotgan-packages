@@ -102,9 +102,11 @@ fn parse_number_value(s: String, pos: i64) -> i64 =
     };
 
 fn find_number_end(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.byte_at(pos) };
-    if is_digit(c) or c == char_minus() or c == char_plus() or
-       c == char_dot() or c == char_e_lower() or c == char_e_upper() { find_number_end(s, pos + 1) } else { pos };
+    if pos >= s.len() { pos } else {
+        let c = s.byte_at(pos);
+        if is_digit(c) or c == char_minus() or c == char_plus() or
+           c == char_dot() or c == char_e_lower() or c == char_e_upper() { find_number_end(s, pos + 1) } else { pos }
+    };
 
 fn skip_number(s: String, pos: i64) -> i64 =
     let p = skip_ws(s, pos);
@@ -120,7 +122,10 @@ fn parse_bool_value(s: String, pos: i64) -> bool =
 
 fn skip_bool(s: String, pos: i64) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { p } else if s.byte_at(p) == char_t() { p + 4  // true } else if s.byte_at(p) == char_f() { p + 5  // false } else { p };
+    if p >= s.len() { p }
+    else if s.byte_at(p) == char_t() { p + 4 }
+    else if s.byte_at(p) == char_f() { p + 5 }
+    else { p };
 
 // ============================================================================
 // Null Parsing
@@ -128,15 +133,21 @@ fn skip_bool(s: String, pos: i64) -> i64 =
 
 fn skip_null(s: String, pos: i64) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { p } else if s.byte_at(p) == char_n() { p + 4  // null } else { p };
+    if p >= s.len() { p }
+    else if s.byte_at(p) == char_n() { p + 4 }
+    else { p };
 
 // ============================================================================
 // String Parsing
 // ============================================================================
 
 fn find_string_end_iter(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else { let c = s.byte_at(pos) };
-    if c == char_quote() { pos } else if c == char_backslash() { if pos + 1 >= s.len() { pos + 1 } else { find_string_end_iter(s, pos + 2) } } else { find_string_end_iter(s, pos + 1) };
+    if pos >= s.len() { pos } else {
+        let c = s.byte_at(pos);
+        if c == char_quote() { pos }
+        else if c == char_backslash() { if pos + 1 >= s.len() { pos + 1 } else { find_string_end_iter(s, pos + 2) } }
+        else { find_string_end_iter(s, pos + 1) }
+    };
 
 fn find_string_end(s: String, pos: i64) -> i64 =
     let p = skip_ws(s, pos);
@@ -148,18 +159,30 @@ fn skip_string(s: String, pos: i64) -> i64 =
 
 fn parse_string_value(s: String, pos: i64) -> String =
     let p = skip_ws(s, pos);
-    if p >= s.len() { "" } else if s.byte_at(p) != char_quote() { "" } else { let end = find_string_end(s, p) };
-    s.slice(p + 1, end);
+    if p >= s.len() { "" }
+    else if s.byte_at(p) != char_quote() { "" }
+    else {
+        let end = find_string_end(s, p);
+        s.slice(p + 1, end)
+    };
 
 // ============================================================================
 // Array/Object Parsing (using depth tracking)
 // ============================================================================
 
 fn skip_nested_iter(s: String, pos: i64, depth: i64) -> i64 =
-    if depth <= 0 { pos  // Successfully closed all brackets } else if pos >= s.len() { 0 - 1  // Error: unclosed bracket } else { let c = s.byte_at(pos) };
-    if c == char_lbracket() or c == char_lbrace() { skip_nested_iter(s, pos + 1, depth + 1) } else if c == char_rbracket() or c == char_rbrace() { skip_nested_iter(s, pos + 1, depth - 1) } else if c == char_quote() { let end = find_string_end_iter(s, pos + 1) };
-        skip_nested_iter(s, end + 1, depth)
-    else skip_nested_iter(s, pos + 1, depth);
+    if depth <= 0 { pos }
+    else if pos >= s.len() { 0 - 1 }
+    else {
+        let c = s.byte_at(pos);
+        if c == char_lbracket() or c == char_lbrace() { skip_nested_iter(s, pos + 1, depth + 1) }
+        else if c == char_rbracket() or c == char_rbrace() { skip_nested_iter(s, pos + 1, depth - 1) }
+        else if c == char_quote() {
+            let end = find_string_end_iter(s, pos + 1);
+            skip_nested_iter(s, end + 1, depth)
+        }
+        else { skip_nested_iter(s, pos + 1, depth) }
+    };
 
 fn skip_array(s: String, pos: i64) -> i64 =
     let p = skip_ws(s, pos);
@@ -179,20 +202,35 @@ fn skip_value(s: String, pos: i64) -> i64 =
 
 fn count_array_iter(s: String, pos: i64, count: i64, first: bool) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { count } else if s.byte_at(p) == char_rbracket() { count } else { let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
+    if p >= s.len() { count }
+    else if s.byte_at(p) == char_rbracket() { count }
+    else {
+        let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p };
         let p3 = skip_value(s, p2);
-        count_array_iter(s, p3, count + 1, false);
+        count_array_iter(s, p3, count + 1, false)
+    };
 
 fn array_length(s: String, pos: i64) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { 0 } else if s.byte_at(p) != char_lbracket() { 0 } else { let p2 = skip_ws(s, p + 1) };
-    if p2 < s.len() and s.byte_at(p2) == char_rbracket() { 0 } else { count_array_iter(s, p + 1, 0, true) };
+    if p >= s.len() { 0 }
+    else if s.byte_at(p) != char_lbracket() { 0 }
+    else {
+        let p2 = skip_ws(s, p + 1);
+        if p2 < s.len() and s.byte_at(p2) == char_rbracket() { 0 } else { count_array_iter(s, p + 1, 0, true) }
+    };
 
 fn array_element_pos_iter(s: String, pos: i64, idx: i64, current: i64, first: bool) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { 0 - 1 } else if s.byte_at(p) == char_rbracket() { 0 - 1 } else { let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
-        if current == idx { skip_ws(s, p2) } else { let p3 = skip_value(s, p2) };
-        array_element_pos_iter(s, p3, idx, current + 1, false);
+    if p >= s.len() { 0 - 1 }
+    else if s.byte_at(p) == char_rbracket() { 0 - 1 }
+    else {
+        let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p };
+        if current == idx { skip_ws(s, p2) }
+        else {
+            let p3 = skip_value(s, p2);
+            array_element_pos_iter(s, p3, idx, current + 1, false)
+        }
+    };
 
 fn array_element_pos(s: String, pos: i64, idx: i64) -> i64 =
     let p = skip_ws(s, pos);
@@ -204,27 +242,42 @@ fn array_element_pos(s: String, pos: i64, idx: i64) -> i64 =
 
 fn count_object_iter(s: String, pos: i64, count: i64, first: bool) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { count } else if s.byte_at(p) == char_rbrace() { count } else { let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
+    if p >= s.len() { count }
+    else if s.byte_at(p) == char_rbrace() { count }
+    else {
+        let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p };
         let p3 = skip_string(s, p2);
         let p4 = skip_ws(s, p3);
         let p5 = if p4 < s.len() and s.byte_at(p4) == char_colon() { skip_ws(s, p4 + 1) } else { p4 };
         let p6 = skip_value(s, p5);
-        count_object_iter(s, p6, count + 1, false);
+        count_object_iter(s, p6, count + 1, false)
+    };
 
 fn object_length(s: String, pos: i64) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { 0 } else if s.byte_at(p) != char_lbrace() { 0 } else { let p2 = skip_ws(s, p + 1) };
-    if p2 < s.len() and s.byte_at(p2) == char_rbrace() { 0 } else { count_object_iter(s, p + 1, 0, true) };
+    if p >= s.len() { 0 }
+    else if s.byte_at(p) != char_lbrace() { 0 }
+    else {
+        let p2 = skip_ws(s, p + 1);
+        if p2 < s.len() and s.byte_at(p2) == char_rbrace() { 0 } else { count_object_iter(s, p + 1, 0, true) }
+    };
 
 fn object_field_pos_iter(s: String, pos: i64, key: String, first: bool) -> i64 =
     let p = skip_ws(s, pos);
-    if p >= s.len() { 0 - 1 } else if s.byte_at(p) == char_rbrace() { 0 - 1 } else { let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p } };
+    if p >= s.len() { 0 - 1 }
+    else if s.byte_at(p) == char_rbrace() { 0 - 1 }
+    else {
+        let p2 = if first { p } else if s.byte_at(p) == char_comma() { skip_ws(s, p + 1) } else { p };
         let field_key = parse_string_value(s, p2);
         let p3 = skip_string(s, p2);
         let p4 = skip_ws(s, p3);
         let p5 = if p4 < s.len() and s.byte_at(p4) == char_colon() { skip_ws(s, p4 + 1) } else { p4 };
-        if field_key == key { p5 } else { let p6 = skip_value(s, p5) };
-        object_field_pos_iter(s, p6, key, false);
+        if field_key == key { p5 }
+        else {
+            let p6 = skip_value(s, p5);
+            object_field_pos_iter(s, p6, key, false)
+        }
+    };
 
 fn object_field_pos(s: String, pos: i64, key: String) -> i64 =
     let p = skip_ws(s, pos);
@@ -260,12 +313,16 @@ fn nav_index(s: String, pos: i64, idx: i64) -> i64 = array_element_pos(s, pos, i
 
 fn is_valid_json(s: String) -> bool = {
     let t = detect_type(s, 0);
-    if t == json_error() { false } else { {
+    if t == json_error() { false }
+    else {
         let end = skip_value(s, 0);
-        if end < 0 { false  // Error during parsing } else { {
+        if end < 0 { false }
+        else {
             let final_pos = skip_ws(s, end);
             final_pos >= s.len()
-        } }} }};
+        }
+    }
+};
 
 // ============================================================================
 // Serialization Helpers

@@ -20,45 +20,47 @@ fn is_letter(c: i64) -> bool = (c >= 65 and c <= 90) or (c >= 97 and c <= 122);
 
 // Check if character is valid in bare key (letter, digit, underscore, hyphen)
 fn is_bare_key_char(c: i64) -> bool =
-  is_letter(c) or is_digit(c) or c == 95 or c == 45;
+    is_letter(c) or is_digit(c) or c == 95 or c == 45;
 
 // ============================================================
 // SECTION 2: TOKENIZATION HELPERS
 // ============================================================
 
 // Skip whitespace, return new index
-fn skip_ws_iter(s: str, idx: i64, len: i64) -> i64 =
-  if idx >= len { idx } else if is_ws(char_at(s, idx)) { skip_ws_iter(s, idx + 1, len) } else { idx };
+fn skip_ws_iter(s: String, idx: i64, len: i64) -> i64 =
+    if idx >= len { idx }
+    else if is_ws(s.byte_at(idx)) { skip_ws_iter(s, idx + 1, len) }
+    else { idx };
 
-fn skip_ws(s: str, idx: i64) -> i64 = skip_ws_iter(s, idx, str_len(s));
+fn skip_ws(s: String, idx: i64) -> i64 = skip_ws_iter(s, idx, s.len());
 
 // Skip to end of line, return new index
-fn skip_to_eol_iter(s: str, idx: i64, len: i64) -> i64 =
-  if idx >= len { idx } else if is_newline(char_at(s, idx)) { idx } else { skip_to_eol_iter(s, idx + 1, len) };
+fn skip_to_eol_iter(s: String, idx: i64, len: i64) -> i64 =
+    if idx >= len { idx }
+    else if is_newline(s.byte_at(idx)) { idx }
+    else { skip_to_eol_iter(s, idx + 1, len) };
 
-fn skip_to_eol(s: str, idx: i64) -> i64 = skip_to_eol_iter(s, idx, str_len(s));
+fn skip_to_eol(s: String, idx: i64) -> i64 = skip_to_eol_iter(s, idx, s.len());
 
 // Skip comment (from # to end of line)
-fn skip_comment(s: str, idx: i64) -> i64 =
-  if idx >= str_len(s) { idx } else if char_at(s, idx) == 35 { skip_to_eol(s, idx) } else { idx };
+fn skip_comment(s: String, idx: i64) -> i64 =
+    if idx >= s.len() { idx }
+    else if s.byte_at(idx) == 35 { skip_to_eol(s, idx) }
+    else { idx };
 
 // Skip whitespace and comments
-fn skip_ws_comment(s: str, idx: i64) -> i64 =
-  let i1 = skip_ws(s, idx) in
-  let i2 = skip_comment(s, i1) in
-  if i2 == i1 { i1 } else { skip_ws_comment(s, i2) };
+fn skip_ws_comment(s: String, idx: i64) -> i64 = {
+    let i1 = skip_ws(s, idx);
+    let i2 = skip_comment(s, i1);
+    if i2 == i1 { i1 } else { skip_ws_comment(s, i2) }
+};
 
 // ============================================================
 // SECTION 3: VALUE TYPE DETECTION
 // ============================================================
 
 // Value types encoded as i64:
-// 0 = invalid
-// 1 = string (quoted)
-// 2 = integer
-// 3 = boolean
-// 4 = array
-// 5 = inline table
+// 0 = invalid, 1 = string, 2 = integer, 3 = boolean, 4 = array, 5 = inline table
 
 fn type_invalid() -> i64 = 0;
 fn type_string() -> i64 = 1;
@@ -68,35 +70,54 @@ fn type_array() -> i64 = 4;
 fn type_table() -> i64 = 5;
 
 // Detect value type from first character
-fn detect_value_type(s: str, idx: i64) -> i64 =
-  let len = str_len(s) in
-  if idx >= len { 0 } else { let c = char_at(s, idx) in
-    if c == 34 { 1       // " = string } else if c == 39 { 1  // ' = literal string } else if is_digit(c) or c == 45 or c == 43 { 2  // digit } }, -, + = integer
-    else if c == 116 or c == 102 { 3  // t }, f = boolean
-    else if c == 91 { 4  // [ = array
-    else if c == 123 { 5 // { = inline table
-    else 0;
+fn detect_value_type(s: String, idx: i64) -> i64 = {
+    let len = s.len();
+    if idx >= len { 0 }
+    else {
+        let c = s.byte_at(idx);
+        if c == 34 { 1 }
+        else if c == 39 { 1 }
+        else if is_digit(c) or c == 45 or c == 43 { 2 }
+        else if c == 116 or c == 102 { 3 }
+        else if c == 91 { 4 }
+        else if c == 123 { 5 }
+        else { 0 }
+    }
+};
 
 // ============================================================
 // SECTION 4: STRING PARSING
 // ============================================================
 
 // Find closing quote, handling escape sequences
-fn find_string_end_iter(s: str, idx: i64, len: i64, escaped: bool) -> i64 =
-  if idx >= len { -1 } else { let c = char_at(s, idx) in
-    if escaped { find_string_end_iter(s, idx + 1, len, false) } else if c == 92 { find_string_end_iter(s, idx + 1, len, true)  // backslash } else if c == 34 { idx  // closing quote } else { find_string_end_iter(s, idx + 1, len, false) } };
+fn find_string_end_iter(s: String, idx: i64, len: i64, escaped: bool) -> i64 =
+    if idx >= len { -1 }
+    else {
+        let c = s.byte_at(idx);
+        if escaped { find_string_end_iter(s, idx + 1, len, false) }
+        else if c == 92 { find_string_end_iter(s, idx + 1, len, true) }
+        else if c == 34 { idx }
+        else { find_string_end_iter(s, idx + 1, len, false) }
+    };
 
-fn find_string_end(s: str, start: i64) -> i64 =
-  find_string_end_iter(s, start, str_len(s), false);
+fn find_string_end(s: String, start: i64) -> i64 =
+    find_string_end_iter(s, start, s.len(), false);
 
 // Parse quoted string, return (content_start, content_end, next_idx) packed
 // Pack: content_start * 10000000000 + content_end * 100000 + next_idx
-fn parse_string(s: str, idx: i64) -> i64 =
-  let len = str_len(s) in
-  if idx >= len or char_at(s, idx) != 34 { -1 } else { let content_start = idx + 1 in
-    let content_end = find_string_end(s, content_start) in
-    if content_end < 0 { -1 } else { let next_idx = content_end + 1 in
-      content_start * 10000000000 + content_end * 100000 + next_idx } };
+fn parse_string(s: String, idx: i64) -> i64 = {
+    let len = s.len();
+    if idx >= len or s.byte_at(idx) != 34 { -1 }
+    else {
+        let content_start = idx + 1;
+        let content_end = find_string_end(s, content_start);
+        if content_end < 0 { -1 }
+        else {
+            let next_idx = content_end + 1;
+            content_start * 10000000000 + content_end * 100000 + next_idx
+        }
+    }
+};
 
 // Extract string content bounds from packed result
 fn string_start(packed: i64) -> i64 = packed / 10000000000;
@@ -108,53 +129,84 @@ fn string_next(packed: i64) -> i64 = packed - (packed / 100000) * 100000;
 // ============================================================
 
 // Parse bare key (unquoted)
-fn parse_bare_key_iter(s: str, idx: i64, len: i64) -> i64 =
-  if idx >= len { idx } else if is_bare_key_char(char_at(s, idx)) { parse_bare_key_iter(s, idx + 1, len) } else { idx };
+fn parse_bare_key_iter(s: String, idx: i64, len: i64) -> i64 =
+    if idx >= len { idx }
+    else if is_bare_key_char(s.byte_at(idx)) { parse_bare_key_iter(s, idx + 1, len) }
+    else { idx };
 
-fn parse_bare_key(s: str, start: i64) -> i64 =
-  parse_bare_key_iter(s, start, str_len(s));
+fn parse_bare_key(s: String, start: i64) -> i64 =
+    parse_bare_key_iter(s, start, s.len());
 
 // Parse key (bare or quoted), return (key_start, key_end, next_idx) packed
-fn parse_key(s: str, idx: i64) -> i64 =
-  let len = str_len(s) in
-  if idx >= len { -1 } else { let c = char_at(s, idx) in
-    if c == 34 { parse_string(s, idx)  // quoted key } else if is_bare_key_char(c) { let key_end = parse_bare_key(s, idx) in
-      idx * 10000000000 + key_end * 100000 + key_end } else { -1 } };
+fn parse_key(s: String, idx: i64) -> i64 = {
+    let len = s.len();
+    if idx >= len { -1 }
+    else {
+        let c = s.byte_at(idx);
+        if c == 34 { parse_string(s, idx) }
+        else if is_bare_key_char(c) {
+            let key_end = parse_bare_key(s, idx);
+            idx * 10000000000 + key_end * 100000 + key_end
+        }
+        else { -1 }
+    }
+};
 
 // ============================================================
 // SECTION 6: INTEGER PARSING
 // ============================================================
 
 // Parse integer value
-fn parse_int_iter(s: str, idx: i64, len: i64, acc: i64, neg: bool) -> i64 =
-  if idx >= len { if neg { 0 - acc } else { acc } } else { let c = char_at(s, idx) in
-    if is_digit(c) { parse_int_iter(s, idx + 1, len, acc * 10 + (c - 48), neg) } else if neg { 0 - acc } else { acc } };
+fn parse_int_iter(s: String, idx: i64, len: i64, acc: i64, neg: bool) -> i64 =
+    if idx >= len { if neg { 0 - acc } else { acc } }
+    else {
+        let c = s.byte_at(idx);
+        if is_digit(c) { parse_int_iter(s, idx + 1, len, acc * 10 + (c - 48), neg) }
+        else if neg { 0 - acc }
+        else { acc }
+    };
 
-fn parse_integer(s: str, idx: i64) -> i64 =
-  let len = str_len(s) in
-  if idx >= len { 0 } else { let c = char_at(s, idx) in
-    if c == 45 { parse_int_iter(s, idx + 1, len, 0, true)   // negative } else if c == 43 { parse_int_iter(s, idx + 1, len, 0, false)  // positive } else { parse_int_iter(s, idx, len, 0, false) } };
+fn parse_integer(s: String, idx: i64) -> i64 = {
+    let len = s.len();
+    if idx >= len { 0 }
+    else {
+        let c = s.byte_at(idx);
+        if c == 45 { parse_int_iter(s, idx + 1, len, 0, true) }
+        else if c == 43 { parse_int_iter(s, idx + 1, len, 0, false) }
+        else { parse_int_iter(s, idx, len, 0, false) }
+    }
+};
 
 // Find end of integer value
-fn find_int_end_iter(s: str, idx: i64, len: i64) -> i64 =
-  if idx >= len { idx } else { let c = char_at(s, idx) in
-    if is_digit(c) or c == 95 { find_int_end_iter(s, idx + 1, len)  // digits or _ } else { idx } };
+fn find_int_end_iter(s: String, idx: i64, len: i64) -> i64 =
+    if idx >= len { idx }
+    else {
+        let c = s.byte_at(idx);
+        if is_digit(c) or c == 95 { find_int_end_iter(s, idx + 1, len) }
+        else { idx }
+    };
 
-fn find_int_end(s: str, idx: i64) -> i64 =
-  let len = str_len(s) in
-  if idx >= len { idx } else { let c = char_at(s, idx) in
-    if c == 45 or c == 43 { find_int_end_iter(s, idx + 1, len) } else { find_int_end_iter(s, idx, len) } };
+fn find_int_end(s: String, idx: i64) -> i64 = {
+    let len = s.len();
+    if idx >= len { idx }
+    else {
+        let c = s.byte_at(idx);
+        if c == 45 or c == 43 { find_int_end_iter(s, idx + 1, len) }
+        else { find_int_end_iter(s, idx, len) }
+    }
+};
 
 // ============================================================
 // SECTION 7: BOOLEAN PARSING
 // ============================================================
 
 // Parse boolean, returns packed: value * 10 + length
-// value: 0 = false, 1 = true
-// length: number of chars consumed
-fn parse_boolean(s: str, idx: i64) -> i64 =
-  let len = str_len(s) in
-  if idx + 4 <= len and str_slice(s, idx, idx + 4) == "true" { 1 * 10 + 4 } else if idx + 5 <= len and str_slice(s, idx, idx + 5) == "false" { 0 * 10 + 5 } else { -1 };
+fn parse_boolean(s: String, idx: i64) -> i64 = {
+    let len = s.len();
+    if idx + 4 <= len and s.slice(idx, idx + 4) == "true" { 1 * 10 + 4 }
+    else if idx + 5 <= len and s.slice(idx, idx + 5) == "false" { 0 * 10 + 5 }
+    else { -1 }
+};
 
 fn bool_value(packed: i64) -> bool = packed / 10 == 1;
 fn bool_length(packed: i64) -> i64 = packed - (packed / 10) * 10;
@@ -164,32 +216,35 @@ fn bool_length(packed: i64) -> i64 = packed - (packed / 10) * 10;
 // ============================================================
 
 // Check if line is a table header [section]
-fn is_table_header(s: str, idx: i64) -> bool =
-  let i = skip_ws(s, idx) in
-  let len = str_len(s) in
-  if i >= len { false } else { char_at(s, i) == 91 and (i + 1 >= len or char_at(s, i + 1) != 91) } {  };
+fn is_table_header(s: String, idx: i64) -> bool = {
+    let i = skip_ws(s, idx);
+    let len = s.len();
+    if i >= len { false }
+    else { s.byte_at(i) == 91 and (i + 1 >= len or s.byte_at(i + 1) != 91) }
+};
 
 // Check if line is array of tables header [[section]]
-fn is_array_header(s: str, idx: i64) -> bool =
-  let i = skip_ws(s, idx) in
-  let len = str_len(s) in
-  if i + 1 >= len { false } else { char_at(s, i) == 91 and char_at(s, i + 1) == 91 } {  };
+fn is_array_header(s: String, idx: i64) -> bool = {
+    let i = skip_ws(s, idx);
+    let len = s.len();
+    if i + 1 >= len { false }
+    else { s.byte_at(i) == 91 and s.byte_at(i + 1) == 91 }
+};
 
 // Find closing bracket for table header
-fn find_table_close(s: str, idx: i64) -> i64 =
-  let len = str_len(s) in
-  if idx >= len { -1 } else if char_at(s, idx) == 93 { idx } else if is_newline(char_at(s, idx)) { -1 } else { find_table_close(s, idx + 1) };
+fn find_table_close(s: String, idx: i64) -> i64 = {
+    let len = s.len();
+    if idx >= len { -1 }
+    else if s.byte_at(idx) == 93 { idx }
+    else if is_newline(s.byte_at(idx)) { -1 }
+    else { find_table_close(s, idx + 1) }
+};
 
 // ============================================================
 // SECTION 9: LINE CLASSIFICATION
 // ============================================================
 
-// Line types:
-// 0 = empty/whitespace
-// 1 = comment
-// 2 = key-value pair
-// 3 = table header [section]
-// 4 = array of tables [[section]]
+// Line types: 0=empty, 1=comment, 2=key-value, 3=table header, 4=array of tables
 
 fn line_empty() -> i64 = 0;
 fn line_comment() -> i64 = 1;
@@ -197,84 +252,130 @@ fn line_keyval() -> i64 = 2;
 fn line_table() -> i64 = 3;
 fn line_array_table() -> i64 = 4;
 
-fn classify_line(s: str, idx: i64) -> i64 =
-  let i = skip_ws(s, idx) in
-  let len = str_len(s) in
-  if i >= len or is_newline(char_at(s, i)) { 0  // empty } else { let c = char_at(s, i) in
-    if c == 35 { 1  // comment } else if c == 91 { if i + 1 < len and char_at(s, i + 1) == 91 { 4  // [[
-      else 3  // [
-    else 2;  // key-value
+fn classify_line(s: String, idx: i64) -> i64 = {
+    let i = skip_ws(s, idx);
+    let len = s.len();
+    if i >= len or is_newline(s.byte_at(i)) { 0 }
+    else {
+        let c = s.byte_at(i);
+        if c == 35 { 1 }
+        else if c == 91 {
+            if i + 1 < len and s.byte_at(i + 1) == 91 { 4 }
+            else { 3 }
+        }
+        else { 2 }
+    }
+};
 
 // ============================================================
 // SECTION 10: VALIDATION UTILITIES
 // ============================================================
 
-// Check if TOML has valid structure (basic validation)
-fn is_valid_toml_iter(s: str, idx: i64, len: i64) -> bool =
-  if idx >= len { true } else { let line_type = classify_line(s, idx) in
-    let next_line = skip_to_eol(s, idx) in
-    let next_idx = if next_line < len and is_newline(char_at(s, next_line)) { next_line + 1 } else { next_line in
-    if line_type == 0 or line_type == 1 { is_valid_toml_iter(s, next_idx, len)  // skip empty/comment } else if line_type == 3 { let i = skip_ws(s, idx) + 1 in  // skip [
-      let close = find_table_close(s, i) in
-      if close < 0 { false } else { is_valid_toml_iter(s, next_idx, len) }else if line_type == 4 { let i = skip_ws(s, idx) + 2 in  // skip [[
-      let close = find_table_close(s, i) in
-      if close < 0 { false } else { is_valid_toml_iter(s, next_idx, len) }else
-      // key-value: check for = sign
-      let i = skip_ws(s, idx) in
-      let key_result = parse_key(s, i) in
-      if key_result < 0 { false } else { let after_key = string_next(key_result) in
-        let eq_pos = skip_ws(s, after_key) in
-        if eq_pos >= len or char_at(s, eq_pos) != 61 { false  // no = } else { is_valid_toml_iter(s, next_idx, len) } };
+// Get next line index
+fn get_next_line_idx(s: String, idx: i64) -> i64 = {
+    let next_line = skip_to_eol(s, idx);
+    let len = s.len();
+    if next_line < len and is_newline(s.byte_at(next_line)) { next_line + 1 }
+    else { next_line }
+};
 
-fn is_valid_toml(s: str) -> bool = is_valid_toml_iter(s, 0, str_len(s));
+// Check if TOML has valid structure (basic validation)
+fn is_valid_toml_iter(s: String, idx: i64, len: i64) -> bool = {
+    if idx >= len { true }
+    else {
+        let line_type = classify_line(s, idx);
+        let next_idx = get_next_line_idx(s, idx);
+        if line_type == 0 or line_type == 1 { is_valid_toml_iter(s, next_idx, len) }
+        else if line_type == 3 {
+            let i = skip_ws(s, idx) + 1;
+            let close = find_table_close(s, i);
+            if close < 0 { false } else { is_valid_toml_iter(s, next_idx, len) }
+        }
+        else if line_type == 4 {
+            let i = skip_ws(s, idx) + 2;
+            let close = find_table_close(s, i);
+            if close < 0 { false } else { is_valid_toml_iter(s, next_idx, len) }
+        }
+        else {
+            let i = skip_ws(s, idx);
+            let key_result = parse_key(s, i);
+            if key_result < 0 { false }
+            else {
+                let after_key = string_next(key_result);
+                let eq_pos = skip_ws(s, after_key);
+                if eq_pos >= len or s.byte_at(eq_pos) != 61 { false }
+                else { is_valid_toml_iter(s, next_idx, len) }
+            }
+        }
+    }
+};
+
+fn is_valid_toml(s: String) -> bool = is_valid_toml_iter(s, 0, s.len());
 
 // ============================================================
 // SECTION 11: KEY-VALUE EXTRACTION
 // ============================================================
 
 // Count key-value pairs in TOML
-fn count_keyvals_iter(s: str, idx: i64, len: i64, count: i64) -> i64 =
-  if idx >= len { count } else { let line_type = classify_line(s, idx) in
-    let next_line = skip_to_eol(s, idx) in
-    let next_idx = if next_line < len and is_newline(char_at(s, next_line)) { next_line + 1 } else { next_line in
-    if line_type == 2 { count_keyvals_iter(s, next_idx, len, count + 1) } else { count_keyvals_iter(s, next_idx, len, count) } } };
+fn count_keyvals_iter(s: String, idx: i64, len: i64, count: i64) -> i64 = {
+    if idx >= len { count }
+    else {
+        let line_type = classify_line(s, idx);
+        let next_idx = get_next_line_idx(s, idx);
+        if line_type == 2 { count_keyvals_iter(s, next_idx, len, count + 1) }
+        else { count_keyvals_iter(s, next_idx, len, count) }
+    }
+};
 
-fn count_keyvals(s: str) -> i64 = count_keyvals_iter(s, 0, str_len(s), 0);
+fn count_keyvals(s: String) -> i64 = count_keyvals_iter(s, 0, s.len(), 0);
 
 // Count table sections in TOML
-fn count_tables_iter(s: str, idx: i64, len: i64, count: i64) -> i64 =
-  if idx >= len { count } else { let line_type = classify_line(s, idx) in
-    let next_line = skip_to_eol(s, idx) in
-    let next_idx = if next_line < len and is_newline(char_at(s, next_line)) { next_line + 1 } else { next_line in
-    if line_type == 3 or line_type == 4 { count_tables_iter(s, next_idx, len, count + 1) } else { count_tables_iter(s, next_idx, len, count) } } };
+fn count_tables_iter(s: String, idx: i64, len: i64, count: i64) -> i64 = {
+    if idx >= len { count }
+    else {
+        let line_type = classify_line(s, idx);
+        let next_idx = get_next_line_idx(s, idx);
+        if line_type == 3 or line_type == 4 { count_tables_iter(s, next_idx, len, count + 1) }
+        else { count_tables_iter(s, next_idx, len, count) }
+    }
+};
 
-fn count_tables(s: str) -> i64 = count_tables_iter(s, 0, str_len(s), 0);
+fn count_tables(s: String) -> i64 = count_tables_iter(s, 0, s.len(), 0);
 
 // ============================================================
 // SECTION 12: HIGH-LEVEL API
 // ============================================================
 
 // Check if TOML string is valid
-fn validate(s: str) -> bool = is_valid_toml(s);
+fn validate(s: String) -> bool = is_valid_toml(s);
 
 // Get total count of entries (key-values + tables)
-fn entry_count(s: str) -> i64 = count_keyvals(s) + count_tables(s);
+fn entry_count(s: String) -> i64 = count_keyvals(s) + count_tables(s);
 
 // Check if TOML has a specific section [name]
-fn has_section_iter(s: str, name: str, idx: i64, len: i64) -> bool =
-  if idx >= len { false } else { let line_type = classify_line(s, idx) in
-    let next_line = skip_to_eol(s, idx) in
-    let next_idx = if next_line < len and is_newline(char_at(s, next_line)) { next_line + 1 } else { next_line in
-    if line_type == 3 { let i = skip_ws(s, idx) + 1 in
-      let close = find_table_close(s, i) in
-      if close > i { let section = str_slice(s, i, close) in
-        if section == name { true } else { has_section_iter(s, name, next_idx, len) } } else { has_section_iter(s, name, next_idx, len) } } else { has_section_iter(s, name, next_idx, len) } } } {  };
+fn has_section_iter(s: String, name: String, idx: i64, len: i64) -> bool = {
+    if idx >= len { false }
+    else {
+        let line_type = classify_line(s, idx);
+        let next_idx = get_next_line_idx(s, idx);
+        if line_type == 3 {
+            let i = skip_ws(s, idx) + 1;
+            let close = find_table_close(s, i);
+            if close > i {
+                let section = s.slice(i, close);
+                if section == name { true } else { has_section_iter(s, name, next_idx, len) }
+            }
+            else { has_section_iter(s, name, next_idx, len) }
+        }
+        else { has_section_iter(s, name, next_idx, len) }
+    }
+};
 
-fn has_section(s: str, name: str) -> bool =
-  has_section_iter(s, name, 0, str_len(s));
+fn has_section(s: String, name: String) -> bool =
+    has_section_iter(s, name, 0, s.len());
 
 // Check if TOML has "package" section (common for gotgan.toml)
-fn has_package(s: str) -> bool = has_section(s, "package");
+fn has_package(s: String) -> bool = has_section(s, "package");
 
 // Check if TOML has "dependencies" section
-fn has_dependencies(s: str) -> bool = has_section(s, "dependencies"); } } } } {  } } } } } }
+fn has_dependencies(s: String) -> bool = has_section(s, "dependencies");

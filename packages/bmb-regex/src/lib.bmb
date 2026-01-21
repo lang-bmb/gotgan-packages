@@ -24,8 +24,14 @@ fn is_word(c: i64) -> bool = is_alpha(c) or is_digit(c) or c == 95;
 fn is_space(c: i64) -> bool = c == 32 or c == 9 or c == 10 or c == 13;
 
 // Match single character against pattern type
+// Note: pat_any() matches any character except newline (10)
 fn match_char(c: i64, pat_type: i64, pat_char: i64) -> bool =
-    if pat_type == pat_literal() { c == pat_char } else if pat_type == pat_any() { c != 10  // don't match newline } else if pat_type == pat_digit() { is_digit(c) } else if pat_type == pat_alpha() { is_word(c) } else if pat_type == pat_space() { is_space(c) } else { false };
+    if pat_type == pat_literal() { c == pat_char }
+    else if pat_type == pat_any() { c != 10 }
+    else if pat_type == pat_digit() { is_digit(c) }
+    else if pat_type == pat_alpha() { is_word(c) }
+    else if pat_type == pat_space() { is_space(c) }
+    else { false };
 
 // Simple literal string match
 fn match_literal(text: String, pos: i64, pattern: String, pat_pos: i64) -> bool =
@@ -74,8 +80,11 @@ fn extract_number(text: String, pos: i64) -> i64 =
 
 // Parse integer from substring
 fn parse_int_iter(text: String, pos: i64, end: i64, acc: i64) -> i64 =
-    if pos >= end { acc } else { let c = text.byte_at(pos) };
-    if is_digit(c) { parse_int_iter(text, pos + 1, end, acc * 10 + (c - 48)) } else { acc };
+    if pos >= end { acc }
+    else {
+        let c = text.byte_at(pos);
+        if is_digit(c) { parse_int_iter(text, pos + 1, end, acc * 10 + (c - 48)) } else { acc }
+    };
 
 fn parse_int(text: String, pos: i64, end: i64) -> i64 =
     parse_int_iter(text, pos, end, 0);

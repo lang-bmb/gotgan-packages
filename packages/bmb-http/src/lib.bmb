@@ -35,7 +35,21 @@ fn is_server_error(status: i64) -> bool = status >= 500 and status < 600;
 
 // Status code reason phrases
 fn status_reason(status: i64) -> String =
-    if status == 200 { "OK" } else if status == 201 { "Created" } else if status == 204 { "No Content" } else if status == 301 { "Moved Permanently" } else if status == 302 { "Found" } else if status == 400 { "Bad Request" } else if status == 401 { "Unauthorized" } else if status == 403 { "Forbidden" } else if status == 404 { "Not Found" } else if status == 405 { "Method Not Allowed" } else if status == 500 { "Internal Server Error" } else if status == 501 { "Not Implemented" } else if status == 502 { "Bad Gateway" } else if status == 503 { "Service Unavailable" } else { "Unknown" };
+    if status == 200 { "OK" }
+    else if status == 201 { "Created" }
+    else if status == 204 { "No Content" }
+    else if status == 301 { "Moved Permanently" }
+    else if status == 302 { "Found" }
+    else if status == 400 { "Bad Request" }
+    else if status == 401 { "Unauthorized" }
+    else if status == 403 { "Forbidden" }
+    else if status == 404 { "Not Found" }
+    else if status == 405 { "Method Not Allowed" }
+    else if status == 500 { "Internal Server Error" }
+    else if status == 501 { "Not Implemented" }
+    else if status == 502 { "Bad Gateway" }
+    else if status == 503 { "Service Unavailable" }
+    else { "Unknown" };
 
 // HTTP version
 fn http_1_0() -> String = "HTTP/1.0";
@@ -59,58 +73,66 @@ fn header_authorization() -> String = "Authorization";
 fn header_cache_control() -> String = "Cache-Control";
 fn header_connection() -> String = "Connection";
 
+// Special characters using chr() - BMB doesn't support escape sequences
+fn char_cr() -> i64 = 13;
+fn char_lf() -> i64 = 10;
+fn char_space() -> i64 = 32;
+fn char_colon() -> i64 = 58;
+fn char_slash() -> i64 = 47;
+fn char_percent() -> i64 = 37;
+
 // Method string conversion
 fn method_to_string(method: i64) -> String =
-    if method == method_get() { "GET" } else if method == method_post() { "POST" } else if method == method_put() { "PUT" } else if method == method_delete() { "DELETE" } else if method == method_patch() { "PATCH" } else if method == method_head() { "HEAD" } else if method == method_options() { "OPTIONS" } else { "UNKNOWN" };
+    if method == method_get() { "GET" }
+    else if method == method_post() { "POST" }
+    else if method == method_put() { "PUT" }
+    else if method == method_delete() { "DELETE" }
+    else if method == method_patch() { "PATCH" }
+    else if method == method_head() { "HEAD" }
+    else if method == method_options() { "OPTIONS" }
+    else { "UNKNOWN" };
 
 // Parse HTTP request line
-fn is_http_method_char(c: i64) -> bool = c >= 65 and c <= 90;  // A-Z
+fn is_http_method_char(c: i64) -> bool = c >= 65 and c <= 90;
 
 fn find_space(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.byte_at(pos) == 32 { pos } else { find_space(s, pos + 1) };
+    if pos >= s.len() { pos }
+    else if s.byte_at(pos) == char_space() { pos }
+    else { find_space(s, pos + 1) };
 
 fn find_newline(s: String, pos: i64) -> i64 =
-    if pos >= s.len() { pos } else if s.byte_at(pos) == 10 { pos } else if s.byte_at(pos) == 13 { pos } else { find_newline(s, pos + 1) };
+    if pos >= s.len() { pos }
+    else if s.byte_at(pos) == char_lf() { pos }
+    else if s.byte_at(pos) == char_cr() { pos }
+    else { find_newline(s, pos + 1) };
 
 // Extract method from request line
 fn parse_method(request: String) -> i64 =
-    if request.len() >= 3 and request.slice(0, 3) == "GET" { method_get() } else if request.len() >= 4 and request.slice(0, 4) == "POST" { method_post() } else if request.len() >= 3 and request.slice(0, 3) == "PUT" { method_put() } else if request.len() >= 6 and request.slice(0, 6) == "DELETE" { method_delete() } else if request.len() >= 5 and request.slice(0, 5) == "PATCH" { method_patch() } else if request.len() >= 4 and request.slice(0, 4) == "HEAD" { method_head() } else if request.len() >= 7 and request.slice(0, 7) == "OPTIONS" { method_options() } else { 0 };
+    if request.len() >= 3 and request.slice(0, 3) == "GET" { method_get() }
+    else if request.len() >= 4 and request.slice(0, 4) == "POST" { method_post() }
+    else if request.len() >= 3 and request.slice(0, 3) == "PUT" { method_put() }
+    else if request.len() >= 6 and request.slice(0, 6) == "DELETE" { method_delete() }
+    else if request.len() >= 5 and request.slice(0, 5) == "PATCH" { method_patch() }
+    else if request.len() >= 4 and request.slice(0, 4) == "HEAD" { method_head() }
+    else if request.len() >= 7 and request.slice(0, 7) == "OPTIONS" { method_options() }
+    else { 0 };
 
 // URL encoding check (% followed by two hex digits)
 fn is_url_encoded_char(s: String, pos: i64) -> bool =
-    if pos + 2 >= s.len() { false } else { s.byte_at(pos) == 37 };  // %
-
-// Build response status line
-fn print_status_line(version: String, status: i64) -> i64 = {
-    let u0 = print_str(version);
-    let u1 = print_str(" ");
-    let u2 = print(status);
-    let u3 = print_str(" ");
-    let u4 = print_str(status_reason(status));
-    let u5 = print_str("\r\n");
-    0
-};
-
-// Build request line
-fn print_request_line(method: i64, path: String, version: String) -> i64 = {
-    let u0 = print_str(method_to_string(method));
-    let u1 = print_str(" ");
-    let u2 = print_str(path);
-    let u3 = print_str(" ");
-    let u4 = print_str(version);
-    let u5 = print_str("\r\n");
-    0
-};
-
-// Print header
-fn print_header(name: String, value: String) -> i64 = {
-    let u0 = print_str(name);
-    let u1 = print_str(": ");
-    let u2 = print_str(value);
-    let u3 = print_str("\r\n");
-    0
-};
+    if pos + 2 >= s.len() { false } else { s.byte_at(pos) == char_percent() };
 
 // Validate URL path
 fn is_valid_path(path: String) -> bool =
-    path.len() > 0 and path.byte_at(0) == 47;  // starts with /
+    path.len() > 0 and path.byte_at(0) == char_slash();
+
+// Build status line string (without printing)
+fn build_status_line(ver: String, status: i64) -> String =
+    ver + " " + chr(status / 100 + 48) + chr((status / 10) - (status / 100) * 10 + 48) + chr(status - (status / 10) * 10 + 48) + " " + status_reason(status);
+
+// Build request line string (without printing)
+fn build_request_line(method: i64, path: String, ver: String) -> String =
+    method_to_string(method) + " " + path + " " + ver;
+
+// Build header string (without printing)
+fn build_header(name: String, value: String) -> String =
+    name + ": " + value;
