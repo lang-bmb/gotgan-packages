@@ -1,0 +1,338 @@
+// bmb-algorithms: Standard algorithms for BMB
+// v0.1.0
+//
+// Modules:
+// - sort: Sorting algorithms (bubble, insertion, merge, quick)
+// - search: Searching algorithms (binary, linear)
+// - numeric: Numeric algorithms (GCD, Collatz, primality)
+
+// Re-exports from submodules
+// Note: BMB currently doesn't support module imports, so all functions
+// are defined in this file for now.
+
+// ============================================================================
+// Array Utilities (shared across all algorithms)
+// ============================================================================
+
+// Allocate array of n i64 elements
+fn array_new(n: i64) -> i64
+  pre n > 0
+  post ret != 0
+= malloc(n * 8);
+
+// Free array memory
+fn array_free(arr: i64) -> i64
+  pre arr != 0
+= { let _u = free(arr); 0 };
+
+// Get element at index
+@inline
+fn array_get(arr: i64, idx: i64) -> i64 = load_i64(arr + idx * 8);
+
+// Set element at index
+@inline
+fn array_set(arr: i64, idx: i64, value: i64) -> i64 = {
+    let _s = store_i64(arr + idx * 8, value);
+    0
+};
+
+// Swap two elements in array
+@inline
+fn array_swap(arr: i64, i: i64, j: i64) -> i64 = {
+    let tmp = load_i64(arr + i * 8);
+    let _a = store_i64(arr + i * 8, load_i64(arr + j * 8));
+    let _b = store_i64(arr + j * 8, tmp);
+    0
+};
+
+// ============================================================================
+// Sorting Algorithms
+// ============================================================================
+
+// --- Bubble Sort ---
+// Time: O(n²), Space: O(1), Stable: Yes
+// Good for: Small arrays, nearly sorted data
+
+fn bubble_sort(arr: i64, n: i64) -> i64
+  pre arr != 0 and n > 0
+= bubble_sort_outer(arr, n, 0);
+
+fn bubble_sort_outer(arr: i64, n: i64, i: i64) -> i64 =
+    if i >= n - 1 { 0 }
+    else {
+        let _inner = bubble_sort_inner(arr, n, i, 0);
+        bubble_sort_outer(arr, n, i + 1)
+    };
+
+fn bubble_sort_inner(arr: i64, n: i64, i: i64, j: i64) -> i64 =
+    if j >= n - i - 1 { 0 }
+    else {
+        let a = array_get(arr, j);
+        let b = array_get(arr, j + 1);
+        let _s = if a > b { array_swap(arr, j, j + 1) } else { 0 };
+        bubble_sort_inner(arr, n, i, j + 1)
+    };
+
+// --- Insertion Sort ---
+// Time: O(n²), Space: O(1), Stable: Yes
+// Good for: Small arrays, nearly sorted data, online sorting
+
+fn insertion_sort(arr: i64, n: i64) -> i64
+  pre arr != 0 and n > 0
+= insertion_sort_outer(arr, n, 1);
+
+fn insertion_sort_outer(arr: i64, n: i64, i: i64) -> i64 =
+    if i >= n { 0 }
+    else {
+        let key = array_get(arr, i);
+        let _inner = insertion_sort_inner(arr, i - 1, key);
+        insertion_sort_outer(arr, n, i + 1)
+    };
+
+fn insertion_sort_inner(arr: i64, j: i64, key: i64) -> i64 =
+    if j < 0 {
+        let _s = array_set(arr, j + 1, key);
+        0
+    }
+    else if array_get(arr, j) > key {
+        let _s = array_set(arr, j + 1, array_get(arr, j));
+        insertion_sort_inner(arr, j - 1, key)
+    }
+    else {
+        let _s = array_set(arr, j + 1, key);
+        0
+    };
+
+// --- Merge Sort ---
+// Time: O(n log n), Space: O(n), Stable: Yes
+// Good for: Large arrays, linked lists, external sorting
+
+fn merge_sort(arr: i64, n: i64) -> i64
+  pre arr != 0 and n > 0
+= merge_sort_helper(arr, 0, n - 1);
+
+fn merge_sort_helper(arr: i64, l: i64, r: i64) -> i64 =
+    if l < r {
+        let m = l + (r - l) / 2;
+        let _left = merge_sort_helper(arr, l, m);
+        let _right = merge_sort_helper(arr, m + 1, r);
+        merge(arr, l, m, r)
+    } else { 0 };
+
+fn merge(arr: i64, l: i64, m: i64, r: i64) -> i64 = {
+    let n1 = m - l + 1;
+    let n2 = r - m;
+    let left_arr = array_new(n1);
+    let right_arr = array_new(n2);
+
+    let _c1 = merge_copy_temp(arr, left_arr, l, n1, 0);
+    let _c2 = merge_copy_temp(arr, right_arr, m + 1, n2, 0);
+    let _merge = merge_arrays(arr, left_arr, right_arr, n1, n2, l, 0, 0);
+
+    let _f1 = array_free(left_arr);
+    let _f2 = array_free(right_arr);
+    0
+};
+
+fn merge_copy_temp(src: i64, dst: i64, src_start: i64, count: i64, i: i64) -> i64 =
+    if i >= count { 0 }
+    else {
+        let _s = array_set(dst, i, array_get(src, src_start + i));
+        merge_copy_temp(src, dst, src_start, count, i + 1)
+    };
+
+fn merge_arrays(arr: i64, left: i64, right: i64, n1: i64, n2: i64, k: i64, i: i64, j: i64) -> i64 =
+    if i >= n1 and j >= n2 { 0 }
+    else if i >= n1 { merge_copy_remaining(arr, right, k, j, n2) }
+    else if j >= n2 { merge_copy_remaining(arr, left, k, i, n1) }
+    else {
+        let l_val = array_get(left, i);
+        let r_val = array_get(right, j);
+        if l_val <= r_val {
+            let _s = array_set(arr, k, l_val);
+            merge_arrays(arr, left, right, n1, n2, k + 1, i + 1, j)
+        } else {
+            let _s = array_set(arr, k, r_val);
+            merge_arrays(arr, left, right, n1, n2, k + 1, i, j + 1)
+        }
+    };
+
+fn merge_copy_remaining(arr: i64, src: i64, k: i64, i: i64, n: i64) -> i64 =
+    if i >= n { 0 }
+    else {
+        let _s = array_set(arr, k, array_get(src, i));
+        merge_copy_remaining(arr, src, k + 1, i + 1, n)
+    };
+
+// --- Quick Sort ---
+// Time: O(n log n) avg, O(n²) worst, Space: O(log n), Stable: No
+// Good for: General purpose, in-place sorting
+
+fn quick_sort(arr: i64, n: i64) -> i64
+  pre arr != 0 and n > 0
+= quick_sort_helper(arr, 0, n - 1);
+
+fn quick_sort_helper(arr: i64, low: i64, high: i64) -> i64 =
+    if low < high {
+        let result = quick_partition(arr, low, high);
+        let pi = result.0;
+        let _left = quick_sort_helper(arr, low, pi - 1);
+        let _right = quick_sort_helper(arr, pi + 1, high);
+        0
+    } else { 0 };
+
+fn quick_partition(arr: i64, low: i64, high: i64) -> (i64, i64) = {
+    let pivot = array_get(arr, high);
+    quick_partition_loop(arr, low, high, pivot, low, low - 1)
+};
+
+fn quick_partition_loop(arr: i64, low: i64, high: i64, pivot: i64, j: i64, i: i64) -> (i64, i64) =
+    if j >= high {
+        let _s = array_swap(arr, i + 1, high);
+        (i + 1, 0)
+    }
+    else {
+        if array_get(arr, j) <= pivot {
+            let new_i = i + 1;
+            let _s = array_swap(arr, new_i, j);
+            quick_partition_loop(arr, low, high, pivot, j + 1, new_i)
+        }
+        else {
+            quick_partition_loop(arr, low, high, pivot, j + 1, i)
+        }
+    };
+
+// ============================================================================
+// Searching Algorithms
+// ============================================================================
+
+// Binary search - find index of target in sorted array
+// Returns index if found, -1 if not found
+fn binary_search(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n > 0
+= binary_search_helper(arr, 0, n - 1, target);
+
+fn binary_search_helper(arr: i64, low: i64, high: i64, target: i64) -> i64 =
+    if low > high { 0 - 1 }
+    else {
+        let mid = low + (high - low) / 2;
+        let mid_val = array_get(arr, mid);
+        if mid_val == target { mid }
+        else if mid_val > target { binary_search_helper(arr, low, mid - 1, target) }
+        else { binary_search_helper(arr, mid + 1, high, target) }
+    };
+
+// Linear search - find index of target in array
+fn linear_search(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n > 0
+= linear_search_helper(arr, n, target, 0);
+
+fn linear_search_helper(arr: i64, n: i64, target: i64, i: i64) -> i64 =
+    if i >= n { 0 - 1 }
+    else if array_get(arr, i) == target { i }
+    else { linear_search_helper(arr, n, target, i + 1) };
+
+// ============================================================================
+// Numeric Algorithms
+// ============================================================================
+
+// Greatest Common Divisor (Euclidean algorithm)
+fn gcd(a: i64, b: i64) -> i64
+  pre a >= 0 and b >= 0
+  post ret >= 0
+= if b == 0 { a } else { gcd(b, a % b) };
+
+// Least Common Multiple
+fn lcm(a: i64, b: i64) -> i64
+  pre a > 0 and b > 0
+= (a / gcd(a, b)) * b;
+
+// Collatz sequence length
+fn collatz_length(n: i64) -> i64
+  pre n > 0
+= collatz_step(n, 0);
+
+fn collatz_step(n: i64, steps: i64) -> i64 =
+    if n <= 1 { steps }
+    else if n % 2 == 0 { collatz_step(n / 2, steps + 1) }
+    else { collatz_step(3 * n + 1, steps + 1) };
+
+// Primality test (trial division)
+fn is_prime(n: i64) -> bool
+  pre n >= 0
+= if n < 2 { false }
+  else if n == 2 { true }
+  else if n % 2 == 0 { false }
+  else { is_prime_check(n, 3) };
+
+fn is_prime_check(n: i64, d: i64) -> bool =
+    if d * d > n { true }
+    else if n % d == 0 { false }
+    else { is_prime_check(n, d + 2) };
+
+// Fibonacci (iterative)
+fn fibonacci(n: i64) -> i64
+  pre n >= 0
+= fib_iter(n, 0, 1);
+
+fn fib_iter(n: i64, a: i64, b: i64) -> i64 =
+    if n <= 0 { a }
+    else { fib_iter(n - 1, b, a + b) };
+
+// Power (exponentiation by squaring)
+fn power(base: i64, exp: i64) -> i64
+  pre exp >= 0
+= if exp == 0 { 1 }
+  else if exp % 2 == 0 {
+      let half = power(base, exp / 2);
+      half * half
+  }
+  else { base * power(base, exp - 1) };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_sorting() -> i64 = {
+    let arr = array_new(5);
+    let _s0 = array_set(arr, 0, 5);
+    let _s1 = array_set(arr, 1, 3);
+    let _s2 = array_set(arr, 2, 4);
+    let _s3 = array_set(arr, 3, 1);
+    let _s4 = array_set(arr, 4, 2);
+
+    let _sort = bubble_sort(arr, 5);
+
+    let ok = array_get(arr, 0) == 1 and
+             array_get(arr, 1) == 2 and
+             array_get(arr, 2) == 3 and
+             array_get(arr, 3) == 4 and
+             array_get(arr, 4) == 5;
+
+    let _f = array_free(arr);
+    if ok { 1 } else { 0 }
+};
+
+fn test_numeric() -> i64 = {
+    let g = gcd(48, 18) == 6;
+    let l = lcm(4, 6) == 12;
+    let c = collatz_length(6) == 8;
+    let p1 = is_prime(17) == true;
+    let p2 = is_prime(18) == false;
+    let f = fibonacci(10) == 55;
+    let pw = power(2, 10) == 1024;
+
+    if g and l and c and p1 and p2 and f and pw { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = test_sorting();
+    let t2 = test_numeric();
+    if t1 == 1 and t2 == 1 {
+        let _p = println(777);
+        0
+    } else {
+        let _p = println(999);
+        1
+    }
+};
