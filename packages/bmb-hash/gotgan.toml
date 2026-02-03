@@ -1,0 +1,8 @@
+[package]
+name = "bmb-hash"
+version = "0.1.0"
+description = "Native high-performance hash table with typed pointers"
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

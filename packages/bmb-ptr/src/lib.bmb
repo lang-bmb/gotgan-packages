@@ -1,0 +1,197 @@
+// bmb-ptr: Typed pointer utilities for zero-overhead memory access
+// v0.1.0
+//
+// Provides ergonomic typed pointer operations that generate optimal LLVM IR
+// (GEP instructions instead of inttoptr) for better alias analysis and optimization.
+//
+// Usage:
+//   let arr = i64_array_new(100);    // Allocate 100 i64s
+//   set arr[0] = 42;                  // Direct GEP-based store
+//   let val = arr[0];                 // Direct GEP-based load
+//   let _f = i64_array_free(arr);     // Free memory
+
+// ============================================================================
+// i64 Array Operations
+// ============================================================================
+
+// Allocate a typed i64 array
+// Returns *i64 pointer for direct indexing without inttoptr overhead
+@inline
+fn i64_array_new(n: i64) -> *i64 = malloc(n * 8) as *i64;
+
+// Allocate a zero-initialized i64 array
+@inline
+fn i64_array_new_zeroed(n: i64) -> *i64 = calloc(n, 8) as *i64;
+
+// Free an i64 array
+@inline
+fn i64_array_free(arr: *i64) -> i64 = { let _u = free(arr as i64); 0 };
+
+// Swap two elements in an i64 array
+@inline
+fn i64_swap(arr: *i64, i: i64, j: i64) -> i64 = {
+    let tmp = arr[i];
+    set arr[i] = arr[j];
+    set arr[j] = tmp;
+    0
+};
+
+// Fill array with a value
+fn i64_array_fill(arr: *i64, n: i64, value: i64) -> i64 = {
+    let mut i = 0;
+    while i < n {
+        set arr[i] = value;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// Fill array with sequence: start, start+1, start+2, ...
+fn i64_array_iota(arr: *i64, n: i64, start: i64) -> i64 = {
+    let mut i = 0;
+    while i < n {
+        set arr[i] = start + i;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// Fill array with reverse sequence: n, n-1, ..., 2, 1 (1-indexed, for sorting worst case)
+fn i64_array_reverse(arr: *i64, n: i64) -> i64 = {
+    let mut i = 0;
+    while i < n {
+        set arr[i] = n - i;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// Copy from src to dst
+fn i64_array_copy(dst: *i64, src: *i64, n: i64) -> i64 = {
+    let mut i = 0;
+    while i < n {
+        set dst[i] = src[i];
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// Sum all elements
+fn i64_array_sum(arr: *i64, n: i64) -> i64 = {
+    let mut i = 0;
+    let mut sum: i64 = 0;
+    while i < n {
+        { sum = sum + arr[i]; i = i + 1; 0 }
+    };
+    sum
+};
+
+// Find min element helper
+fn i64_array_min_loop(arr: *i64, n: i64, i: i64, min_val: i64) -> i64 =
+    if i >= n { min_val }
+    else {
+        let val = arr[i];
+        let new_min = if val < min_val { val } else { min_val };
+        i64_array_min_loop(arr, n, i + 1, new_min)
+    };
+
+// Find min element (returns 0 if n <= 0)
+fn i64_array_min(arr: *i64, n: i64) -> i64 =
+    if n <= 0 { 0 }
+    else { i64_array_min_loop(arr, n, 1, arr[0]) };
+
+// Find max element helper
+fn i64_array_max_loop(arr: *i64, n: i64, i: i64, max_val: i64) -> i64 =
+    if i >= n { max_val }
+    else {
+        let val = arr[i];
+        let new_max = if val > max_val { val } else { max_val };
+        i64_array_max_loop(arr, n, i + 1, new_max)
+    };
+
+// Find max element (returns 0 if n <= 0)
+fn i64_array_max(arr: *i64, n: i64) -> i64 =
+    if n <= 0 { 0 }
+    else { i64_array_max_loop(arr, n, 1, arr[0]) };
+
+// ============================================================================
+// i32 Array Operations (for memory-efficient use cases)
+// ============================================================================
+
+// Allocate a typed i32 array
+@inline
+fn i32_array_new(n: i64) -> *i32 = malloc(n * 4) as *i32;
+
+// Allocate a zero-initialized i32 array
+@inline
+fn i32_array_new_zeroed(n: i64) -> *i32 = calloc(n, 4) as *i32;
+
+// Free an i32 array
+@inline
+fn i32_array_free(arr: *i32) -> i64 = { let _u = free(arr as i64); 0 };
+
+// ============================================================================
+// u8 Array Operations (for byte buffers)
+// ============================================================================
+
+// Allocate a typed u8 array (byte buffer)
+@inline
+fn u8_array_new(n: i64) -> *u8 = malloc(n) as *u8;
+
+// Allocate a zero-initialized u8 array
+@inline
+fn u8_array_new_zeroed(n: i64) -> *u8 = calloc(n, 1) as *u8;
+
+// Free a u8 array
+@inline
+fn u8_array_free(arr: *u8) -> i64 = { let _u = free(arr as i64); 0 };
+
+// ============================================================================
+// Generic Pointer Utilities
+// ============================================================================
+
+// Check if pointer is null
+@inline
+fn ptr_is_null(ptr: i64) -> bool = ptr == 0;
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_i64_array() -> i64 = {
+    let arr = i64_array_new(10);
+    let _f = i64_array_iota(arr, 10, 0);  // 0,1,2,3,4,5,6,7,8,9
+
+    let sum = i64_array_sum(arr, 10);  // 45
+    let min = i64_array_min(arr, 10);  // 0
+    let max = i64_array_max(arr, 10);  // 9
+
+    let _swap = i64_swap(arr, 0, 9);  // 9,1,2,3,4,5,6,7,8,0
+
+    let _free = i64_array_free(arr);
+
+    if sum == 45 and min == 0 and max == 9 { 1 } else { 0 }
+};
+
+fn test_i64_array_fill() -> i64 = {
+    let arr = i64_array_new(5);
+    let _f = i64_array_fill(arr, 5, 42);
+
+    let ok = arr[0] == 42 and arr[1] == 42 and arr[4] == 42;
+    let _free = i64_array_free(arr);
+
+    if ok { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = test_i64_array();
+    let t2 = test_i64_array_fill();
+
+    if t1 == 1 and t2 == 1 {
+        let _p = println(999);
+        0
+    } else {
+        let _p = println(0);
+        1
+    }
+};

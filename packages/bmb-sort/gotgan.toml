@@ -1,0 +1,8 @@
+[package]
+name = "bmb-sort"
+version = "0.1.0"
+description = "High-performance sorting algorithms with typed pointers"
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

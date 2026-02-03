@@ -1,0 +1,224 @@
+// bmb-hash: Native high-performance hash table
+// v0.1.0
+//
+// Open-addressing hash table with linear probing.
+// Uses FNV-1a variant hash function for good distribution.
+//
+// Memory layout:
+//   HashMap: [entries: i64, count: i64, capacity: i64] = 24 bytes
+//   Entry:   [key: i64, value: i64, state: i64] = 24 bytes
+//
+// Usage:
+//   let map = hmap_new(1024);
+//   let _r = hmap_put(map, key, value);
+//   let val = hmap_get(map, key);
+//   let _f = hmap_free(map);
+
+// Sentinel value for "not found"
+fn HMAP_NOT_FOUND() -> i64 = 0 - 9223372036854775807 - 1;
+
+// Entry states
+fn HMAP_STATE_EMPTY() -> i64 = 0;
+fn HMAP_STATE_OCCUPIED() -> i64 = 1;
+fn HMAP_STATE_TOMBSTONE() -> i64 = 2;
+
+// Entry size (24 bytes per entry)
+fn HMAP_ENTRY_SIZE() -> i64 = 24;
+
+// FNV-1a variant hash function
+@inline
+fn hmap_hash_i64(key: i64) -> i64 = {
+    let h = key * 5871781006564002453;
+    h bxor (h >> 32)
+};
+
+// Helper: get entry base address
+fn hmap_entry_addr(entries: i64, idx: i64) -> i64 = entries + idx * HMAP_ENTRY_SIZE();
+
+// Initialize entries to empty state
+fn hmap_init_entries(entries: i64, capacity: i64) -> i64 = {
+    let mut i: i64 = 0;
+    while i < capacity {
+        let e = hmap_entry_addr(entries, i);
+        let _s = store_i64(e + 16, HMAP_STATE_EMPTY());
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// Create a new hash map with given capacity (must be power of 2)
+fn hmap_new(capacity: i64) -> i64 = {
+    let m = malloc(24);
+    let entries = malloc(capacity * HMAP_ENTRY_SIZE());
+    let _init = hmap_init_entries(entries, capacity);
+    let _s1 = store_i64(m, entries);
+    let _s2 = store_i64(m + 8, 0);
+    let _s3 = store_i64(m + 16, capacity);
+    m
+};
+
+// Free hash map memory
+fn hmap_free(m: i64) -> i64 = {
+    let entries = load_i64(m);
+    let _e = free(entries);
+    let _m = free(m);
+    0
+};
+
+// Get number of entries
+fn hmap_len(m: i64) -> i64 = load_i64(m + 8);
+
+// Insert or update a key-value pair
+fn hmap_put(m: i64, key: i64, value: i64) -> i64 = {
+    let hash = hmap_hash_i64(key);
+    let cap = load_i64(m + 16);
+    let mask = cap - 1;
+    let entries = load_i64(m);
+    let mut idx: i64 = hash band mask;
+    let mut i: i64 = 0;
+    let mut result: i64 = 0;
+
+    while i < cap {
+        let e = hmap_entry_addr(entries, idx);
+        let state = load_i64(e + 16);
+        if state == HMAP_STATE_EMPTY() or state == HMAP_STATE_TOMBSTONE() {
+            {
+                store_i64(e, key);
+                store_i64(e + 8, value);
+                store_i64(e + 16, HMAP_STATE_OCCUPIED());
+                store_i64(m + 8, load_i64(m + 8) + 1);
+                result = 1;
+                i = cap;
+                0
+            }
+        } else if state == HMAP_STATE_OCCUPIED() and load_i64(e) == key {
+            { store_i64(e + 8, value); result = 0; i = cap; 0 }
+        } else {
+            { idx = (idx + 1) band mask; i = i + 1; 0 }
+        }
+    };
+    result
+};
+
+// Get value for a key
+fn hmap_get(m: i64, key: i64) -> i64 = {
+    let hash = hmap_hash_i64(key);
+    let cap = load_i64(m + 16);
+    let mask = cap - 1;
+    let entries = load_i64(m);
+    let mut idx: i64 = hash band mask;
+    let mut i: i64 = 0;
+    let mut result: i64 = HMAP_NOT_FOUND();
+
+    while i < cap {
+        let e = hmap_entry_addr(entries, idx);
+        let state = load_i64(e + 16);
+        if state == HMAP_STATE_EMPTY() {
+            { i = cap; 0 }
+        } else if state == HMAP_STATE_OCCUPIED() and load_i64(e) == key {
+            { result = load_i64(e + 8); i = cap; 0 }
+        } else {
+            { idx = (idx + 1) band mask; i = i + 1; 0 }
+        }
+    };
+    result
+};
+
+// Check if key exists
+fn hmap_contains(m: i64, key: i64) -> bool =
+    hmap_get(m, key) != HMAP_NOT_FOUND();
+
+// Remove a key
+fn hmap_delete(m: i64, key: i64) -> i64 = {
+    let hash = hmap_hash_i64(key);
+    let cap = load_i64(m + 16);
+    let mask = cap - 1;
+    let entries = load_i64(m);
+    let mut idx: i64 = hash band mask;
+    let mut i: i64 = 0;
+    let mut result: i64 = 0;
+
+    while i < cap {
+        let e = hmap_entry_addr(entries, idx);
+        let state = load_i64(e + 16);
+        if state == HMAP_STATE_EMPTY() {
+            { i = cap; 0 }
+        } else if state == HMAP_STATE_OCCUPIED() and load_i64(e) == key {
+            {
+                store_i64(e + 16, HMAP_STATE_TOMBSTONE());
+                store_i64(m + 8, load_i64(m + 8) - 1);
+                result = 1;
+                i = cap;
+                0
+            }
+        } else {
+            { idx = (idx + 1) band mask; i = i + 1; 0 }
+        }
+    };
+    result
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_basic() -> i64 = {
+    let m = hmap_new(64);
+
+    let _r1 = hmap_put(m, 1, 100);
+    let _r2 = hmap_put(m, 2, 200);
+    let _r3 = hmap_put(m, 3, 300);
+
+    let v1 = hmap_get(m, 1);
+    let v2 = hmap_get(m, 2);
+    let v3 = hmap_get(m, 3);
+    let len = hmap_len(m);
+
+    let _f = hmap_free(m);
+
+    if v1 == 100 and v2 == 200 and v3 == 300 and len == 3 { 1 } else { 0 }
+};
+
+fn test_update() -> i64 = {
+    let m = hmap_new(64);
+
+    let _r1 = hmap_put(m, 1, 100);
+    let _r2 = hmap_put(m, 1, 150);  // Update
+
+    let v = hmap_get(m, 1);
+    let len = hmap_len(m);
+
+    let _f = hmap_free(m);
+
+    if v == 150 and len == 1 { 1 } else { 0 }
+};
+
+fn test_delete() -> i64 = {
+    let m = hmap_new(64);
+
+    let _r1 = hmap_put(m, 1, 100);
+    let _r2 = hmap_put(m, 2, 200);
+
+    let _d = hmap_delete(m, 1);
+    let v1 = hmap_get(m, 1);
+    let v2 = hmap_get(m, 2);
+    let len = hmap_len(m);
+
+    let _f = hmap_free(m);
+
+    if v1 == HMAP_NOT_FOUND() and v2 == 200 and len == 1 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = test_basic();
+    let t2 = test_update();
+    let t3 = test_delete();
+
+    if t1 == 1 and t2 == 1 and t3 == 1 {
+        let _p = println(999);
+        0
+    } else {
+        let _p = println(0);
+        1
+    }
+};

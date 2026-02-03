@@ -1,0 +1,8 @@
+[package]
+name = "bmb-ptr"
+version = "0.1.0"
+description = "Typed pointer utilities for zero-overhead memory access"
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]
