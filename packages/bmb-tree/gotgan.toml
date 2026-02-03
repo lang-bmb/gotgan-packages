@@ -1,0 +1,6 @@
+[package]
+name = "bmb-tree"
+version = "0.1.0"
+description = "Binary tree data structure with typed pointers"
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"

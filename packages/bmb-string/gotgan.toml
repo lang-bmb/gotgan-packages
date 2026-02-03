@@ -1,0 +1,6 @@
+[package]
+name = "bmb-string"
+version = "0.1.0"
+description = "String utilities: character classification, conversion, parsing, searching"
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
