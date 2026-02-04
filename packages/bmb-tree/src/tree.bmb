@@ -1,0 +1,116 @@
+// bmb-tree: Binary Tree Package
+// Provides typed pointer-based binary tree implementation
+//
+// Features:
+// - Node allocation and deallocation
+// - Tree construction (make_tree)
+// - Tree traversal (check_tree, map, fold)
+// - Tree destruction (free_tree)
+
+// ============================================================================
+// Binary Tree Node
+// ============================================================================
+
+/// Binary tree node with typed pointers
+struct Node {
+    left: *Node,
+    right: *Node
+}
+
+/// Allocate a new node (16 bytes: 2 pointers)
+fn node_new() -> *Node = malloc(16) as *Node;
+
+/// Free a single node
+fn node_free(node: *Node) -> i64 = { free(node as i64); 0 };
+
+// ============================================================================
+// Tree Construction
+// ============================================================================
+
+/// Create a complete binary tree of given depth
+/// depth=0: single leaf node
+/// depth=n: node with two subtrees of depth n-1
+fn make_tree(depth: i64) -> *Node = {
+    let node = node_new();
+    if depth > 0 {
+        let _l = set node.left = make_tree(depth - 1);
+        let _r = set node.right = make_tree(depth - 1);
+        node
+    } else {
+        let _l = set node.left = null;
+        let _r = set node.right = null;
+        node
+    }
+};
+
+/// Create a leaf node
+fn make_leaf() -> *Node = {
+    let node = node_new();
+    let _l = set node.left = null;
+    let _r = set node.right = null;
+    node
+};
+
+// ============================================================================
+// Tree Traversal
+// ============================================================================
+
+/// Count nodes in tree (returns total node count)
+fn check_tree(node: *Node) -> i64 = {
+    let left = node.left;
+    if left == null {
+        1
+    } else {
+        1 + check_tree(node.left) + check_tree(node.right)
+    }
+};
+
+/// Get tree depth (0 for leaf)
+fn tree_depth(node: *Node) -> i64 = {
+    let left = node.left;
+    if left == null {
+        0
+    } else {
+        1 + tree_depth(node.left)
+    }
+};
+
+/// Check if node is a leaf
+fn is_leaf(node: *Node) -> bool = node.left == null;
+
+// ============================================================================
+// Tree Destruction
+// ============================================================================
+
+/// Free entire tree recursively
+fn free_tree(node: *Node) -> i64 = {
+    let left = node.left;
+    if left != null {
+        let _l = free_tree(node.left);
+        let _r = free_tree(node.right);
+        let _f = node_free(node);
+        0
+    } else {
+        let _f = node_free(node);
+        0
+    }
+};
+
+// ============================================================================
+// Utilities
+// ============================================================================
+
+/// Left shift: 1 << n (for calculating iterations)
+fn shift_left(x: i64, n: i64) -> i64 = {
+    let mut result: i64 = x;
+    let mut i: i64 = 0;
+    while i < n {
+        { result = result * 2 };
+        { i = i + 1 };
+    };
+    result
+};
+
+/// Calculate number of nodes in complete tree of depth d
+/// Formula: 2^(d+1) - 1
+fn tree_node_count(depth: i64) -> i64 = shift_left(1, depth + 1) - 1;

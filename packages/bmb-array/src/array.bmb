@@ -1,0 +1,149 @@
+// bmb-array: Array Utilities Package (Library Only)
+// Provides typed array operations for i64 and f64 arrays
+
+// ============================================================================
+// i64 Array Operations (using raw i64 addresses and intrinsics)
+// ============================================================================
+
+/// Allocate i64 array of size n (returns raw address)
+@inline
+fn i64_array_new(n: i64) -> i64 = malloc(n * 8);
+
+/// Free i64 array
+@inline
+fn i64_array_free(arr: i64) -> i64 = { free(arr); 0 };
+
+/// Get element at index
+@inline
+fn i64_array_get(arr: i64, i: i64) -> i64 = load_i64(arr + i * 8);
+
+/// Set element at index
+@inline
+fn i64_array_set(arr: i64, i: i64, val: i64) -> i64 = {
+    store_i64(arr + i * 8, val);
+    0
+};
+
+/// Swap two elements
+@inline
+fn i64_array_swap(arr: i64, i: i64, j: i64) -> i64 = {
+    let tmp = load_i64(arr + i * 8);
+    store_i64(arr + i * 8, load_i64(arr + j * 8));
+    store_i64(arr + j * 8, tmp);
+    0
+};
+
+/// Fill array with value
+fn i64_array_fill(arr: i64, n: i64, val: i64) -> i64 = {
+    let mut i: i64 = 0;
+    while i < n { {
+        store_i64(arr + i * 8, val);
+        i = i + 1;
+        ()
+    } };
+    0
+};
+
+/// Copy from src to dst
+fn i64_array_copy(dst: i64, src: i64, n: i64) -> i64 = {
+    let mut i: i64 = 0;
+    while i < n { {
+        store_i64(dst + i * 8, load_i64(src + i * 8));
+        i = i + 1;
+        ()
+    } };
+    0
+};
+
+/// Initialize with values 0..n-1
+fn i64_array_iota(arr: i64, n: i64) -> i64 = {
+    let mut i: i64 = 0;
+    while i < n { {
+        store_i64(arr + i * 8, i);
+        i = i + 1;
+        ()
+    } };
+    0
+};
+
+/// Initialize with reverse values n-1..0
+fn i64_array_reverse_iota(arr: i64, n: i64) -> i64 = {
+    let mut i: i64 = 0;
+    while i < n { {
+        store_i64(arr + i * 8, n - 1 - i);
+        i = i + 1;
+        ()
+    } };
+    0
+};
+
+/// Sum all elements
+fn i64_array_sum(arr: i64, n: i64) -> i64 = {
+    let mut i: i64 = 0;
+    let mut sum: i64 = 0;
+    while i < n { {
+        sum = sum + load_i64(arr + i * 8);
+        i = i + 1;
+        ()
+    } };
+    sum
+};
+
+/// Find min element
+fn i64_array_min(arr: i64, n: i64) -> i64 = {
+    let result = if n == 0 { 0 }
+    else { {
+        let mut i: i64 = 1;
+        let mut min: i64 = load_i64(arr);
+        let mut val: i64 = 0;
+        while i < n { {
+            val = load_i64(arr + i * 8);
+            min = if val < min { val } else { min };
+            i = i + 1;
+            ()
+        } };
+        min
+    } };
+    result
+};
+
+/// Find max element
+fn i64_array_max(arr: i64, n: i64) -> i64 = {
+    let result = if n == 0 { 0 }
+    else { {
+        let mut i: i64 = 1;
+        let mut max: i64 = load_i64(arr);
+        let mut val: i64 = 0;
+        while i < n { {
+            val = load_i64(arr + i * 8);
+            max = if val > max { val } else { max };
+            i = i + 1;
+            ()
+        } };
+        max
+    } };
+    result
+};
+
+// ============================================================================
+// f64 Array Operations
+// ============================================================================
+
+/// Allocate f64 array (returns i64 address)
+@inline
+fn f64_array_new(n: i64) -> i64 = malloc(n * 8);
+
+/// Free f64 array
+@inline
+fn f64_array_free(arr: i64) -> i64 = { free(arr); 0 };
+
+/// Get f64 element
+@inline
+fn f64_array_get(arr: i64, i: i64) -> f64 = load_f64(arr + i * 8);
+
+/// Set f64 element
+@inline
+fn f64_array_set(arr: i64, i: i64, val: f64) -> i64 = {
+    store_f64(arr + i * 8, val);
+    0
+};
