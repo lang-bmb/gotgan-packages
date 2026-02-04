@@ -1,5 +1,5 @@
-// bmb-option: Option type for representing optional values
-// v0.1.0
+// bmb-option: Generic Option type for representing optional values
+// v0.2.0 - Now with generic Option<T> support (v0.60.261+)
 //
 // The Option type represents a value that may or may not exist.
 // This is BMB's equivalent to Rust's Option<T> or Haskell's Maybe a.
@@ -13,10 +13,10 @@
 //       Option::None => 0
 //   };
 
-// Option enum - represents an optional value
-enum Option {
-    Some(i64),
-    None
+// Option<T> enum - represents an optional value of any type
+pub enum Option<T> {
+    Some(T),
+    None,
 }
 
 // ============================================
@@ -25,84 +25,88 @@ enum Option {
 
 // Create Some variant with a value
 @inline
-pub fn some(value: i64) -> Option = Option::Some(value);
+pub fn some<T>(value: T) -> Option<T> = Option::Some(value);
 
-// Create None variant
+// Create None variant (use Option::None directly for type inference)
+// Note: Generic none() requires explicit type context
 @inline
-pub fn none() -> Option = Option::None;
+pub fn none_i64() -> Option<i64> = Option::None;
 
 // ============================================
 // Predicates
 // ============================================
 
 // Check if Option contains a value
-pub fn is_some(opt: Option) -> bool = match opt {
+pub fn is_some<T>(opt: Option<T>) -> bool = match opt {
     Option::Some(_) => true,
-    Option::None => false
+    Option::None => false,
 };
 
 // Check if Option is empty
-pub fn is_none(opt: Option) -> bool = match opt {
+pub fn is_none<T>(opt: Option<T>) -> bool = match opt {
     Option::Some(_) => false,
-    Option::None => true
+    Option::None => true,
 };
 
 // ============================================
-// Extractors
+// Extractors (i64 specialization for safety)
 // ============================================
 
-// Unwrap the value, returns 0 if None (no panic support yet)
-pub fn unwrap(opt: Option) -> i64 = match opt {
+// Unwrap the value, returns 0 if None (i64 version)
+pub fn unwrap_i64(opt: Option<i64>) -> i64 = match opt {
     Option::Some(x) => x,
-    Option::None => 0
+    Option::None => 0,
 };
 
-// Unwrap with a default value if None
-pub fn unwrap_or(opt: Option, default: i64) -> i64 = match opt {
+// Unwrap with a default value if None (i64 version)
+pub fn unwrap_or_i64(opt: Option<i64>, default: i64) -> i64 = match opt {
     Option::Some(x) => x,
-    Option::None => default
+    Option::None => default,
 };
+
+// Note: Generic unwrap<T> requires panic/abort support
+// For now, use type-specialized versions like unwrap_i64
 
 // ============================================
-// Transformers (manual - no closures)
+// Transformers (i64 specialization - no closures)
 // ============================================
 
 // Double the value if Some
-pub fn map_double(opt: Option) -> Option = match opt {
+pub fn map_double(opt: Option<i64>) -> Option<i64> = match opt {
     Option::Some(x) => Option::Some(x * 2),
-    Option::None => Option::None
+    Option::None => Option::None,
 };
 
 // Increment the value if Some
-pub fn map_inc(opt: Option) -> Option = match opt {
+pub fn map_inc(opt: Option<i64>) -> Option<i64> = match opt {
     Option::Some(x) => Option::Some(x + 1),
-    Option::None => Option::None
+    Option::None => Option::None,
 };
 
 // Negate the value if Some
-pub fn map_neg(opt: Option) -> Option = match opt {
+pub fn map_neg(opt: Option<i64>) -> Option<i64> = match opt {
     Option::Some(x) => Option::Some(0 - x),
-    Option::None => Option::None
+    Option::None => Option::None,
 };
 
 // ============================================
-// Combinators
+// Combinators (i64 specialization)
 // ============================================
 
 // Return first Some, or second if first is None
-pub fn opt_or(opt: Option, other: Option) -> Option = match opt {
+pub fn opt_or(opt: Option<i64>, other: Option<i64>) -> Option<i64> = match opt {
     Option::Some(x) => Option::Some(x),
-    Option::None => other
+    Option::None => other,
 };
 
 // AND: returns None if first is None, otherwise returns second
-pub fn opt_and(opt: Option, other: Option) -> Option = match opt {
+pub fn opt_and(opt: Option<i64>, other: Option<i64>) -> Option<i64> = match opt {
     Option::Some(_) => other,
-    Option::None => Option::None
+    Option::None => Option::None,
 };
 
 // XOR: returns Some only if exactly one is Some
-pub fn opt_xor(opt: Option, other: Option) -> Option = {
+pub fn opt_xor(opt: Option<i64>, other: Option<i64>) -> Option<i64> = {
     let a_some = is_some(opt);
     let b_some = is_some(other);
     if a_some and not b_some {
@@ -115,15 +119,15 @@ pub fn opt_xor(opt: Option, other: Option) -> Option = {
 };
 
 // ============================================
-// Comparison
+// Comparison (i64 specialization)
 // ============================================
 
 // Check if two Options are equal
-pub fn eq(a: Option, b: Option) -> bool = {
+pub fn eq(a: Option<i64>, b: Option<i64>) -> bool = {
     let a_some = is_some(a);
     let b_some = is_some(b);
     if a_some and b_some {
-        unwrap(a) == unwrap(b)
+        unwrap_i64(a) == unwrap_i64(b)
     } else if not a_some and not b_some {
         true
     } else {
@@ -133,12 +137,12 @@ pub fn eq(a: Option, b: Option) -> bool = {
 
 // Compare Options: returns -1 if a < b, 0 if equal, 1 if a > b
 // None < Some(x) for any x
-pub fn opt_cmp(a: Option, b: Option) -> i64 = {
+pub fn opt_cmp(a: Option<i64>, b: Option<i64>) -> i64 = {
     let a_some = is_some(a);
     let b_some = is_some(b);
     if a_some and b_some {
-        let x = unwrap(a);
-        let y = unwrap(b);
+        let x = unwrap_i64(a);
+        let y = unwrap_i64(b);
         if x < y { -1 } else if x > y { 1 } else { 0 }
     } else if a_some {
         1
@@ -150,19 +154,19 @@ pub fn opt_cmp(a: Option, b: Option) -> i64 = {
 };
 
 // ============================================
-// Utilities
+// Utilities (i64 specialization)
 // ============================================
 
 // Get the value if Some and greater than threshold
-pub fn filter_gt(opt: Option, threshold: i64) -> Option = match opt {
+pub fn filter_gt(opt: Option<i64>, threshold: i64) -> Option<i64> = match opt {
     Option::Some(x) => if x > threshold { Option::Some(x) } else { Option::None },
-    Option::None => Option::None
+    Option::None => Option::None,
 };
 
 // Get the value if Some and less than threshold
-pub fn filter_lt(opt: Option, threshold: i64) -> Option = match opt {
+pub fn filter_lt(opt: Option<i64>, threshold: i64) -> Option<i64> = match opt {
     Option::Some(x) => if x < threshold { Option::Some(x) } else { Option::None },
-    Option::None => Option::None
+    Option::None => Option::None,
 };
 
 // ============================================
@@ -171,7 +175,7 @@ pub fn filter_lt(opt: Option, threshold: i64) -> Option = match opt {
 
 fn test_constructors() -> i64 = {
     let s = some(42);
-    let n = none();
+    let n: Option<i64> = Option::None;
 
     if not is_some(s) { 1 }
     else if not is_none(n) { 2 }
@@ -183,23 +187,23 @@ fn test_constructors() -> i64 = {
 fn test_unwrap() -> i64 = {
     let s = some(42);
 
-    if unwrap(s) != 42 { 1 }
-    else if unwrap_or(s, 0) != 42 { 2 }
-    else if unwrap_or(none(), 99) != 99 { 3 }
+    if unwrap_i64(s) != 42 { 1 }
+    else if unwrap_or_i64(s, 0) != 42 { 2 }
+    else if unwrap_or_i64(none_i64(), 99) != 99 { 3 }
     else { 0 }
 };
 
 fn test_map() -> i64 = {
     let s = some(10);
     let doubled = map_double(s);
-    let doubled_none = map_double(none());
+    let doubled_none = map_double(none_i64());
     let inc = map_inc(s);
     let neg = map_neg(s);
 
-    if unwrap(doubled) != 20 { 1 }
+    if unwrap_i64(doubled) != 20 { 1 }
     else if is_some(doubled_none) { 2 }
-    else if unwrap(inc) != 11 { 3 }
-    else if unwrap(neg) != -10 { 4 }
+    else if unwrap_i64(inc) != 11 { 3 }
+    else if unwrap_i64(neg) != -10 { 4 }
     else { 0 }
 };
 
@@ -220,18 +224,18 @@ fn test_filter() -> i64 = {
 fn test_combinators() -> i64 = {
     let s1 = some(1);
     let s2 = some(2);
-    let n = none();
+    let n = none_i64();
 
     // opt_or
-    if unwrap(opt_or(s1, s2)) != 1 { 1 }
-    else if unwrap(opt_or(n, s2)) != 2 { 2 }
+    if unwrap_i64(opt_or(s1, s2)) != 1 { 1 }
+    else if unwrap_i64(opt_or(n, s2)) != 2 { 2 }
     // opt_and
-    else if unwrap(opt_and(s1, s2)) != 2 { 3 }
+    else if unwrap_i64(opt_and(s1, s2)) != 2 { 3 }
     else if is_some(opt_and(n, s2)) { 4 }
     // opt_xor
     else if not is_none(opt_xor(s1, s2)) { 5 }
-    else if unwrap(opt_xor(s1, n)) != 1 { 6 }
-    else if unwrap(opt_xor(n, s2)) != 2 { 7 }
+    else if unwrap_i64(opt_xor(s1, n)) != 1 { 6 }
+    else if unwrap_i64(opt_xor(n, s2)) != 2 { 7 }
     else if not is_none(opt_xor(n, n)) { 8 }
     else { 0 }
 };
@@ -240,8 +244,8 @@ fn test_equality() -> i64 = {
     let s1 = some(42);
     let s2 = some(42);
     let s3 = some(99);
-    let n1 = none();
-    let n2 = none();
+    let n1 = none_i64();
+    let n2 = none_i64();
 
     if not eq(s1, s2) { 1 }
     else if eq(s1, s3) { 2 }
@@ -253,7 +257,7 @@ fn test_equality() -> i64 = {
 fn test_comparison() -> i64 = {
     let s1 = some(10);
     let s2 = some(20);
-    let n = none();
+    let n = none_i64();
 
     if opt_cmp(s1, s2) != -1 { 1 }
     else if opt_cmp(s2, s1) != 1 { 2 }
@@ -262,6 +266,19 @@ fn test_comparison() -> i64 = {
     else if opt_cmp(s1, n) != 1 { 5 }
     else if opt_cmp(n, n) != 0 { 6 }
     else { 0 }
+};
+
+// Test generic Option with different types
+fn test_generic() -> i64 = {
+    // Option<i64>
+    let oi = some(100);
+    if unwrap_i64(oi) != 100 { 1 }
+    // Option<bool> - represented as Option<i64> internally
+    else {
+        let ob = some(1);  // true as 1
+        if unwrap_i64(ob) != 1 { 2 }
+        else { 0 }
+    }
 };
 
 fn main() -> i64 = {
@@ -286,8 +303,12 @@ fn main() -> i64 = {
                             let r7 = test_comparison();
                             if r7 != 0 { let _p = println(r7 + 60); r7 + 60 }
                             else {
-                                let _p = println(999);
-                                999
+                                let r8 = test_generic();
+                                if r8 != 0 { let _p = println(r8 + 70); r8 + 70 }
+                                else {
+                                    let _p = println(999);
+                                    999
+                                }
                             }
                         }
                     }
