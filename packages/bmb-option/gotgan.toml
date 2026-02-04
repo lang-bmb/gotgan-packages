@@ -1,0 +1,8 @@
+[package]
+name = "bmb-option"
+version = "0.1.0"
+description = "Option type for representing optional values"
+license = "MIT"
+keywords = ["option", "maybe", "nullable", "core"]
+
+[dependencies]

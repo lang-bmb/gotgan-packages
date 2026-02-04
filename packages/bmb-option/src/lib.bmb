@@ -1,0 +1,298 @@
+// bmb-option: Option type for representing optional values
+// v0.1.0
+//
+// The Option type represents a value that may or may not exist.
+// This is BMB's equivalent to Rust's Option<T> or Haskell's Maybe a.
+//
+// Usage:
+//   let some_val = Option::Some(42);
+//   let none_val = Option::None;
+//
+//   let result = match some_val {
+//       Option::Some(x) => x * 2,
+//       Option::None => 0
+//   };
+
+// Option enum - represents an optional value
+enum Option {
+    Some(i64),
+    None
+}
+
+// ============================================
+// Constructors
+// ============================================
+
+// Create Some variant with a value
+@inline
+pub fn some(value: i64) -> Option = Option::Some(value);
+
+// Create None variant
+@inline
+pub fn none() -> Option = Option::None;
+
+// ============================================
+// Predicates
+// ============================================
+
+// Check if Option contains a value
+pub fn is_some(opt: Option) -> bool = match opt {
+    Option::Some(_) => true,
+    Option::None => false
+};
+
+// Check if Option is empty
+pub fn is_none(opt: Option) -> bool = match opt {
+    Option::Some(_) => false,
+    Option::None => true
+};
+
+// ============================================
+// Extractors
+// ============================================
+
+// Unwrap the value, returns 0 if None (no panic support yet)
+pub fn unwrap(opt: Option) -> i64 = match opt {
+    Option::Some(x) => x,
+    Option::None => 0
+};
+
+// Unwrap with a default value if None
+pub fn unwrap_or(opt: Option, default: i64) -> i64 = match opt {
+    Option::Some(x) => x,
+    Option::None => default
+};
+
+// ============================================
+// Transformers (manual - no closures)
+// ============================================
+
+// Double the value if Some
+pub fn map_double(opt: Option) -> Option = match opt {
+    Option::Some(x) => Option::Some(x * 2),
+    Option::None => Option::None
+};
+
+// Increment the value if Some
+pub fn map_inc(opt: Option) -> Option = match opt {
+    Option::Some(x) => Option::Some(x + 1),
+    Option::None => Option::None
+};
+
+// Negate the value if Some
+pub fn map_neg(opt: Option) -> Option = match opt {
+    Option::Some(x) => Option::Some(0 - x),
+    Option::None => Option::None
+};
+
+// ============================================
+// Combinators
+// ============================================
+
+// Return first Some, or second if first is None
+pub fn opt_or(opt: Option, other: Option) -> Option = match opt {
+    Option::Some(x) => Option::Some(x),
+    Option::None => other
+};
+
+// AND: returns None if first is None, otherwise returns second
+pub fn opt_and(opt: Option, other: Option) -> Option = match opt {
+    Option::Some(_) => other,
+    Option::None => Option::None
+};
+
+// XOR: returns Some only if exactly one is Some
+pub fn opt_xor(opt: Option, other: Option) -> Option = {
+    let a_some = is_some(opt);
+    let b_some = is_some(other);
+    if a_some and not b_some {
+        opt
+    } else if not a_some and b_some {
+        other
+    } else {
+        Option::None
+    }
+};
+
+// ============================================
+// Comparison
+// ============================================
+
+// Check if two Options are equal
+pub fn eq(a: Option, b: Option) -> bool = {
+    let a_some = is_some(a);
+    let b_some = is_some(b);
+    if a_some and b_some {
+        unwrap(a) == unwrap(b)
+    } else if not a_some and not b_some {
+        true
+    } else {
+        false
+    }
+};
+
+// Compare Options: returns -1 if a < b, 0 if equal, 1 if a > b
+// None < Some(x) for any x
+pub fn opt_cmp(a: Option, b: Option) -> i64 = {
+    let a_some = is_some(a);
+    let b_some = is_some(b);
+    if a_some and b_some {
+        let x = unwrap(a);
+        let y = unwrap(b);
+        if x < y { -1 } else if x > y { 1 } else { 0 }
+    } else if a_some {
+        1
+    } else if b_some {
+        -1
+    } else {
+        0
+    }
+};
+
+// ============================================
+// Utilities
+// ============================================
+
+// Get the value if Some and greater than threshold
+pub fn filter_gt(opt: Option, threshold: i64) -> Option = match opt {
+    Option::Some(x) => if x > threshold { Option::Some(x) } else { Option::None },
+    Option::None => Option::None
+};
+
+// Get the value if Some and less than threshold
+pub fn filter_lt(opt: Option, threshold: i64) -> Option = match opt {
+    Option::Some(x) => if x < threshold { Option::Some(x) } else { Option::None },
+    Option::None => Option::None
+};
+
+// ============================================
+// Tests
+// ============================================
+
+fn test_constructors() -> i64 = {
+    let s = some(42);
+    let n = none();
+
+    if not is_some(s) { 1 }
+    else if not is_none(n) { 2 }
+    else if is_none(s) { 3 }
+    else if is_some(n) { 4 }
+    else { 0 }
+};
+
+fn test_unwrap() -> i64 = {
+    let s = some(42);
+
+    if unwrap(s) != 42 { 1 }
+    else if unwrap_or(s, 0) != 42 { 2 }
+    else if unwrap_or(none(), 99) != 99 { 3 }
+    else { 0 }
+};
+
+fn test_map() -> i64 = {
+    let s = some(10);
+    let doubled = map_double(s);
+    let doubled_none = map_double(none());
+    let inc = map_inc(s);
+    let neg = map_neg(s);
+
+    if unwrap(doubled) != 20 { 1 }
+    else if is_some(doubled_none) { 2 }
+    else if unwrap(inc) != 11 { 3 }
+    else if unwrap(neg) != -10 { 4 }
+    else { 0 }
+};
+
+fn test_filter() -> i64 = {
+    let s = some(10);
+    let filtered = filter_gt(s, 5);
+    let filtered2 = filter_gt(s, 15);
+    let filtered3 = filter_lt(s, 15);
+    let filtered4 = filter_lt(s, 5);
+
+    if not is_some(filtered) { 1 }
+    else if not is_none(filtered2) { 2 }
+    else if not is_some(filtered3) { 3 }
+    else if not is_none(filtered4) { 4 }
+    else { 0 }
+};
+
+fn test_combinators() -> i64 = {
+    let s1 = some(1);
+    let s2 = some(2);
+    let n = none();
+
+    // opt_or
+    if unwrap(opt_or(s1, s2)) != 1 { 1 }
+    else if unwrap(opt_or(n, s2)) != 2 { 2 }
+    // opt_and
+    else if unwrap(opt_and(s1, s2)) != 2 { 3 }
+    else if is_some(opt_and(n, s2)) { 4 }
+    // opt_xor
+    else if not is_none(opt_xor(s1, s2)) { 5 }
+    else if unwrap(opt_xor(s1, n)) != 1 { 6 }
+    else if unwrap(opt_xor(n, s2)) != 2 { 7 }
+    else if not is_none(opt_xor(n, n)) { 8 }
+    else { 0 }
+};
+
+fn test_equality() -> i64 = {
+    let s1 = some(42);
+    let s2 = some(42);
+    let s3 = some(99);
+    let n1 = none();
+    let n2 = none();
+
+    if not eq(s1, s2) { 1 }
+    else if eq(s1, s3) { 2 }
+    else if eq(s1, n1) { 3 }
+    else if not eq(n1, n2) { 4 }
+    else { 0 }
+};
+
+fn test_comparison() -> i64 = {
+    let s1 = some(10);
+    let s2 = some(20);
+    let n = none();
+
+    if opt_cmp(s1, s2) != -1 { 1 }
+    else if opt_cmp(s2, s1) != 1 { 2 }
+    else if opt_cmp(s1, s1) != 0 { 3 }
+    else if opt_cmp(n, s1) != -1 { 4 }
+    else if opt_cmp(s1, n) != 1 { 5 }
+    else if opt_cmp(n, n) != 0 { 6 }
+    else { 0 }
+};
+
+fn main() -> i64 = {
+    let r1 = test_constructors();
+    if r1 != 0 { let _p = println(r1); r1 }
+    else {
+        let r2 = test_unwrap();
+        if r2 != 0 { let _p = println(r2 + 10); r2 + 10 }
+        else {
+            let r3 = test_map();
+            if r3 != 0 { let _p = println(r3 + 20); r3 + 20 }
+            else {
+                let r4 = test_filter();
+                if r4 != 0 { let _p = println(r4 + 30); r4 + 30 }
+                else {
+                    let r5 = test_combinators();
+                    if r5 != 0 { let _p = println(r5 + 40); r5 + 40 }
+                    else {
+                        let r6 = test_equality();
+                        if r6 != 0 { let _p = println(r6 + 50); r6 + 50 }
+                        else {
+                            let r7 = test_comparison();
+                            if r7 != 0 { let _p = println(r7 + 60); r7 + 60 }
+                            else {
+                                let _p = println(999);
+                                999
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+};
