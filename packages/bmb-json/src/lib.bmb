@@ -335,10 +335,10 @@ fn json_encode_number(value: i64) -> String = int_to_string(value);
 // Encode string with proper quoting (simple version without escape handling)
 fn json_encode_string(value: String) -> String = {
     let sb = sb_new();
-    let sb2 = sb_push(sb, chr(char_quote()));
-    let sb3 = sb_push(sb2, value);
-    let sb4 = sb_push(sb3, chr(char_quote()));
-    sb_build(sb4)
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, value);
+    let _p = sb_push(sb, chr(char_quote()));
+    sb_build(sb)
 };
 
 // ============================================================================
@@ -348,79 +348,79 @@ fn json_encode_string(value: String) -> String = {
 // Build "hello" (JSON string literal)
 fn make_json_hello() -> String = {
     let sb = sb_new();
-    let sb2 = sb_push(sb, chr(char_quote()));
-    let sb3 = sb_push(sb2, "hello");
-    let sb4 = sb_push(sb3, chr(char_quote()));
-    sb_build(sb4)
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "hello");
+    let _p = sb_push(sb, chr(char_quote()));
+    sb_build(sb)
 };
 
 // Build "" (empty JSON string)
 fn make_json_empty() -> String = {
     let sb = sb_new();
-    let sb2 = sb_push(sb, chr(char_quote()));
-    let sb3 = sb_push(sb2, chr(char_quote()));
-    sb_build(sb3)
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, chr(char_quote()));
+    sb_build(sb)
 };
 
 // Build "  \"world\"  " (JSON string with spaces)
 fn make_json_world_spaced() -> String = {
     let sb = sb_new();
-    let sb2 = sb_push(sb, "  ");
-    let sb3 = sb_push(sb2, chr(char_quote()));
-    let sb4 = sb_push(sb3, "world");
-    let sb5 = sb_push(sb4, chr(char_quote()));
-    let sb6 = sb_push(sb5, "  ");
-    sb_build(sb6)
+    let _p = sb_push(sb, "  ");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "world");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "  ");
+    sb_build(sb)
 };
 
 // Build {"name":"alice","age":30}
 fn make_test_object() -> String = {
     let sb = sb_new();
-    let sb2 = sb_push(sb, chr(char_lbrace()));
-    let sb3 = sb_push(sb2, chr(char_quote()));
-    let sb4 = sb_push(sb3, "name");
-    let sb5 = sb_push(sb4, chr(char_quote()));
-    let sb6 = sb_push(sb5, chr(char_colon()));
-    let sb7 = sb_push(sb6, chr(char_quote()));
-    let sb8 = sb_push(sb7, "alice");
-    let sb9 = sb_push(sb8, chr(char_quote()));
-    let sb10 = sb_push(sb9, chr(char_comma()));
-    let sb11 = sb_push(sb10, chr(char_quote()));
-    let sb12 = sb_push(sb11, "age");
-    let sb13 = sb_push(sb12, chr(char_quote()));
-    let sb14 = sb_push(sb13, chr(char_colon()));
-    let sb15 = sb_push(sb14, "30");
-    let sb16 = sb_push(sb15, chr(char_rbrace()));
-    sb_build(sb16)
+    let _p = sb_push(sb, chr(char_lbrace()));
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "name");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, chr(char_colon()));
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "alice");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, chr(char_comma()));
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "age");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, chr(char_colon()));
+    let _p = sb_push(sb, "30");
+    let _p = sb_push(sb, chr(char_rbrace()));
+    sb_build(sb)
 };
 
 // Build {"data":[1,2,{"x":100}]}
 fn make_nested_object() -> String = {
     let sb = sb_new();
-    let sb2 = sb_push(sb, chr(char_lbrace()));
-    let sb3 = sb_push(sb2, chr(char_quote()));
-    let sb4 = sb_push(sb3, "data");
-    let sb5 = sb_push(sb4, chr(char_quote()));
-    let sb6 = sb_push(sb5, chr(char_colon()));
-    let sb7 = sb_push(sb6, "[1,2,{");
-    let sb8 = sb_push(sb7, chr(char_quote()));
-    let sb9 = sb_push(sb8, "x");
-    let sb10 = sb_push(sb9, chr(char_quote()));
-    let sb11 = sb_push(sb10, ":100}]");
-    let sb12 = sb_push(sb11, chr(char_rbrace()));
-    sb_build(sb12)
+    let _p = sb_push(sb, chr(char_lbrace()));
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "data");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, chr(char_colon()));
+    let _p = sb_push(sb, "[1,2,{");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "x");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, ":100}]");
+    let _p = sb_push(sb, chr(char_rbrace()));
+    sb_build(sb)
 };
 
 // Build {"a":1}
 fn make_simple_object() -> String = {
     let sb = sb_new();
-    let sb2 = sb_push(sb, chr(char_lbrace()));
-    let sb3 = sb_push(sb2, chr(char_quote()));
-    let sb4 = sb_push(sb3, "a");
-    let sb5 = sb_push(sb4, chr(char_quote()));
-    let sb6 = sb_push(sb5, ":1");
-    let sb7 = sb_push(sb6, chr(char_rbrace()));
-    sb_build(sb7)
+    let _p = sb_push(sb, chr(char_lbrace()));
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, "a");
+    let _p = sb_push(sb, chr(char_quote()));
+    let _p = sb_push(sb, ":1");
+    let _p = sb_push(sb, chr(char_rbrace()));
+    sb_build(sb)
 };
 
 // ============================================================================
