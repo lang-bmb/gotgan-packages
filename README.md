@@ -6,17 +6,20 @@ Community packages for the BMB programming language, managed by [gotgan](https:/
 
 This repository contains **reusable community packages** that extend BMB's capabilities beyond the standard library.
 
-**NOT included here:**
-- Core language primitives (in `stdlib/core/`)
-- Built-in types and operations (part of compiler)
-- Language-level features (ownership, contracts, etc.)
+**NOT included here (in official stdlib packages/):**
+- Core types: bmb-core, bmb-string, bmb-array, bmb-io, bmb-process
+- Option/Result: bmb-option, bmb-result, bmb-traits, bmb-iter
+- Data formats: bmb-json (official stdlib)
+- Networking: bmb-http (official stdlib)
+- Pattern matching: bmb-regex (official stdlib)
+- Testing: bmb-test (official stdlib)
 
-**Included here:**
-- Utility libraries (math, time, formatting)
-- Data format parsers (JSON, TOML, YAML)
-- System utilities (fs, process, network)
-- Development tools (testing, logging)
+**Included here (community packages):**
+- Extended utilities (math, time, formatting, random)
+- Additional data formats (TOML, YAML)
+- Development tools (logging, advanced testing)
 - Domain-specific libraries
+- Algorithms and collections
 
 ## Available Packages
 
@@ -25,15 +28,17 @@ This repository contains **reusable community packages** that extend BMB's capab
 | [bmb-math](packages/bmb-math) | Mathematical functions and constants | 0.1.0 | Stable |
 | [bmb-rand](packages/bmb-rand) | Pseudo-random number generation | 0.1.0 | Stable |
 | [bmb-log](packages/bmb-log) | Structured logging utilities | 0.1.0 | Stable |
-| [bmb-testing](packages/bmb-testing) | Testing framework | 0.1.0 | Stable |
+| [bmb-testing](packages/bmb-testing) | Extended testing framework | 0.1.0 | Stable |
 | [bmb-fmt](packages/bmb-fmt) | String formatting utilities | 0.1.0 | Stable |
 | [bmb-time](packages/bmb-time) | Time and duration utilities | 0.1.0 | Stable |
-| [bmb-json](packages/bmb-json) | JSON parsing and serialization | 0.1.0 | Stable |
-| [bmb-regex](packages/bmb-regex) | Regular expression matching | 0.1.0 | Stable |
-| [bmb-http](packages/bmb-http) | HTTP client and server utilities | 0.1.0 | Stable |
 | [bmb-fs](packages/bmb-fs) | File system path utilities | 0.1.0 | Stable |
 | [bmb-semver](packages/bmb-semver) | Semantic versioning parsing | 0.1.0 | Stable |
 | [bmb-toml](packages/bmb-toml) | TOML parsing and validation | 0.1.0 | Stable |
+| [bmb-algorithms](packages/bmb-algorithms) | Common algorithms | 0.1.0 | Stable |
+| [bmb-collections](packages/bmb-collections) | Additional collections | 0.1.0 | Stable |
+| [bmb-hash](packages/bmb-hash) | Hash functions | 0.1.0 | Stable |
+
+> Note: bmb-json, bmb-http, bmb-regex, bmb-option, bmb-result, bmb-string, bmb-array are now part of the official stdlib in `lang-bmb/packages/`.
 
 ## Installation
 

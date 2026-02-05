@@ -1,8 +1,0 @@
-[package]
-name = "bmb-result"
-version = "0.1.0"
-description = "Result type for error handling"
-license = "MIT"
-keywords = ["result", "error", "either", "core"]
-
-[dependencies]
