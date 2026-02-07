@@ -379,3 +379,206 @@ fn has_package(s: String) -> bool = has_section(s, "package");
 
 // Check if TOML has "dependencies" section
 fn has_dependencies(s: String) -> bool = has_section(s, "dependencies");
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_char_classification() -> i64 =
+    if b2i(is_ws(32)) == 1 and b2i(is_ws(9)) == 1 and b2i(is_ws(65)) == 0
+       and b2i(is_newline(10)) == 1 and b2i(is_newline(13)) == 1 and b2i(is_newline(32)) == 0
+       and b2i(is_digit(48)) == 1 and b2i(is_digit(57)) == 1 and b2i(is_digit(65)) == 0
+       and b2i(is_letter(65)) == 1 and b2i(is_letter(122)) == 1 and b2i(is_letter(48)) == 0
+       and b2i(is_bare_key_char(95)) == 1 and b2i(is_bare_key_char(45)) == 1 { 1 } else { 0 };
+
+fn test_skip_ws() -> i64 =
+    if skip_ws("  hello", 0) == 2 and skip_ws("hello", 0) == 0
+       and skip_ws("   ", 0) == 3 { 1 } else { 0 };
+
+fn test_skip_comment() -> i64 = {
+    let s = "# this is a comment\nkey = val";
+    let result = skip_comment(s, 0);
+    // "# this is a comment" = 19 chars (0-18), newline at position 19
+    if result == 19 { 1 } else { 0 }
+};
+
+fn test_skip_ws_comment() -> i64 = {
+    let s = "  # comment\nkey";
+    let result = skip_ws_comment(s, 0);
+    // Skips whitespace then comment, stops at newline
+    if result == 11 { 1 } else { 0 }
+};
+
+fn test_value_type_detection() -> i64 = {
+    // 34 = ", 48 = '0', 45 = '-', 116 = 't', 102 = 'f', 91 = '[', 123 = '{'
+    if detect_value_type("\"hello\"", 0) == type_string()
+       and detect_value_type("42", 0) == type_integer()
+       and detect_value_type("-5", 0) == type_integer()
+       and detect_value_type("true", 0) == type_boolean()
+       and detect_value_type("false", 0) == type_boolean()
+       and detect_value_type("[1,2]", 0) == type_array()
+       and detect_value_type("{a=1}", 0) == type_table() { 1 } else { 0 }
+};
+
+fn test_string_parsing() -> i64 = {
+    let s = "\"hello world\" rest";
+    let result = parse_string(s, 0);
+    if result < 0 { 0 }
+    else {
+        let cs = string_start(result);
+        let ce = string_end(result);
+        let nx = string_next(result);
+        // content starts at 1, ends at 12 (position of closing "), next is 13
+        if cs == 1 and ce == 12 and nx == 13 { 1 } else { 0 }
+    }
+};
+
+fn test_string_empty() -> i64 = {
+    let s = "\"\" rest";
+    let result = parse_string(s, 0);
+    if result < 0 { 0 }
+    else {
+        let cs = string_start(result);
+        let ce = string_end(result);
+        // empty string: content_start == content_end
+        if cs == 1 and ce == 1 { 1 } else { 0 }
+    }
+};
+
+fn test_key_bare() -> i64 = {
+    let s = "my_key = val";
+    let result = parse_key(s, 0);
+    if result < 0 { 0 }
+    else {
+        let ks = string_start(result);
+        let ke = string_end(result);
+        // bare key "my_key" starts at 0, ends at 6
+        if ks == 0 and ke == 6 { 1 } else { 0 }
+    }
+};
+
+fn test_key_quoted() -> i64 = {
+    let s = "\"my key\" = val";
+    let result = parse_key(s, 0);
+    if result < 0 { 0 }
+    else {
+        let ks = string_start(result);
+        let ke = string_end(result);
+        // quoted key content starts at 1, ends at 7
+        if ks == 1 and ke == 7 { 1 } else { 0 }
+    }
+};
+
+fn test_integer_parsing() -> i64 =
+    if parse_integer("42", 0) == 42 and parse_integer("-7", 0) == -7
+       and parse_integer("+100", 0) == 100 and parse_integer("0", 0) == 0 { 1 } else { 0 };
+
+fn test_boolean_parsing() -> i64 = {
+    let t = parse_boolean("true rest", 0);
+    let f = parse_boolean("false rest", 0);
+    let inv = parse_boolean("maybe", 0);
+    if b2i(bool_value(t)) == 1 and bool_length(t) == 4
+       and b2i(bool_value(f)) == 0 and bool_length(f) == 5
+       and inv == -1 { 1 } else { 0 }
+};
+
+fn test_table_header() -> i64 =
+    if b2i(is_table_header("[package]", 0)) == 1
+       and b2i(is_table_header("key = val", 0)) == 0
+       and b2i(is_table_header("[[array]]", 0)) == 0 { 1 } else { 0 };
+
+fn test_array_header() -> i64 =
+    if b2i(is_array_header("[[items]]", 0)) == 1
+       and b2i(is_array_header("[package]", 0)) == 0 { 1 } else { 0 };
+
+fn test_line_classification() -> i64 = {
+    if classify_line("", 0) == line_empty()
+       and classify_line("# comment", 0) == line_comment()
+       and classify_line("key = val", 0) == line_keyval()
+       and classify_line("[section]", 0) == line_table()
+       and classify_line("[[array]]", 0) == line_array_table() { 1 } else { 0 }
+};
+
+fn test_validate_simple() -> i64 = {
+    let toml = "[package]\nname = \"test\"\nversion = \"1.0.0\"";
+    if b2i(validate(toml)) == 1 { 1 } else { 0 }
+};
+
+fn test_validate_empty() -> i64 =
+    if b2i(validate("")) == 1 and b2i(validate("# just a comment")) == 1 { 1 } else { 0 };
+
+fn test_count_keyvals() -> i64 = {
+    let toml = "[package]\nname = \"test\"\nversion = \"1.0.0\"\n\n[dependencies]\nfoo = \"0.1\"";
+    if count_keyvals(toml) == 3 { 1 } else { 0 }
+};
+
+fn test_count_tables() -> i64 = {
+    let toml = "[package]\nname = \"test\"\n\n[dependencies]\nfoo = \"0.1\"";
+    if count_tables(toml) == 2 { 1 } else { 0 }
+};
+
+fn test_entry_count() -> i64 = {
+    let toml = "[package]\nname = \"test\"\nversion = \"1.0.0\"";
+    if entry_count(toml) == 3 { 1 } else { 0 }
+};
+
+fn test_has_section() -> i64 = {
+    let toml = "[package]\nname = \"test\"\n\n[dependencies]\nfoo = \"0.1\"";
+    if b2i(has_section(toml, "package")) == 1 and b2i(has_section(toml, "dependencies")) == 1
+       and b2i(has_section(toml, "scripts")) == 0 { 1 } else { 0 }
+};
+
+fn test_has_package() -> i64 = {
+    let toml = "[package]\nname = \"bmb-toml\"";
+    if b2i(has_package(toml)) == 1 and b2i(has_dependencies(toml)) == 0 { 1 } else { 0 }
+};
+
+fn test_gotgan_manifest() -> i64 = {
+    let toml = "[package]\nname = \"bmb-toml\"\nversion = \"0.1.0\"\nedition = \"2025\"\ndescription = \"TOML parser\"";
+    if b2i(validate(toml)) == 1 and b2i(has_package(toml)) == 1
+       and count_keyvals(toml) == 4 and count_tables(toml) == 1 { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("char_classification", test_char_classification());
+    let t2 = report("skip_ws", test_skip_ws());
+    let t3 = report("skip_comment", test_skip_comment());
+    let t4 = report("skip_ws_comment", test_skip_ws_comment());
+    let t5 = report("value_type_detection", test_value_type_detection());
+    let t6 = report("string_parsing", test_string_parsing());
+    let t7 = report("string_empty", test_string_empty());
+    let t8 = report("key_bare", test_key_bare());
+    let t9 = report("key_quoted", test_key_quoted());
+    let t10 = report("integer_parsing", test_integer_parsing());
+    let t11 = report("boolean_parsing", test_boolean_parsing());
+    let t12 = report("table_header", test_table_header());
+    let t13 = report("array_header", test_array_header());
+    let t14 = report("line_classification", test_line_classification());
+    let t15 = report("validate_simple", test_validate_simple());
+    let t16 = report("validate_empty", test_validate_empty());
+    let t17 = report("count_keyvals", test_count_keyvals());
+    let t18 = report("count_tables", test_count_tables());
+    let t19 = report("entry_count", test_entry_count());
+    let t20 = report("has_section", test_has_section());
+    let t21 = report("has_package", test_has_package());
+    let t22 = report("gotgan_manifest", test_gotgan_manifest());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20 + t21 + t22;
+    let total = 22;
+    let _p1 = print_str("bmb-toml: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};
