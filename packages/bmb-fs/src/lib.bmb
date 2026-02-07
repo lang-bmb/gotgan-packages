@@ -106,3 +106,75 @@ fn is_valid_path_iter(path: String, pos: i64) -> bool =
 
 fn is_valid_path(path: String) -> bool =
     path.len() > 0 and is_valid_path_iter(path, 0);
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_absolute_relative() -> i64 =
+    if b2i(is_absolute("/usr/bin")) == 1 and b2i(is_relative("src/main.rs")) == 1
+       and b2i(is_absolute("foo")) == 0 and b2i(is_relative("/foo")) == 0 { 1 } else { 0 };
+
+fn test_find_last_sep() -> i64 =
+    if find_last_sep("/usr/bin/ls") == 8 and find_last_sep("file.txt") == 0 - 1
+       and find_last_sep("/") == 0 { 1 } else { 0 };
+
+fn test_dirname_basename() -> i64 =
+    if dirname_end("/usr/bin/ls") == 8 and basename_start("/usr/bin/ls") == 9
+       and dirname_end("file.txt") == 0 and basename_start("file.txt") == 0 { 1 } else { 0 };
+
+fn test_extension() -> i64 =
+    if b2i(has_extension("file.txt")) == 1 and b2i(has_extension("file")) == 0
+       and find_ext("file.txt") == 4 and ext_start("noext") == 5 { 1 } else { 0 };
+
+fn test_stem() -> i64 =
+    if stem_start("/usr/file.txt") == 5 and stem_end("/usr/file.txt") == 9 { 1 } else { 0 };
+
+fn test_count_components() -> i64 =
+    if count_components("a/b/c") == 3 and count_components("/usr/bin") == 2
+       and count_components("file") == 1 and count_components("") == 0 { 1 } else { 0 };
+
+fn test_safe_path() -> i64 =
+    if b2i(is_safe_path("/usr/bin")) == 1 and b2i(is_safe_path("../etc/passwd")) == 0
+       and b2i(is_safe_path("foo/..")) == 0 { 1 } else { 0 };
+
+fn test_path_depth() -> i64 =
+    if path_depth("/usr/bin/ls") == 2 and path_depth("a/b/c") == 3 { 1 } else { 0 };
+
+fn test_ends_with_sep() -> i64 =
+    if b2i(ends_with_sep("/usr/")) == 1 and b2i(ends_with_sep("/usr")) == 0 { 1 } else { 0 };
+
+fn test_valid_path() -> i64 =
+    if b2i(is_valid_path("/usr/bin")) == 1 and b2i(is_valid_path("")) == 0 { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("absolute_relative", test_absolute_relative());
+    let t2 = report("find_last_sep", test_find_last_sep());
+    let t3 = report("dirname_basename", test_dirname_basename());
+    let t4 = report("extension", test_extension());
+    let t5 = report("stem", test_stem());
+    let t6 = report("count_components", test_count_components());
+    let t7 = report("safe_path", test_safe_path());
+    let t8 = report("path_depth", test_path_depth());
+    let t9 = report("ends_with_sep", test_ends_with_sep());
+    let t10 = report("valid_path", test_valid_path());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let total = 10;
+    let _p1 = print_str("bmb-fs: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

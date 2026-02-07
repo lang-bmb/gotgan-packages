@@ -1,0 +1,5 @@
+[package]
+name = "bmb-sha256"
+version = "0.1.0"
+edition = "2025"
+description = "Pure BMB SHA-256 implementation (FIPS 180-4)"

@@ -241,3 +241,119 @@ fn is_stable(v: i64) -> bool = get_major(v) >= 1;
 
 // Check if version is prerelease (major == 0)
 fn is_prerelease(v: i64) -> bool = get_major(v) == 0;
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_pack_extract() -> i64 = {
+    let v = pack_version(1, 2, 3);
+    if v == 1002003 and get_major(v) == 1 and get_minor(v) == 2 and get_patch(v) == 3 { 1 } else { 0 }
+};
+
+fn test_pack_zeroes() -> i64 = {
+    let v = pack_version(0, 0, 0);
+    if v == 0 and get_major(v) == 0 and get_minor(v) == 0 and get_patch(v) == 0 { 1 } else { 0 }
+};
+
+fn test_parse_version() -> i64 =
+    if parse_version("1.2.3") == 1002003 and parse_version("0.0.1") == 1
+       and parse_version("10.20.30") == 10020030 { 1 } else { 0 };
+
+fn test_parse_invalid() -> i64 =
+    if parse_version("") == 0 - 1 and parse_version("1.2") == 0 - 1 { 1 } else { 0 };
+
+fn test_compare_version() -> i64 =
+    if compare_version(1002003, 1002004) == 0 - 1 and compare_version(2000000, 1999999) == 1
+       and compare_version(1002003, 1002003) == 0 { 1 } else { 0 };
+
+fn test_compare_semver() -> i64 =
+    if compare_semver("1.2.3", "1.2.4") == 0 - 1 and compare_semver("2.0.0", "1.9.9") == 1
+       and compare_semver("1.0.0", "1.0.0") == 0 { 1 } else { 0 };
+
+fn test_predicates() -> i64 =
+    if b2i(version_lt(1000000, 2000000)) == 1 and b2i(version_ge(2000000, 1000000)) == 1
+       and b2i(version_eq(1002003, 1002003)) == 1 and b2i(version_gt(1002004, 1002003)) == 1 { 1 } else { 0 };
+
+fn test_caret() -> i64 = {
+    let v1 = pack_version(1, 2, 3);
+    let c1 = pack_version(1, 0, 0);
+    let v2 = pack_version(2, 0, 0);
+    let v3 = pack_version(0, 2, 5);
+    let c3 = pack_version(0, 2, 3);
+    let v4 = pack_version(0, 3, 0);
+    if b2i(matches_caret(v1, c1)) == 1 and b2i(matches_caret(v2, c1)) == 0
+       and b2i(matches_caret(v3, c3)) == 1 and b2i(matches_caret(v4, c3)) == 0 { 1 } else { 0 }
+};
+
+fn test_tilde() -> i64 = {
+    let v1 = pack_version(1, 2, 5);
+    let c1 = pack_version(1, 2, 3);
+    let v2 = pack_version(1, 3, 0);
+    if b2i(matches_tilde(v1, c1)) == 1 and b2i(matches_tilde(v2, c1)) == 0 { 1 } else { 0 }
+};
+
+fn test_satisfies() -> i64 =
+    if b2i(satisfies("1.2.3", "^1.0.0")) == 1 and b2i(satisfies("2.0.0", "^1.0.0")) == 0
+       and b2i(satisfies("1.2.5", "~1.2.3")) == 1 and b2i(satisfies("1.3.0", "~1.2.3")) == 0 { 1 } else { 0 };
+
+fn test_increment() -> i64 = {
+    let v = pack_version(1, 2, 3);
+    if inc_major(v) == pack_version(2, 0, 0) and inc_minor(v) == pack_version(1, 3, 0)
+       and inc_patch(v) == pack_version(1, 2, 4) { 1 } else { 0 }
+};
+
+fn test_stability() -> i64 =
+    if b2i(is_stable(pack_version(1, 0, 0))) == 1 and b2i(is_prerelease(pack_version(0, 9, 0))) == 1
+       and b2i(is_stable(pack_version(0, 1, 0))) == 0 { 1 } else { 0 };
+
+fn test_digit_helpers() -> i64 =
+    if b2i(is_digit(48)) == 1 and b2i(is_digit(57)) == 1 and b2i(is_digit(47)) == 0
+       and digit_value(48) == 0 and digit_value(57) == 9 { 1 } else { 0 };
+
+fn test_constraint_parse() -> i64 = {
+    let r1 = parse_constraint_op("^1.0.0");
+    let r2 = parse_constraint_op("~1.2.0");
+    let r3 = parse_constraint_op(">=1.0.0");
+    let r4 = parse_constraint_op("1.0.0");
+    if get_op(r1) == 1 and get_skip(r1) == 1
+       and get_op(r2) == 2 and get_skip(r2) == 1
+       and get_op(r3) == 4 and get_skip(r3) == 2
+       and get_op(r4) == 0 and get_skip(r4) == 0 { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("pack_extract", test_pack_extract());
+    let t2 = report("pack_zeroes", test_pack_zeroes());
+    let t3 = report("parse_version", test_parse_version());
+    let t4 = report("parse_invalid", test_parse_invalid());
+    let t5 = report("compare_version", test_compare_version());
+    let t6 = report("compare_semver", test_compare_semver());
+    let t7 = report("predicates", test_predicates());
+    let t8 = report("caret", test_caret());
+    let t9 = report("tilde", test_tilde());
+    let t10 = report("satisfies", test_satisfies());
+    let t11 = report("increment", test_increment());
+    let t12 = report("stability", test_stability());
+    let t13 = report("digit_helpers", test_digit_helpers());
+    let t14 = report("constraint_parse", test_constraint_parse());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14;
+    let total = 14;
+    let _p1 = print_str("bmb-semver: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};
