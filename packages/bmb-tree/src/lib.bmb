@@ -121,52 +121,89 @@ fn tree_node_count(depth: i64) -> i64 = shift_left(1, depth + 1) - 1;
 
 fn test_leaf() -> i64 = {
     let leaf = make_leaf();
-    let t1 = if is_leaf(leaf) { 1 } else { 0 };
-    let t2 = if check_tree(leaf) == 1 { 1 } else { 0 };
-    let t3 = if tree_depth(leaf) == 0 { 1 } else { 0 };
+    let ok = is_leaf(leaf) and check_tree(leaf) == 1 and tree_depth(leaf) == 0;
     let _f = free_tree(leaf);
-    t1 + t2 + t3
+    if ok { 1 } else { 0 }
 };
 
 fn test_make_tree() -> i64 = {
-    // Depth 2: 7 nodes (1 + 2 + 4)
     let tree = make_tree(2);
     let count = check_tree(tree);
     let depth = tree_depth(tree);
-
-    let t1 = if count == 7 { 1 } else { 0 };
-    let t2 = if depth == 2 { 1 } else { 0 };
-    let t3 = if tree_node_count(2) == 7 { 1 } else { 0 };
-
+    let ok = count == 7 and depth == 2 and tree_node_count(2) == 7;
     let _f = free_tree(tree);
-    t1 + t2 + t3
+    if ok { 1 } else { 0 }
 };
 
 fn test_larger_tree() -> i64 = {
-    // Depth 4: 31 nodes
     let tree = make_tree(4);
     let count = check_tree(tree);
-
-    let t1 = if count == 31 { 1 } else { 0 };
-    let t2 = if tree_node_count(4) == 31 { 1 } else { 0 };
-
+    let ok = count == 31 and tree_node_count(4) == 31;
     let _f = free_tree(tree);
-    t1 + t2
+    if ok { 1 } else { 0 }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_is_leaf() -> i64 = {
+    let leaf = make_leaf();
+    let non_leaf = make_tree(1);
+    let r1 = b2i(is_leaf(leaf));
+    let r2 = b2i(is_leaf(non_leaf));
+    let _f1 = free_tree(leaf);
+    let _f2 = free_tree(non_leaf);
+    if r1 == 1 and r2 == 0 { 1 } else { 0 }
+};
+
+fn test_tree_depth() -> i64 = {
+    let t0 = make_tree(0);
+    let t3 = make_tree(3);
+    let d0 = tree_depth(t0);
+    let d3 = tree_depth(t3);
+    let _f0 = free_tree(t0);
+    let _f3 = free_tree(t3);
+    if d0 == 0 and d3 == 3 { 1 } else { 0 }
+};
+
+fn test_node_count() -> i64 = {
+    let t3 = make_tree(3);
+    let count = check_tree(t3);
+    let expected = tree_node_count(3);
+    let _f = free_tree(t3);
+    if count == 15 and expected == 15 { 1 } else { 0 }
+};
+
+fn test_shift_left() -> i64 =
+    if shift_left(1, 0) == 1 and shift_left(1, 3) == 8 and shift_left(1, 10) == 1024 { 1 } else { 0 };
+
+fn test_tree_node_count_formula() -> i64 =
+    if tree_node_count(0) == 1 and tree_node_count(1) == 3
+       and tree_node_count(2) == 7 and tree_node_count(5) == 63 { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
 };
 
 fn main() -> i64 = {
-    let t1 = test_leaf();
-    let t2 = test_make_tree();
-    let t3 = test_larger_tree();
-
-    let total = t1 + t2 + t3;
-    let expected = 3 + 3 + 2;
-
-    if total == expected {
-        let _p = println(999);
-        0
-    } else {
-        let _p = println(total);
-        1
-    }
+    let t1 = report("leaf", test_leaf());
+    let t2 = report("make_tree", test_make_tree());
+    let t3 = report("larger_tree", test_larger_tree());
+    let t4 = report("is_leaf", test_is_leaf());
+    let t5 = report("tree_depth", test_tree_depth());
+    let t6 = report("node_count", test_node_count());
+    let t7 = report("shift_left", test_shift_left());
+    let t8 = report("node_count_formula", test_tree_node_count_formula());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-tree: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
 };

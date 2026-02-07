@@ -244,16 +244,85 @@ fn test_heap_sort() -> i64 = {
     if sorted { 1 } else { 0 }
 };
 
-fn main() -> i64 = {
-    let t1 = test_quick_sort();
-    let t2 = test_merge_sort();
-    let t3 = test_heap_sort();
+fn test_bubble_sort() -> i64 = {
+    let arr = malloc(10 * 8) as *i64;
+    let _f = fill_reverse(arr, 10);
+    let _s = bubble_sort(arr, 10);
+    let sorted = is_sorted(arr, 10);
+    let _free = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
 
-    if t1 == 1 and t2 == 1 and t3 == 1 {
-        let _p = println(999);
+fn test_insertion_sort() -> i64 = {
+    let arr = malloc(10 * 8) as *i64;
+    let _f = fill_reverse(arr, 10);
+    let _s = insertion_sort(arr, 10);
+    let sorted = is_sorted(arr, 10);
+    let _free = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
+
+fn test_single_element() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    set arr[0] = 42;
+    let _s = quick_sort(arr, 1);
+    let ok = arr[0] == 42;
+    let _free = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_already_sorted() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 1;
+    set arr[1] = 2;
+    set arr[2] = 3;
+    set arr[3] = 4;
+    set arr[4] = 5;
+    let _s = quick_sort(arr, 5);
+    let sorted = is_sorted(arr, 5);
+    let _free = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
+
+fn test_duplicates() -> i64 = {
+    let arr = malloc(6 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 1;
+    set arr[2] = 3;
+    set arr[3] = 1;
+    set arr[4] = 2;
+    set arr[5] = 2;
+    let _s = merge_sort(arr, 6);
+    let ok = arr[0] == 1 and arr[1] == 1 and arr[2] == 2
+             and arr[3] == 2 and arr[4] == 3 and arr[5] == 3;
+    let _free = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
         0
-    } else {
-        let _p = println(0);
-        1
-    }
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("quick_sort", test_quick_sort());
+    let t2 = report("merge_sort", test_merge_sort());
+    let t3 = report("heap_sort", test_heap_sort());
+    let t4 = report("bubble_sort", test_bubble_sort());
+    let t5 = report("insertion_sort", test_insertion_sort());
+    let t6 = report("single_element", test_single_element());
+    let t7 = report("already_sorted", test_already_sorted());
+    let t8 = report("duplicates", test_duplicates());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-sort: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
 };

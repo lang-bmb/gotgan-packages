@@ -183,15 +183,88 @@ fn test_i64_array_fill() -> i64 = {
     if ok { 1 } else { 0 }
 };
 
-fn main() -> i64 = {
-    let t1 = test_i64_array();
-    let t2 = test_i64_array_fill();
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
 
-    if t1 == 1 and t2 == 1 {
-        let _p = println(999);
+fn test_iota() -> i64 = {
+    let arr = i64_array_new(5);
+    let _f = i64_array_iota(arr, 5, 10);
+    let ok = arr[0] == 10 and arr[1] == 11 and arr[2] == 12 and arr[3] == 13 and arr[4] == 14;
+    let _free = i64_array_free(arr);
+    if ok { 1 } else { 0 }
+};
+
+fn test_reverse() -> i64 = {
+    let arr = i64_array_new(5);
+    let _f = i64_array_reverse(arr, 5);
+    let ok = arr[0] == 5 and arr[1] == 4 and arr[2] == 3 and arr[3] == 2 and arr[4] == 1;
+    let _free = i64_array_free(arr);
+    if ok { 1 } else { 0 }
+};
+
+fn test_copy() -> i64 = {
+    let src = i64_array_new(3);
+    let dst = i64_array_new(3);
+    set src[0] = 10;
+    set src[1] = 20;
+    set src[2] = 30;
+    let _c = i64_array_copy(dst, src, 3);
+    let ok = dst[0] == 10 and dst[1] == 20 and dst[2] == 30;
+    let _f1 = i64_array_free(src);
+    let _f2 = i64_array_free(dst);
+    if ok { 1 } else { 0 }
+};
+
+fn test_min_max() -> i64 = {
+    let arr = i64_array_new(5);
+    set arr[0] = 3;
+    set arr[1] = 1;
+    set arr[2] = 4;
+    set arr[3] = 1;
+    set arr[4] = 5;
+    let mn = i64_array_min(arr, 5);
+    let mx = i64_array_max(arr, 5);
+    let _f = i64_array_free(arr);
+    if mn == 1 and mx == 5 { 1 } else { 0 }
+};
+
+fn test_swap() -> i64 = {
+    let arr = i64_array_new(3);
+    set arr[0] = 10;
+    set arr[1] = 20;
+    set arr[2] = 30;
+    let _s = i64_swap(arr, 0, 2);
+    let ok = arr[0] == 30 and arr[2] == 10 and arr[1] == 20;
+    let _f = i64_array_free(arr);
+    if ok { 1 } else { 0 }
+};
+
+fn test_ptr_null() -> i64 =
+    if b2i(ptr_is_null(0)) == 1 and b2i(ptr_is_null(1)) == 0 { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
         0
-    } else {
-        let _p = println(0);
-        1
-    }
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("i64_array", test_i64_array());
+    let t2 = report("i64_array_fill", test_i64_array_fill());
+    let t3 = report("iota", test_iota());
+    let t4 = report("reverse", test_reverse());
+    let t5 = report("copy", test_copy());
+    let t6 = report("min_max", test_min_max());
+    let t7 = report("swap", test_swap());
+    let t8 = report("ptr_null", test_ptr_null());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-ptr: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
 };
