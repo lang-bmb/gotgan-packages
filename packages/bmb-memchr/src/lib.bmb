@@ -1,0 +1,545 @@
+// bmb-memchr: Fast byte and substring search utilities
+// v0.1.0
+//
+// Provides efficient byte-level search operations on strings and byte buffers.
+// All functions work on both String (via byte_at) and raw byte buffers (*i64).
+//
+// Performance target: equivalent to C memchr/memmem implementations.
+//
+// Usage:
+//   let pos = str_find_byte("hello", 108);     // 2 (finds 'l')
+//   let pos = str_find("hello world", "world"); // 6
+//   let pos = str_rfind_byte("hello", 108);     // 3 (finds last 'l')
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+fn NOT_FOUND() -> i64 = 0 - 1;
+
+// ============================================================================
+// Single Byte Search in Strings
+// ============================================================================
+
+// Find first occurrence of byte in string
+fn str_find_byte(s: String, needle: i64) -> i64
+  post ret >= -1 and ret < s.len() and ((ret >= 0) implies (s.byte_at(ret) == needle))
+= {
+    let len = s.len();
+    let mut pos = 0;
+    let mut result = NOT_FOUND();
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else if s.byte_at(pos) == needle {
+            { result = pos; done = true; 0 }
+        } else {
+            { pos = pos + 1; 0 }
+        };
+        0
+    };
+    result
+};
+
+// Find last occurrence of byte in string
+fn str_rfind_byte(s: String, needle: i64) -> i64
+  post ret >= -1 and ret < s.len() and ((ret >= 0) implies (s.byte_at(ret) == needle))
+= if s.len() == 0 { NOT_FOUND() }
+  else {
+      {
+          let mut pos = s.len() - 1;
+          let mut result = NOT_FOUND();
+          let mut done = false;
+          while not done {
+              let _r = if s.byte_at(pos) == needle {
+                  { result = pos; done = true; 0 }
+              } else if pos <= 0 {
+                  { done = true; 0 }
+              } else {
+                  { pos = pos - 1; 0 }
+              };
+              0
+          };
+          result
+      }
+  };
+
+// Count occurrences of byte in string
+fn str_count_byte(s: String, needle: i64) -> i64
+  post ret >= 0
+= {
+    let len = s.len();
+    let mut pos = 0;
+    let mut count = 0;
+    while pos < len {
+        let _r = if s.byte_at(pos) == needle { { count = count + 1; 0 } } else { 0 };
+        pos = pos + 1;
+        0
+    };
+    count
+};
+
+// ============================================================================
+// Multi-byte Search (find any of 2 or 3 bytes)
+// ============================================================================
+
+// Find first occurrence of any of 2 bytes
+fn str_find_byte2(s: String, b1: i64, b2: i64) -> i64
+  post ret >= -1 and ret < s.len()
+= {
+    let len = s.len();
+    let mut pos = 0;
+    let mut result = NOT_FOUND();
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else {
+            {
+                let c = s.byte_at(pos);
+                let _c = if c == b1 or c == b2 {
+                    { result = pos; done = true; 0 }
+                } else {
+                    { pos = pos + 1; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    result
+};
+
+// Find first occurrence of any of 3 bytes
+fn str_find_byte3(s: String, b1: i64, b2: i64, b3: i64) -> i64
+  post ret >= -1 and ret < s.len()
+= {
+    let len = s.len();
+    let mut pos = 0;
+    let mut result = NOT_FOUND();
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else {
+            {
+                let c = s.byte_at(pos);
+                let _c = if c == b1 or c == b2 or c == b3 {
+                    { result = pos; done = true; 0 }
+                } else {
+                    { pos = pos + 1; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    result
+};
+
+// ============================================================================
+// Substring Search (str_find / memmem equivalent)
+// ============================================================================
+
+// Check if needle matches at position in haystack
+fn str_match_at(haystack: String, needle: String, h_pos: i64) -> bool = {
+    let n_len = needle.len();
+    let mut n_pos = 0;
+    let mut matched = true;
+    let mut done = false;
+    while not done {
+        let _r = if n_pos >= n_len {
+            { done = true; 0 }
+        } else if haystack.byte_at(h_pos + n_pos) != needle.byte_at(n_pos) {
+            { matched = false; done = true; 0 }
+        } else {
+            { n_pos = n_pos + 1; 0 }
+        };
+        0
+    };
+    matched
+};
+
+// Find first occurrence of substring
+fn str_find(haystack: String, needle: String) -> i64
+  post ret >= -1 and ((ret >= 0) implies (needle.len() > 0))
+= if needle.len() == 0 { 0 }
+  else if needle.len() > haystack.len() { NOT_FOUND() }
+  else {
+      {
+          let h_len = haystack.len();
+          let n_len = needle.len();
+          let mut pos = 0;
+          let mut result = NOT_FOUND();
+          let mut done = false;
+          while not done {
+              let _r = if pos + n_len > h_len {
+                  { done = true; 0 }
+              } else if str_match_at(haystack, needle, pos) {
+                  { result = pos; done = true; 0 }
+              } else {
+                  { pos = pos + 1; 0 }
+              };
+              0
+          };
+          result
+      }
+  };
+
+// Find last occurrence of substring
+fn str_rfind(haystack: String, needle: String) -> i64
+  post ret >= -1
+= if needle.len() == 0 { haystack.len() }
+  else if needle.len() > haystack.len() { NOT_FOUND() }
+  else {
+      {
+          let mut pos = haystack.len() - needle.len();
+          let mut result = NOT_FOUND();
+          let mut done = false;
+          while not done {
+              let _r = if str_match_at(haystack, needle, pos) {
+                  { result = pos; done = true; 0 }
+              } else if pos <= 0 {
+                  { done = true; 0 }
+              } else {
+                  { pos = pos - 1; 0 }
+              };
+              0
+          };
+          result
+      }
+  };
+
+// Count non-overlapping occurrences of substring
+fn str_count(haystack: String, needle: String) -> i64
+  post ret >= 0
+= if needle.len() == 0 { haystack.len() + 1 }
+  else {
+      {
+          let h_len = haystack.len();
+          let n_len = needle.len();
+          let mut pos = 0;
+          let mut count = 0;
+          while pos + n_len <= h_len {
+              let _r = if str_match_at(haystack, needle, pos) {
+                  { count = count + 1; pos = pos + n_len; 0 }
+              } else {
+                  { pos = pos + 1; 0 }
+              };
+              0
+          };
+          count
+      }
+  };
+
+// ============================================================================
+// Buffer Operations (i64 pointer + load_i64/store_i64)
+// ============================================================================
+
+// Find byte in buffer (raw pointer, 8 bytes per element)
+fn buf_find_byte(buf: i64, len: i64, needle: i64) -> i64
+  pre len >= 0
+  post ret >= -1 and ret < len
+= {
+    let mut pos = 0;
+    let mut result = NOT_FOUND();
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else if load_i64(buf + pos * 8) == needle {
+            { result = pos; done = true; 0 }
+        } else {
+            { pos = pos + 1; 0 }
+        };
+        0
+    };
+    result
+};
+
+// Find byte from end
+fn buf_rfind_byte(buf: i64, len: i64, needle: i64) -> i64
+  pre len >= 0
+  post ret >= -1 and ret < len
+= if len == 0 { NOT_FOUND() }
+  else {
+      {
+          let mut pos = len - 1;
+          let mut result = NOT_FOUND();
+          let mut done = false;
+          while not done {
+              let _r = if load_i64(buf + pos * 8) == needle {
+                  { result = pos; done = true; 0 }
+              } else if pos <= 0 {
+                  { done = true; 0 }
+              } else {
+                  { pos = pos - 1; 0 }
+              };
+              0
+          };
+          result
+      }
+  };
+
+// Check if buffer subsequence matches at position
+fn buf_match_at(haystack: i64, needle: i64, h_pos: i64, n_len: i64) -> bool = {
+    let mut n_pos = 0;
+    let mut matched = true;
+    let mut done = false;
+    while not done {
+        let _r = if n_pos >= n_len {
+            { done = true; 0 }
+        } else if load_i64(haystack + (h_pos + n_pos) * 8) != load_i64(needle + n_pos * 8) {
+            { matched = false; done = true; 0 }
+        } else {
+            { n_pos = n_pos + 1; 0 }
+        };
+        0
+    };
+    matched
+};
+
+// Find subsequence in buffer
+fn buf_find(haystack: i64, h_len: i64, needle: i64, n_len: i64) -> i64
+  pre h_len >= 0 and n_len >= 0
+  post ret >= -1
+= if n_len == 0 { 0 }
+  else if n_len > h_len { NOT_FOUND() }
+  else {
+      {
+          let mut pos = 0;
+          let mut result = NOT_FOUND();
+          let mut done = false;
+          while not done {
+              let _r = if pos + n_len > h_len {
+                  { done = true; 0 }
+              } else if buf_match_at(haystack, needle, pos, n_len) {
+                  { result = pos; done = true; 0 }
+              } else {
+                  { pos = pos + 1; 0 }
+              };
+              0
+          };
+          result
+      }
+  };
+
+// ============================================================================
+// String Utilities (built on memchr)
+// ============================================================================
+
+// Check if string contains substring
+fn str_contains(haystack: String, needle: String) -> bool =
+    str_find(haystack, needle) >= 0;
+
+// Check if string starts with prefix
+fn str_starts_with(s: String, prefix: String) -> bool =
+    if prefix.len() > s.len() { false }
+    else { str_match_at(s, prefix, 0) };
+
+// Check if string ends with suffix
+fn str_ends_with(s: String, suffix: String) -> bool =
+    if suffix.len() > s.len() { false }
+    else { str_match_at(s, suffix, s.len() - suffix.len()) };
+
+// Find nth occurrence of byte (0-indexed)
+fn str_find_nth_byte(s: String, needle: i64, n: i64) -> i64
+  pre n >= 0
+  post ret >= -1 and ret < s.len()
+= {
+    let len = s.len();
+    let mut pos = 0;
+    let mut count = 0;
+    let mut result = NOT_FOUND();
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else if s.byte_at(pos) == needle {
+            {
+                let _c = if count == n {
+                    { result = pos; done = true; 0 }
+                } else {
+                    { count = count + 1; 0 }
+                };
+                pos = pos + 1;
+                0
+            }
+        } else {
+            { pos = pos + 1; 0 }
+        };
+        0
+    };
+    result
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+// Single byte search
+fn test_find_byte_found() -> i64 =
+    if str_find_byte("hello", 108) == 2 { 1 } else { 0 };  // 'l'
+
+fn test_find_byte_not_found() -> i64 =
+    if str_find_byte("hello", 122) == NOT_FOUND() { 1 } else { 0 };  // 'z'
+
+fn test_find_byte_first() -> i64 =
+    if str_find_byte("hello", 104) == 0 { 1 } else { 0 };  // 'h'
+
+fn test_find_byte_last() -> i64 =
+    if str_find_byte("hello", 111) == 4 { 1 } else { 0 };  // 'o'
+
+fn test_find_byte_empty() -> i64 =
+    if str_find_byte("", 104) == NOT_FOUND() { 1 } else { 0 };
+
+// Reverse byte search
+fn test_rfind_byte() -> i64 =
+    if str_rfind_byte("hello", 108) == 3 { 1 } else { 0 };  // last 'l'
+
+fn test_rfind_byte_not_found() -> i64 =
+    if str_rfind_byte("hello", 122) == NOT_FOUND() { 1 } else { 0 };
+
+// Count byte
+fn test_count_byte() -> i64 =
+    if str_count_byte("hello", 108) == 2 { 1 } else { 0 };  // two 'l's
+
+fn test_count_byte_none() -> i64 =
+    if str_count_byte("hello", 122) == 0 { 1 } else { 0 };
+
+// Multi-byte search
+fn test_find_byte2() -> i64 =
+    if str_find_byte2("hello", 108, 111) == 2 { 1 } else { 0 };  // 'l' or 'o'
+
+fn test_find_byte3() -> i64 =
+    if str_find_byte3("hello", 120, 121, 111) == 4 { 1 } else { 0 };  // 'x','y','o'
+
+// Substring search
+fn test_str_find() -> i64 =
+    if str_find("hello world", "world") == 6 { 1 } else { 0 };
+
+fn test_str_find_not_found() -> i64 =
+    if str_find("hello world", "xyz") == NOT_FOUND() { 1 } else { 0 };
+
+fn test_str_find_empty_needle() -> i64 =
+    if str_find("hello", "") == 0 { 1 } else { 0 };
+
+fn test_str_find_at_start() -> i64 =
+    if str_find("hello world", "hello") == 0 { 1 } else { 0 };
+
+fn test_str_find_at_end() -> i64 =
+    if str_find("hello world", "orld") == 7 { 1 } else { 0 };
+
+fn test_str_find_needle_too_long() -> i64 =
+    if str_find("hi", "hello") == NOT_FOUND() { 1 } else { 0 };
+
+// Reverse substring search
+fn test_str_rfind() -> i64 =
+    if str_rfind("abcabc", "abc") == 3 { 1 } else { 0 };
+
+fn test_str_rfind_single() -> i64 =
+    if str_rfind("hello world", "world") == 6 { 1 } else { 0 };
+
+// Count substrings
+fn test_str_count() -> i64 =
+    if str_count("abcabcabc", "abc") == 3 { 1 } else { 0 };
+
+fn test_str_count_overlap() -> i64 =
+    // Non-overlapping: "aa" in "aaa" = 1 (not 2)
+    if str_count("aaa", "aa") == 1 { 1 } else { 0 };
+
+// String utilities
+fn test_contains() -> i64 =
+    if str_contains("hello world", "lo wo") { 1 } else { 0 };
+
+fn test_starts_with() -> i64 =
+    if str_starts_with("hello", "hel") { 1 } else { 0 };
+
+fn test_ends_with() -> i64 =
+    if str_ends_with("hello", "llo") { 1 } else { 0 };
+
+fn test_nth_byte() -> i64 =
+    // 2nd 'l' in "hello" (0-indexed, so n=1)
+    if str_find_nth_byte("hello", 108, 1) == 3 { 1 } else { 0 };
+
+// Buffer operations
+fn test_buf_find() -> i64 = {
+    let buf = malloc(5 * 8);
+    store_i64(buf, 1); store_i64(buf + 8, 2); store_i64(buf + 16, 3);
+    store_i64(buf + 24, 4); store_i64(buf + 32, 5);
+    let result = buf_find_byte(buf, 5, 3);
+    let _f = free(buf);
+    if result == 2 { 1 } else { 0 }
+};
+
+fn test_buf_rfind() -> i64 = {
+    let buf = malloc(5 * 8);
+    store_i64(buf, 1); store_i64(buf + 8, 2); store_i64(buf + 16, 1);
+    store_i64(buf + 24, 2); store_i64(buf + 32, 1);
+    let result = buf_rfind_byte(buf, 5, 1);
+    let _f = free(buf);
+    if result == 4 { 1 } else { 0 }
+};
+
+fn test_buf_subsequence() -> i64 = {
+    let h = malloc(6 * 8);
+    store_i64(h, 1); store_i64(h + 8, 2); store_i64(h + 16, 3);
+    store_i64(h + 24, 4); store_i64(h + 32, 5); store_i64(h + 40, 6);
+    let n = malloc(3 * 8);
+    store_i64(n, 3); store_i64(n + 8, 4); store_i64(n + 16, 5);
+    let result = buf_find(h, 6, n, 3);
+    let _f1 = free(h);
+    let _f2 = free(n);
+    if result == 2 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = test_find_byte_found();
+    let t2 = test_find_byte_not_found();
+    let t3 = test_find_byte_first();
+    let t4 = test_find_byte_last();
+    let t5 = test_find_byte_empty();
+    let t6 = test_rfind_byte();
+    let t7 = test_rfind_byte_not_found();
+    let t8 = test_count_byte();
+    let t9 = test_count_byte_none();
+    let t10 = test_find_byte2();
+    let t11 = test_find_byte3();
+    let t12 = test_str_find();
+    let t13 = test_str_find_not_found();
+    let t14 = test_str_find_empty_needle();
+    let t15 = test_str_find_at_start();
+    let t16 = test_str_find_at_end();
+    let t17 = test_str_find_needle_too_long();
+    let t18 = test_str_rfind();
+    let t19 = test_str_rfind_single();
+    let t20 = test_str_count();
+    let t21 = test_str_count_overlap();
+    let t22 = test_contains();
+    let t23 = test_starts_with();
+    let t24 = test_ends_with();
+    let t25 = test_nth_byte();
+    let t26 = test_buf_find();
+    let t27 = test_buf_rfind();
+    let t28 = test_buf_subsequence();
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10
+               + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20
+               + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28;
+    let total = 28;
+
+    let _p1 = print_str("bmb-memchr: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+
+    if passed == total {
+        let _ok = println(999);
+        0
+    } else {
+        let _fail = println(0);
+        1
+    }
+};
