@@ -98,24 +98,31 @@ fn read_be32(buf: i64, off: i64) -> i64 = {
 fn aput(arr: i64, idx: i64, val: i64) -> i64 = st(arr + idx * 8, val);
 fn aget(arr: i64, idx: i64) -> i64 = load_i64(arr + idx * 8);
 
+// v0.89.4: Converted from recursive to while-loop with let-in-while (Cycle 44)
 // Fill W[0..15] from block
-fn w_fill(w: i64, block: i64, i: i64) -> i64 =
-    if i >= 16 { 0 }
-    else {
+fn w_fill(w: i64, block: i64) -> i64 = {
+    let mut i = 0;
+    while i < 16 {
         let _s = aput(w, i, read_be32(block, i * 4));
-        w_fill(w, block, i + 1)
+        i = i + 1;
+        0
     };
+    0
+};
 
 // Extend W[16..63]
-fn w_extend(w: i64, i: i64) -> i64 =
-    if i >= 64 { 0 }
-    else {
+fn w_extend(w: i64) -> i64 = {
+    let mut i = 16;
+    while i < 64 {
         let s0 = ssig0(aget(w, i - 15));
         let s1 = ssig1(aget(w, i - 2));
         let val = add32(add32(add32(aget(w, i - 16), s0), aget(w, i - 7)), s1);
         let _s = aput(w, i, val);
-        w_extend(w, i + 1)
+        i = i + 1;
+        0
     };
+    0
+};
 
 // State init
 fn sinit(s: i64) -> i64 = {
@@ -151,34 +158,58 @@ fn cround(wv: i64, w: i64, r: i64) -> i64 = {
 };
 
 // Run 64 rounds
-fn crounds(wv: i64, w: i64, r: i64) -> i64 =
-    if r >= 64 { 0 }
-    else { let _c = cround(wv, w, r); crounds(wv, w, r + 1) };
+fn crounds(wv: i64, w: i64) -> i64 = {
+    let mut r = 0;
+    while r < 64 {
+        let _c = cround(wv, w, r);
+        r = r + 1;
+        0
+    };
+    0
+};
 
 // Add working vars back to state
-fn sadd(s: i64, wv: i64, i: i64) -> i64 =
-    if i >= 8 { 0 }
-    else { let _a = aput(s, i, add32(aget(s, i), aget(wv, i))); sadd(s, wv, i + 1) };
+fn sadd(s: i64, wv: i64) -> i64 = {
+    let mut i = 0;
+    while i < 8 {
+        let _a = aput(s, i, add32(aget(s, i), aget(wv, i)));
+        i = i + 1;
+        0
+    };
+    0
+};
 
 // Process one 512-bit block
 fn pblock(s: i64, w: i64, wv: i64, blk: i64) -> i64 = {
-    let _f = w_fill(w, blk, 0);
-    let _e = w_extend(w, 16);
+    let _f = w_fill(w, blk);
+    let _e = w_extend(w);
     let _i = wv_init(wv, s);
-    let _c = crounds(wv, w, 0);
-    let _a = sadd(s, wv, 0);
+    let _c = crounds(wv, w);
+    let _a = sadd(s, wv);
     0
 };
 
 // Copy string bytes to block buffer
-fn cpybytes(blk: i64, inp: String, src: i64, dst: i64, n: i64) -> i64 =
-    if n <= 0 { 0 }
-    else { let _s = bput(blk, dst, inp.byte_at(src)); cpybytes(blk, inp, src + 1, dst + 1, n - 1) };
+fn cpybytes(blk: i64, inp: String, src: i64, dst: i64, n: i64) -> i64 = {
+    let mut j = 0;
+    while j < n {
+        let _s = bput(blk, dst + j, inp.byte_at(src + j));
+        j = j + 1;
+        0
+    };
+    0
+};
 
 // Zero block
-fn zblk(blk: i64, i: i64, end: i64) -> i64 =
-    if i >= end { 0 }
-    else { let _s = bput(blk, i, 0); zblk(blk, i + 1, end) };
+fn zblk(blk: i64, start: i64, end: i64) -> i64 = {
+    let mut i = start;
+    while i < end {
+        let _s = bput(blk, i, 0);
+        i = i + 1;
+        0
+    };
+    0
+};
 
 // Write bit length as big-endian 64-bit at offset 56
 fn wlen(blk: i64, bits: i64) -> i64 = {
@@ -194,15 +225,18 @@ fn wlen(blk: i64, bits: i64) -> i64 = {
 };
 
 // Process full blocks
-fn pfull(s: i64, w: i64, wv: i64, blk: i64, inp: String, idx: i64, cnt: i64) -> i64 =
-    if idx >= cnt { 0 }
-    else {
+fn pfull(s: i64, w: i64, wv: i64, blk: i64, inp: String, cnt: i64) -> i64 = {
+    let mut idx = 0;
+    while idx < cnt {
         let off = idx * 64;
         let _z = zblk(blk, 0, 64);
         let _c = cpybytes(blk, inp, off, 0, 64);
         let _p = pblock(s, w, wv, blk);
-        pfull(s, w, wv, blk, inp, idx + 1, cnt)
+        idx = idx + 1;
+        0
     };
+    0
+};
 
 // Hash a string, return state ptr (caller frees)
 fn sha256_raw(inp: String) -> i64 = {
@@ -214,7 +248,7 @@ fn sha256_raw(inp: String) -> i64 = {
     let blk = malloc(64 * 8);
     let _si = sinit(s);
     let nfull = mlen / 64;
-    let _fb = pfull(s, w, wv, blk, inp, 0, nfull);
+    let _fb = pfull(s, w, wv, blk, inp, nfull);
     let rem = mlen - nfull * 64;
     let bstart = nfull * 64;
     let _z = zblk(blk, 0, 64);
