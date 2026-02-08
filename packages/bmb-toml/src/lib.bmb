@@ -434,7 +434,7 @@ fn count_keyvals(s: String) -> i64 = {
     while idx < len {
         let line_type = classify_line(s, idx);
         let next_idx = get_next_line_idx(s, idx);
-        let _r = if line_type == 2 { { count = count + 1; 0 } } else { 0 };
+        let _r = if line_type == 2 { count = count + 1; 0 } else { 0 };
         idx = next_idx;
         0
     };
@@ -449,7 +449,7 @@ fn count_tables(s: String) -> i64 = {
     while idx < len {
         let line_type = classify_line(s, idx);
         let next_idx = get_next_line_idx(s, idx);
-        let _r = if line_type == 3 or line_type == 4 { { count = count + 1; 0 } } else { 0 };
+        let _r = if line_type == 3 or line_type == 4 { count = count + 1; 0 } else { 0 };
         idx = next_idx;
         0
     };

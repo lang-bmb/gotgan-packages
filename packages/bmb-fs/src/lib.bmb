@@ -22,7 +22,7 @@ fn find_last_sep(path: String) -> i64 = {
     let mut pos = 0;
     let mut last = 0 - 1;
     while pos < len {
-        let _r = if path.byte_at(pos) == path_sep() { { last = pos; 0 } } else { 0 };
+        let _r = if path.byte_at(pos) == path_sep() { last = pos; 0 } else { 0 };
         pos = pos + 1;
         0
     };
@@ -47,9 +47,9 @@ fn find_ext(path: String) -> i64 = {
     while pos < len {
         let c = path.byte_at(pos);
         let _r = if c == path_sep() {
-            { { last_dot = 0 - 1; 0 } }
+            last_dot = 0 - 1; 0
         } else if c == ext_sep() {
-            { { last_dot = pos; 0 } }
+            last_dot = pos; 0
         } else { 0 };
         pos = pos + 1;
         0
@@ -82,13 +82,11 @@ fn count_components(path: String) -> i64
           while pos < len {
               let c = path.byte_at(pos);
               let _r = if c == path_sep() {
-                  {
-                      let _r2 = if in_component { { count = count + 1; 0 } } else { 0 };
-                      in_component = false;
-                      0
-                  }
+                  let _r2 = if in_component { count = count + 1; 0 } else { 0 };
+                  in_component = false;
+                  0
               } else {
-                  { { in_component = true; 0 } }
+                  in_component = true; 0
               };
               pos = pos + 1;
               0
@@ -151,9 +149,9 @@ fn needs_normalization(path: String) -> bool = {
                 let c1 = path.byte_at(pos);
                 let c2 = path.byte_at(pos + 1);
                 let _r2 = if c1 == path_sep() and c2 == path_sep() {
-                    { { needs = true; done = true; 0 } }
+                    needs = true; done = true; 0
                 } else {
-                    { { pos = pos + 1; 0 } }
+                    pos = pos + 1; 0
                 };
                 0
             }

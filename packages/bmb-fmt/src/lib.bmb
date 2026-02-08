@@ -93,11 +93,11 @@ fn hex_digit(d: i64) -> String
 
 // Format as binary (limited precision)
 fn print_binary_iter(n: i64, pos: i64) -> i64 =
-    if pos < 0 { 0 } else { {
+    if pos < 0 { 0 } else {
         let bit = (n / pow_simple(2, pos)) - (n / pow_simple(2, pos + 1)) * 2;
         let u0 = print(bit);
         print_binary_iter(n, pos - 1)
-    } };
+    };
 
 fn print_binary(n: i64, bits: i64) -> i64
   pre bits > 0 and bits <= 32

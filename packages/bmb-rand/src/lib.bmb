@@ -191,7 +191,7 @@ fn test_distribution() -> i64 = {
     while remaining > 0 {
         state = next_state(state);
         let v = rand_range(state, 100);
-        let _r = if v < 50 { { count = count + 1; 0 } } else { 0 };
+        let _r = if v < 50 { count = count + 1; 0 } else { 0 };
         remaining = remaining - 1;
         0
     };
@@ -209,7 +209,7 @@ fn test_no_short_cycle() -> i64 = {
     let mut remaining = 100;
     while remaining > 0 {
         let ns = next_state(state);
-        let _r = if ns == prev1 or ns == prev2 { { ok = 0; 0 } } else { 0 };
+        let _r = if ns == prev1 or ns == prev2 { ok = 0; 0 } else { 0 };
         prev2 = prev1;
         prev1 = state;
         state = ns;

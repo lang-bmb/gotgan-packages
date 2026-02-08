@@ -94,7 +94,7 @@ fn count_positional() -> i64 = {
     let mut count = 0;
     while idx < total {
         let arg = get_arg(idx);
-        let _r = if not is_flag_arg(arg) { { count = count + 1; 0 } } else { 0 };
+        let _r = if not is_flag_arg(arg) { count = count + 1; 0 } else { 0 };
         idx = idx + 1;
         0
     };

@@ -8,80 +8,80 @@ fn result_skip() -> i64 = 2;
 
 // Assertion: check equality
 fn assert_eq(actual: i64, expected: i64) -> bool =
-    if actual == expected { true } else { {
+    if actual == expected { true } else {
         let u0 = print_str("FAIL: expected ");
         let u1 = print(expected);
         let u2 = print_str(" but got ");
         let u3 = println(actual);
         false
-    } };
+    };
 
 // Assertion: check not equal
 fn assert_ne(actual: i64, unexpected: i64) -> bool =
-    if actual != unexpected { true } else { {
+    if actual != unexpected { true } else {
         let u0 = print_str("FAIL: expected different from ");
         let u1 = println(unexpected);
         false
-    } };
+    };
 
 // Assertion: check true
 fn assert_true(condition: bool) -> bool =
-    if condition { true } else { {
+    if condition { true } else {
         let u0 = println_str("FAIL: expected true");
         false
-    } };
+    };
 
 // Assertion: check false
 fn assert_false(condition: bool) -> bool =
-    if not condition { true } else { {
+    if not condition { true } else {
         let u0 = println_str("FAIL: expected false");
         false
-    } };
+    };
 
 // Assertion: check greater than
 fn assert_gt(actual: i64, threshold: i64) -> bool =
-    if actual > threshold { true } else { {
+    if actual > threshold { true } else {
         let u0 = print_str("FAIL: expected ");
         let u1 = print(actual);
         let u2 = print_str(" > ");
         let u3 = println(threshold);
         false
-    } };
+    };
 
 // Assertion: check greater than or equal
 fn assert_gte(actual: i64, threshold: i64) -> bool =
-    if actual >= threshold { true } else { {
+    if actual >= threshold { true } else {
         let u0 = print_str("FAIL: expected ");
         let u1 = print(actual);
         let u2 = print_str(" >= ");
         let u3 = println(threshold);
         false
-    } };
+    };
 
 // Assertion: check less than
 fn assert_lt(actual: i64, threshold: i64) -> bool =
-    if actual < threshold { true } else { {
+    if actual < threshold { true } else {
         let u0 = print_str("FAIL: expected ");
         let u1 = print(actual);
         let u2 = print_str(" < ");
         let u3 = println(threshold);
         false
-    } };
+    };
 
 // Assertion: check less than or equal
 fn assert_lte(actual: i64, threshold: i64) -> bool =
-    if actual <= threshold { true } else { {
+    if actual <= threshold { true } else {
         let u0 = print_str("FAIL: expected ");
         let u1 = print(actual);
         let u2 = print_str(" <= ");
         let u3 = println(threshold);
         false
-    } };
+    };
 
 // Assertion: check in range [min, max]
 fn assert_in_range(actual: i64, min_val: i64, max_val: i64) -> bool
   pre min_val <= max_val
-= if actual >= min_val and actual <= max_val { true } else { {
+= if actual >= min_val and actual <= max_val { true } else {
       let u0 = print_str("FAIL: expected ");
       let u1 = print(actual);
       let u2 = print_str(" in range [");
@@ -90,7 +90,7 @@ fn assert_in_range(actual: i64, min_val: i64, max_val: i64) -> bool
       let u5 = print(max_val);
       let u6 = println_str("]");
       false
-  } };
+  };
 
 // Test summary tracking
 fn count_passed(results: i64, total: i64) -> i64 = results;

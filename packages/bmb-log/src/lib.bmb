@@ -23,13 +23,13 @@ fn format_timestamp(counter: i64) -> i64 = counter;
 
 // Core logging functions
 fn log_at_level(level: i64, message: i64, min_level: i64) -> i64 =
-    if should_log(level, min_level) { {
+    if should_log(level, min_level) {
         let u0 = print_str("[");
         let u1 = print_str(level_name(level));
         let u2 = print_str("] ");
         let u3 = println(message);
         1
-    } } else { 0 };
+    } else { 0 };
 
 // Convenience logging functions (with default min_level = INFO)
 fn trace(message: i64) -> i64 = log_at_level(level_trace(), message, level_info());
@@ -48,7 +48,7 @@ fn trace_vv(message: i64) -> i64 = log_at_level(level_trace(), message, level_tr
 
 // Structured logging helpers
 fn log_with_code(level: i64, code: i64, message: i64, min_level: i64) -> i64 =
-    if should_log(level, min_level) { {
+    if should_log(level, min_level) {
         let u0 = print_str("[");
         let u1 = print_str(level_name(level));
         let u2 = print_str(":E");
@@ -56,14 +56,14 @@ fn log_with_code(level: i64, code: i64, message: i64, min_level: i64) -> i64 =
         let u4 = print_str("] ");
         let u5 = println(message);
         1
-    } } else { 0 };
+    } else { 0 };
 
 // Assert with logging
 fn assert_log(condition: bool, message: i64) -> bool =
-    if condition { true } else { {
+    if condition { true } else {
         let u0 = error(message);
         false
-    } };
+    };
 
 // Performance timing placeholder
 fn log_timing(operation: i64, duration_ms: i64) -> i64 = {

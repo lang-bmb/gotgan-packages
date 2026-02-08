@@ -73,7 +73,7 @@ fn str_count_byte(s: String, needle: i64) -> i64
     let mut pos = 0;
     let mut count = 0;
     while pos < len {
-        let _r = if s.byte_at(pos) == needle { { count = count + 1; 0 } } else { 0 };
+        let _r = if s.byte_at(pos) == needle { count = count + 1; 0 } else { 0 };
         pos = pos + 1;
         0
     };
