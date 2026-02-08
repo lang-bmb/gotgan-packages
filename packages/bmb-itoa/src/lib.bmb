@@ -1,0 +1,427 @@
+// bmb-itoa: Fast integer-to-string and string-to-integer conversion
+// v0.1.0
+//
+// High-performance number formatting and parsing.
+// Supports decimal, hexadecimal, octal, and binary representations.
+//
+// Performance target: equivalent to C itoa/strtol implementations.
+//
+// Contracts: post parse(to_string(n)) == n (round-trip correctness)
+//
+// Usage:
+//   let s = itoa(42);          // "42"
+//   let n = atoi("42");        // 42
+//   let h = itoa_hex(255);     // "ff"
+//   let b = itoa_bin(10);      // "1010"
+
+// ============================================================================
+// Integer to String (Decimal)
+// ============================================================================
+
+// Convert i64 to decimal string
+fn itoa(n: i64) -> String
+  post ret.len() >= 1
+= if n == 0 { "0" }
+  else if n < 0 {
+      if n == 0 - 9223372036854775807 - 1 {
+          // Handle i64::MIN specially to avoid overflow on negation
+          "-9223372036854775808"
+      } else {
+          "-" + itoa_pos(0 - n)
+      }
+  }
+  else { itoa_pos(n) };
+
+fn itoa_pos(n: i64) -> String
+  pre n > 0
+  post ret.len() >= 1
+= if n < 10 { digit_str(n) }
+  else { itoa_pos(n / 10) + digit_str(n - (n / 10) * 10) };
+
+// Single digit to string
+fn digit_str(d: i64) -> String
+  pre d >= 0 and d <= 9
+  post ret.len() == 1
+= if d == 0 { "0" } else if d == 1 { "1" } else if d == 2 { "2" }
+  else if d == 3 { "3" } else if d == 4 { "4" } else if d == 5 { "5" }
+  else if d == 6 { "6" } else if d == 7 { "7" } else if d == 8 { "8" }
+  else { "9" };
+
+// ============================================================================
+// Integer to String (Hexadecimal)
+// ============================================================================
+
+fn hex_digit_str(d: i64) -> String
+  pre d >= 0 and d <= 15
+  post ret.len() == 1
+= if d < 10 { digit_str(d) }
+  else if d == 10 { "a" } else if d == 11 { "b" } else if d == 12 { "c" }
+  else if d == 13 { "d" } else if d == 14 { "e" } else { "f" };
+
+fn hex_digit_upper_str(d: i64) -> String
+  pre d >= 0 and d <= 15
+  post ret.len() == 1
+= if d < 10 { digit_str(d) }
+  else if d == 10 { "A" } else if d == 11 { "B" } else if d == 12 { "C" }
+  else if d == 13 { "D" } else if d == 14 { "E" } else { "F" };
+
+// Convert non-negative integer to lowercase hex string
+fn itoa_hex(n: i64) -> String
+  pre n >= 0
+  post ret.len() >= 1
+= if n == 0 { "0" }
+  else { itoa_hex_pos(n) };
+
+fn itoa_hex_pos(n: i64) -> String =
+    if n <= 0 { "" }
+    else { itoa_hex_pos(n / 16) + hex_digit_str(n band 15) };
+
+// Convert to uppercase hex string
+fn itoa_hex_upper(n: i64) -> String
+  pre n >= 0
+  post ret.len() >= 1
+= if n == 0 { "0" }
+  else { itoa_hex_upper_pos(n) };
+
+fn itoa_hex_upper_pos(n: i64) -> String =
+    if n <= 0 { "" }
+    else { itoa_hex_upper_pos(n / 16) + hex_digit_upper_str(n band 15) };
+
+// Hex with 0x prefix
+fn itoa_hex_prefixed(n: i64) -> String
+  pre n >= 0
+= "0x" + itoa_hex(n);
+
+// ============================================================================
+// Integer to String (Binary)
+// ============================================================================
+
+fn itoa_bin(n: i64) -> String
+  pre n >= 0
+  post ret.len() >= 1
+= if n == 0 { "0" }
+  else { itoa_bin_pos(n) };
+
+fn itoa_bin_pos(n: i64) -> String =
+    if n <= 0 { "" }
+    else { itoa_bin_pos(n / 2) + digit_str(n band 1) };
+
+// Binary with 0b prefix
+fn itoa_bin_prefixed(n: i64) -> String
+  pre n >= 0
+= "0b" + itoa_bin(n);
+
+// ============================================================================
+// Integer to String (Octal)
+// ============================================================================
+
+fn itoa_oct(n: i64) -> String
+  pre n >= 0
+  post ret.len() >= 1
+= if n == 0 { "0" }
+  else { itoa_oct_pos(n) };
+
+fn itoa_oct_pos(n: i64) -> String =
+    if n <= 0 { "" }
+    else { itoa_oct_pos(n / 8) + digit_str(n band 7) };
+
+// Octal with 0o prefix
+fn itoa_oct_prefixed(n: i64) -> String
+  pre n >= 0
+= "0o" + itoa_oct(n);
+
+// ============================================================================
+// String to Integer (Decimal)
+// ============================================================================
+
+// Error sentinel value
+fn ATOI_ERROR() -> i64 = 0 - 9223372036854775807 - 1;
+
+// Parse decimal string to i64
+// Returns ATOI_ERROR on invalid input
+fn atoi(s: String) -> i64
+  post (s.len() == 0) implies ret == ATOI_ERROR()
+= if s.len() == 0 { ATOI_ERROR() }
+  else if s.byte_at(0) == 45 {
+      // Negative number
+      if s.len() == 1 { ATOI_ERROR() }  // just "-"
+      else {
+          {
+              let val = atoi_pos(s, 1);
+              if val == ATOI_ERROR() { ATOI_ERROR() }
+              else { 0 - val }
+          }
+      }
+  }
+  else if s.byte_at(0) == 43 {
+      // Explicit positive
+      if s.len() == 1 { ATOI_ERROR() }
+      else { atoi_pos(s, 1) }
+  }
+  else { atoi_pos(s, 0) };
+
+fn atoi_pos(s: String, start: i64) -> i64 = {
+    let len = s.len();
+    let mut pos = start;
+    let mut acc = 0;
+    let mut valid = true;
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else {
+            {
+                let c = s.byte_at(pos);
+                let _r2 = if c >= 48 and c <= 57 {
+                    { acc = acc * 10 + (c - 48); pos = pos + 1; 0 }
+                } else {
+                    { valid = false; done = true; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    if valid { acc } else { ATOI_ERROR() }
+};
+
+// ============================================================================
+// String to Integer (Hexadecimal)
+// ============================================================================
+
+fn atoi_hex(s: String) -> i64
+  post (s.len() == 0) implies ret == ATOI_ERROR()
+= if s.len() == 0 { ATOI_ERROR() }
+  else {
+      {
+          // Skip optional 0x prefix
+          let start = if s.len() >= 2 and s.byte_at(0) == 48 and (s.byte_at(1) == 120 or s.byte_at(1) == 88) { 2 }
+                      else { 0 };
+          if start >= s.len() { ATOI_ERROR() }
+          else { atoi_hex_pos(s, start) }
+      }
+  };
+
+fn atoi_hex_pos(s: String, start: i64) -> i64 = {
+    let len = s.len();
+    let mut pos = start;
+    let mut acc = 0;
+    let mut valid = true;
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else {
+            {
+                let c = s.byte_at(pos);
+                let val = if c >= 48 and c <= 57 { c - 48 }
+                          else if c >= 97 and c <= 102 { c - 97 + 10 }
+                          else if c >= 65 and c <= 70 { c - 65 + 10 }
+                          else { 0 - 1 };
+                let _r2 = if val < 0 {
+                    { valid = false; done = true; 0 }
+                } else {
+                    { acc = acc * 16 + val; pos = pos + 1; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    if valid { acc } else { ATOI_ERROR() }
+};
+
+// ============================================================================
+// String to Integer (Binary)
+// ============================================================================
+
+fn atoi_bin(s: String) -> i64
+  post (s.len() == 0) implies ret == ATOI_ERROR()
+= if s.len() == 0 { ATOI_ERROR() }
+  else {
+      {
+          let start = if s.len() >= 2 and s.byte_at(0) == 48 and (s.byte_at(1) == 98 or s.byte_at(1) == 66) { 2 }
+                      else { 0 };
+          if start >= s.len() { ATOI_ERROR() }
+          else { atoi_bin_pos(s, start) }
+      }
+  };
+
+fn atoi_bin_pos(s: String, start: i64) -> i64 = {
+    let len = s.len();
+    let mut pos = start;
+    let mut acc = 0;
+    let mut valid = true;
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else {
+            {
+                let c = s.byte_at(pos);
+                let _r2 = if c == 48 {
+                    { acc = acc * 2; pos = pos + 1; 0 }
+                } else if c == 49 {
+                    { acc = acc * 2 + 1; pos = pos + 1; 0 }
+                } else {
+                    { valid = false; done = true; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    if valid { acc } else { ATOI_ERROR() }
+};
+
+// ============================================================================
+// Formatting Utilities
+// ============================================================================
+
+// Pad with leading zeros to minimum width
+fn itoa_padded(n: i64, min_width: i64) -> String
+  pre n >= 0 and min_width >= 1
+= {
+    let s = itoa(n);
+    if s.len() >= min_width { s }
+    else { pad_zeros(min_width - s.len()) + s }
+};
+
+fn pad_zeros(count: i64) -> String = {
+    let mut result = "";
+    let mut remaining = count;
+    while remaining > 0 {
+        result = result + "0";
+        remaining = remaining - 1;
+        0
+    };
+    result
+};
+
+// Format with thousands separator
+fn itoa_grouped(n: i64, sep: String) -> String
+  pre n >= 0
+= {
+    let s = itoa(n);
+    if s.len() <= 3 { s }
+    else { itoa_insert_sep(s, s.len(), sep) }
+};
+
+fn itoa_insert_sep(s: String, remaining: i64, sep: String) -> String =
+    if remaining <= 3 { s.slice(0, remaining) }
+    else {
+        let group_start = remaining - 3;
+        let rest = itoa_insert_sep(s, group_start, sep);
+        rest + sep + s.slice(group_start, remaining)
+    };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+// Decimal conversion
+fn test_itoa_zero() -> i64 = if itoa(0) == "0" { 1 } else { 0 };
+fn test_itoa_positive() -> i64 = if itoa(42) == "42" { 1 } else { 0 };
+fn test_itoa_negative() -> i64 = if itoa(0 - 42) == "-42" { 1 } else { 0 };
+fn test_itoa_large() -> i64 = if itoa(1234567890) == "1234567890" { 1 } else { 0 };
+fn test_itoa_one() -> i64 = if itoa(1) == "1" { 1 } else { 0 };
+
+// Hex conversion
+fn test_hex_zero() -> i64 = if itoa_hex(0) == "0" { 1 } else { 0 };
+fn test_hex_255() -> i64 = if itoa_hex(255) == "ff" { 1 } else { 0 };
+fn test_hex_16() -> i64 = if itoa_hex(16) == "10" { 1 } else { 0 };
+fn test_hex_upper() -> i64 = if itoa_hex_upper(255) == "FF" { 1 } else { 0 };
+
+// Binary conversion
+fn test_bin_zero() -> i64 = if itoa_bin(0) == "0" { 1 } else { 0 };
+fn test_bin_ten() -> i64 = if itoa_bin(10) == "1010" { 1 } else { 0 };
+fn test_bin_255() -> i64 = if itoa_bin(255) == "11111111" { 1 } else { 0 };
+
+// Octal conversion
+fn test_oct_zero() -> i64 = if itoa_oct(0) == "0" { 1 } else { 0 };
+fn test_oct_8() -> i64 = if itoa_oct(8) == "10" { 1 } else { 0 };
+fn test_oct_255() -> i64 = if itoa_oct(255) == "377" { 1 } else { 0 };
+
+// String to integer (decimal)
+fn test_atoi_zero() -> i64 = if atoi("0") == 0 { 1 } else { 0 };
+fn test_atoi_positive() -> i64 = if atoi("42") == 42 { 1 } else { 0 };
+fn test_atoi_negative() -> i64 = if atoi("-42") == 0 - 42 { 1 } else { 0 };
+fn test_atoi_invalid() -> i64 = if atoi("abc") == ATOI_ERROR() { 1 } else { 0 };
+fn test_atoi_empty() -> i64 = if atoi("") == ATOI_ERROR() { 1 } else { 0 };
+
+// Hex parsing
+fn test_atoi_hex() -> i64 = if atoi_hex("ff") == 255 { 1 } else { 0 };
+fn test_atoi_hex_prefix() -> i64 = if atoi_hex("0xff") == 255 { 1 } else { 0 };
+fn test_atoi_hex_upper() -> i64 = if atoi_hex("0xFF") == 255 { 1 } else { 0 };
+
+// Binary parsing
+fn test_atoi_bin() -> i64 = if atoi_bin("1010") == 10 { 1 } else { 0 };
+fn test_atoi_bin_prefix() -> i64 = if atoi_bin("0b1010") == 10 { 1 } else { 0 };
+
+// Round-trip tests: parse(to_string(n)) == n
+fn test_roundtrip_0() -> i64 = if atoi(itoa(0)) == 0 { 1 } else { 0 };
+fn test_roundtrip_42() -> i64 = if atoi(itoa(42)) == 42 { 1 } else { 0 };
+fn test_roundtrip_neg() -> i64 = if atoi(itoa(0 - 999)) == 0 - 999 { 1 } else { 0 };
+fn test_roundtrip_large() -> i64 = if atoi(itoa(9876543210)) == 9876543210 { 1 } else { 0 };
+fn test_roundtrip_hex() -> i64 = if atoi_hex(itoa_hex(65535)) == 65535 { 1 } else { 0 };
+fn test_roundtrip_bin() -> i64 = if atoi_bin(itoa_bin(170)) == 170 { 1 } else { 0 };
+
+// Padded formatting
+fn test_padded() -> i64 = if itoa_padded(42, 5) == "00042" { 1 } else { 0 };
+fn test_padded_exact() -> i64 = if itoa_padded(42, 2) == "42" { 1 } else { 0 };
+
+fn main() -> i64 = {
+    let t1 = test_itoa_zero();
+    let t2 = test_itoa_positive();
+    let t3 = test_itoa_negative();
+    let t4 = test_itoa_large();
+    let t5 = test_itoa_one();
+    let t6 = test_hex_zero();
+    let t7 = test_hex_255();
+    let t8 = test_hex_16();
+    let t9 = test_hex_upper();
+    let t10 = test_bin_zero();
+    let t11 = test_bin_ten();
+    let t12 = test_bin_255();
+    let t13 = test_oct_zero();
+    let t14 = test_oct_8();
+    let t15 = test_oct_255();
+    let t16 = test_atoi_zero();
+    let t17 = test_atoi_positive();
+    let t18 = test_atoi_negative();
+    let t19 = test_atoi_invalid();
+    let t20 = test_atoi_empty();
+    let t21 = test_atoi_hex();
+    let t22 = test_atoi_hex_prefix();
+    let t23 = test_atoi_hex_upper();
+    let t24 = test_atoi_bin();
+    let t25 = test_atoi_bin_prefix();
+    let t26 = test_roundtrip_0();
+    let t27 = test_roundtrip_42();
+    let t28 = test_roundtrip_neg();
+    let t29 = test_roundtrip_large();
+    let t30 = test_roundtrip_hex();
+    let t31 = test_roundtrip_bin();
+    let t32 = test_padded();
+    let t33 = test_padded_exact();
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10
+               + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19 + t20
+               + t21 + t22 + t23 + t24 + t25 + t26 + t27 + t28 + t29 + t30
+               + t31 + t32 + t33;
+    let total = 33;
+
+    let _p1 = print_str("bmb-itoa: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+
+    if passed == total {
+        let _ok = println(999);
+        0
+    } else {
+        let _fail = println(0);
+        1
+    }
+};

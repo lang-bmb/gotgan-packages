@@ -8,13 +8,24 @@ fn digit_char(d: i64) -> i64
 = d + 48;
 
 // Count digits in a number
-fn count_digits_iter(n: i64, count: i64) -> i64 =
-    if n < 10 { count + 1 } else { count_digits_iter(n / 10, count + 1) };
-
 fn count_digits(n: i64) -> i64
   pre n >= 0
   post ret >= 1
-= count_digits_iter(n, 0);
+= {
+    let mut val = n;
+    let mut count = 0;
+    let mut done = false;
+    while not done {
+        count = count + 1;
+        let _r = if val < 10 {
+            { done = true; 0 }
+        } else {
+            { val = val / 10; 0 }
+        };
+        0
+    };
+    count
+};
 
 // Get nth digit from right (0-indexed)
 fn get_digit(n: i64, pos: i64) -> i64
@@ -24,12 +35,18 @@ fn get_digit(n: i64, pos: i64) -> i64
   shifted - (shifted / 10) * 10;
 
 // Simple power for formatting
-fn pow_simple_iter(base: i64, exp: i64, acc: i64) -> i64 =
-    if exp <= 0 { acc } else { pow_simple_iter(base, exp - 1, acc * base) };
-
 fn pow_simple(base: i64, exp: i64) -> i64
   pre exp >= 0
-= pow_simple_iter(base, exp, 1);
+= {
+    let mut result = 1;
+    let mut remaining = exp;
+    while remaining > 0 {
+        result = result * base;
+        remaining = remaining - 1;
+        0
+    };
+    result
+};
 
 // Format integer with padding
 fn pad_left_count(n: i64, width: i64) -> i64 =
@@ -37,11 +54,15 @@ fn pad_left_count(n: i64, width: i64) -> i64 =
     if width > digits { width - digits } else { 0 };
 
 // Print padding spaces
-fn print_spaces(count: i64) -> i64 =
-    if count <= 0 { 0 } else { {
-        let u0 = print_str(" ");
-        print_spaces(count - 1)
-    } };
+fn print_spaces(count: i64) -> i64 = {
+    let mut remaining = count;
+    while remaining > 0 {
+        let _u = print_str(" ");
+        remaining = remaining - 1;
+        0
+    };
+    0
+};
 
 // Format with minimum width (right-aligned)
 fn print_padded(n: i64, width: i64) -> i64 = {
@@ -52,16 +73,17 @@ fn print_padded(n: i64, width: i64) -> i64 = {
 };
 
 // Format with leading zeros
-fn print_zero_padded_iter(n: i64, remaining_zeros: i64) -> i64 =
-    if remaining_zeros <= 0 { let u0 = print(n); 0 } else { {
-        let u0 = print_str("0");
-        print_zero_padded_iter(n, remaining_zeros - 1)
-    } };
-
 fn print_zero_padded(n: i64, width: i64) -> i64 = {
     let digits = count_digits(n);
     let zeros_needed = if width > digits { width - digits } else { 0 };
-    print_zero_padded_iter(n, zeros_needed)
+    let mut remaining = zeros_needed;
+    while remaining > 0 {
+        let _u = print_str("0");
+        remaining = remaining - 1;
+        0
+    };
+    let _u = print(n);
+    0
 };
 
 // Format as hexadecimal (simplified, 0-15 only)

@@ -17,10 +17,17 @@ fn is_absolute(path: String) -> bool =
 fn is_relative(path: String) -> bool = not is_absolute(path);
 
 // Find last separator position
-fn find_last_sep_iter(path: String, pos: i64, last: i64) -> i64 =
-    if pos >= path.len() { last } else if path.byte_at(pos) == path_sep() { find_last_sep_iter(path, pos + 1, pos) } else { find_last_sep_iter(path, pos + 1, last) };
-
-fn find_last_sep(path: String) -> i64 = find_last_sep_iter(path, 0, -1);
+fn find_last_sep(path: String) -> i64 = {
+    let len = path.len();
+    let mut pos = 0;
+    let mut last = 0 - 1;
+    while pos < len {
+        let _r = if path.byte_at(pos) == path_sep() { { last = pos; 0 } } else { 0 };
+        pos = pos + 1;
+        0
+    };
+    last
+};
 
 // Get directory name (parent path)
 fn dirname_end(path: String) -> i64 =
@@ -33,15 +40,22 @@ fn basename_start(path: String) -> i64 =
     if last < 0 { 0 } else { last + 1 };
 
 // Find extension position (last dot after last separator)
-fn find_ext_iter(path: String, pos: i64, last_dot: i64, last_sep: i64) -> i64 =
-    if pos >= path.len() { last_dot } else {
+fn find_ext(path: String) -> i64 = {
+    let len = path.len();
+    let mut pos = 0;
+    let mut last_dot = 0 - 1;
+    while pos < len {
         let c = path.byte_at(pos);
-        if c == path_sep() { find_ext_iter(path, pos + 1, 0 - 1, pos) }
-        else if c == ext_sep() { find_ext_iter(path, pos + 1, pos, last_sep) }
-        else { find_ext_iter(path, pos + 1, last_dot, last_sep) }
+        let _r = if c == path_sep() {
+            { { last_dot = 0 - 1; 0 } }
+        } else if c == ext_sep() {
+            { { last_dot = pos; 0 } }
+        } else { 0 };
+        pos = pos + 1;
+        0
     };
-
-fn find_ext(path: String) -> i64 = find_ext_iter(path, 0, -1, -1);
+    last_dot
+};
 
 // Get extension (including dot) start position, or path length if none
 fn ext_start(path: String) -> i64 =
@@ -56,37 +70,98 @@ fn stem_start(path: String) -> i64 = basename_start(path);
 fn stem_end(path: String) -> i64 = ext_start(path);
 
 // Path component counting
-fn count_components_iter(path: String, pos: i64, count: i64, in_component: bool) -> i64 =
-    if pos >= path.len() { if in_component { count + 1 } else { count } } else {
-        let c = path.byte_at(pos);
-        if c == path_sep() { count_components_iter(path, pos + 1, if in_component { count + 1 } else { count }, false) }
-        else { count_components_iter(path, pos + 1, count, true) }
-    };
-
 fn count_components(path: String) -> i64
   post ret >= 0
-= if path.len() == 0 { 0 } else { count_components_iter(path, 0, 0, false) };
+= if path.len() == 0 { 0 }
+  else {
+      {
+          let len = path.len();
+          let mut pos = 0;
+          let mut count = 0;
+          let mut in_component = false;
+          while pos < len {
+              let c = path.byte_at(pos);
+              let _r = if c == path_sep() {
+                  {
+                      let _r2 = if in_component { { count = count + 1; 0 } } else { 0 };
+                      in_component = false;
+                      0
+                  }
+              } else {
+                  { { in_component = true; 0 } }
+              };
+              pos = pos + 1;
+              0
+          };
+          if in_component { count + 1 } else { count }
+      }
+  };
 
 // Check for dangerous path components
 fn has_parent_ref_at(path: String, pos: i64) -> bool =
     if pos + 1 >= path.len() { false } else { path.byte_at(pos) == 46 and path.byte_at(pos + 1) == 46 };
 
-fn is_safe_path_iter(path: String, pos: i64) -> bool =
-    if pos >= path.len() { true } else if has_parent_ref_at(path, pos) { false } else { is_safe_path_iter(path, pos + 1) };
-
-fn is_safe_path(path: String) -> bool =
-    is_safe_path_iter(path, 0);
+fn is_safe_path(path: String) -> bool = {
+    let len = path.len();
+    let mut pos = 0;
+    let mut safe = true;
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else if has_parent_ref_at(path, pos) {
+            { safe = false; done = true; 0 }
+        } else {
+            { pos = pos + 1; 0 }
+        };
+        0
+    };
+    safe
+};
 
 // Normalize path (conceptual - removes redundant separators)
-fn count_consecutive_seps(path: String, pos: i64) -> i64 =
-    if pos >= path.len() { 0 } else if path.byte_at(pos) != path_sep() { 0 } else { 1 + count_consecutive_seps(path, pos + 1) };
-
-fn needs_normalization(path: String, pos: i64) -> bool =
-    if pos + 1 >= path.len() { false } else {
-        let c1 = path.byte_at(pos);
-        let c2 = path.byte_at(pos + 1);
-        (c1 == path_sep() and c2 == path_sep()) or needs_normalization(path, pos + 1)
+fn count_consecutive_seps(path: String, start: i64) -> i64 = {
+    let len = path.len();
+    let mut pos = start;
+    let mut count = 0;
+    let mut done = false;
+    while not done {
+        let _r = if pos >= len {
+            { done = true; 0 }
+        } else if path.byte_at(pos) != path_sep() {
+            { done = true; 0 }
+        } else {
+            { count = count + 1; pos = pos + 1; 0 }
+        };
+        0
     };
+    count
+};
+
+fn needs_normalization(path: String) -> bool = {
+    let len = path.len();
+    let mut pos = 0;
+    let mut needs = false;
+    let mut done = false;
+    while not done {
+        let _r = if pos + 1 >= len {
+            { done = true; 0 }
+        } else {
+            {
+                let c1 = path.byte_at(pos);
+                let c2 = path.byte_at(pos + 1);
+                let _r2 = if c1 == path_sep() and c2 == path_sep() {
+                    { { needs = true; done = true; 0 } }
+                } else {
+                    { { pos = pos + 1; 0 } }
+                };
+                0
+            }
+        };
+        0
+    };
+    needs
+};
 
 // Path depth (number of directories from root)
 fn path_depth(path: String) -> i64
@@ -101,11 +176,28 @@ fn ends_with_sep(path: String) -> bool =
 // Validate path characters (simplified - no null bytes)
 fn is_valid_path_char(c: i64) -> bool = c != 0;
 
-fn is_valid_path_iter(path: String, pos: i64) -> bool =
-    if pos >= path.len() { true } else if not is_valid_path_char(path.byte_at(pos)) { false } else { is_valid_path_iter(path, pos + 1) };
-
-fn is_valid_path(path: String) -> bool =
-    path.len() > 0 and is_valid_path_iter(path, 0);
+fn is_valid_path(path: String) -> bool = {
+    let len = path.len();
+    if len == 0 { false }
+    else {
+        {
+            let mut pos = 0;
+            let mut valid = true;
+            let mut done = false;
+            while not done {
+                let _r = if pos >= len {
+                    { done = true; 0 }
+                } else if not is_valid_path_char(path.byte_at(pos)) {
+                    { valid = false; done = true; 0 }
+                } else {
+                    { pos = pos + 1; 0 }
+                };
+                0
+            };
+            valid
+        }
+    }
+};
 
 // ============================================================
 // Tests
