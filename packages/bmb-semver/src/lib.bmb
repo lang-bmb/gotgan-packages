@@ -49,17 +49,31 @@ fn digit_value(c: i64) -> i64
 
 // Parse number from string starting at index, return (value, end_index)
 // Uses packed result: value * 10000 + end_index
-fn parse_num_iter(s: String, idx: i64, acc: i64, len: i64) -> i64 =
-    if idx >= len { acc * 10000 + idx }
-    else {
-        let c = s.byte_at(idx);
-        if is_digit(c) { parse_num_iter(s, idx + 1, acc * 10 + digit_value(c), len) }
-        else { acc * 10000 + idx }
-    };
-
 fn parse_num(s: String, start: i64) -> i64
   pre start >= 0
-= parse_num_iter(s, start, 0, s.len());
+= {
+    let len = s.len();
+    let mut idx = start;
+    let mut acc = 0;
+    let mut done = false;
+    while not done {
+        let _r = if idx >= len {
+            { done = true; 0 }
+        } else {
+            {
+                let c = s.byte_at(idx);
+                let _r2 = if is_digit(c) {
+                    { acc = acc * 10 + digit_value(c); idx = idx + 1; 0 }
+                } else {
+                    { done = true; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    acc * 10000 + idx
+};
 
 // Extract parsed value from packed result
 fn parsed_value(packed: i64) -> i64 = packed / 10000;

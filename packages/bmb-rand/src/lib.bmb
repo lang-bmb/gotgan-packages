@@ -52,8 +52,16 @@ fn rand_bool(state: i64) -> bool =
 // ============================================================
 
 // Advance state N times
-fn rand_n(state: i64, n: i64) -> i64 =
-    if n <= 0 { state } else { rand_n(next_state(state), n - 1) };
+fn rand_n(state: i64, n: i64) -> i64 = {
+    let mut s = state;
+    let mut remaining = n;
+    while remaining > 0 {
+        s = next_state(s);
+        remaining = remaining - 1;
+        0
+    };
+    s
+};
 
 // Simple hash function for seed generation from arbitrary i64
 fn hash_seed(x: i64) -> i64 =
@@ -175,32 +183,40 @@ fn test_hash_seed() -> i64 = {
 };
 
 // Test: distribution is roughly uniform (count values < 50 out of 100 samples in [0,100))
-fn count_below_iter(state: i64, n: i64, threshold: i64, modulus: i64, count: i64) -> i64 =
-    if n <= 0 { count } else {
-        let s = next_state(state);
-        let v = rand_range(s, modulus);
-        let c = if v < threshold { count + 1 } else { count };
-        count_below_iter(s, n - 1, threshold, modulus, c)
-    };
-
 fn test_distribution() -> i64 = {
     let s = init_seed(314159);
-    let below50 = count_below_iter(s, 200, 50, 100, 0);
+    let mut state = s;
+    let mut remaining = 200;
+    let mut count = 0;
+    while remaining > 0 {
+        state = next_state(state);
+        let v = rand_range(state, 100);
+        let _r = if v < 50 { { count = count + 1; 0 } } else { 0 };
+        remaining = remaining - 1;
+        0
+    };
     // Expect roughly 100 out of 200 to be below 50. Accept 60-140 range.
-    if below50 >= 60 and below50 <= 140 { 1 } else { 0 }
+    if count >= 60 and count <= 140 { 1 } else { 0 }
 };
 
 // Test: no short cycles (100 distinct states)
-fn count_distinct_iter(state: i64, n: i64, prev1: i64, prev2: i64, ok: i64) -> i64 =
-    if n <= 0 { ok } else {
-        let s = next_state(state);
-        let still_ok = if s == prev1 or s == prev2 { 0 } else { ok };
-        count_distinct_iter(s, n - 1, state, prev1, still_ok)
-    };
-
 fn test_no_short_cycle() -> i64 = {
     let s = init_seed(42);
-    count_distinct_iter(s, 100, 0, 0, 1)
+    let mut state = s;
+    let mut prev1 = 0;
+    let mut prev2 = 0;
+    let mut ok = 1;
+    let mut remaining = 100;
+    while remaining > 0 {
+        let ns = next_state(state);
+        let _r = if ns == prev1 or ns == prev2 { { ok = 0; 0 } } else { 0 };
+        prev2 = prev1;
+        prev1 = state;
+        state = ns;
+        remaining = remaining - 1;
+        0
+    };
+    ok
 };
 
 // Test: legacy LCG still works
