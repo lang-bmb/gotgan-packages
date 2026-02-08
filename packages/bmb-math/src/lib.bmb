@@ -106,15 +106,13 @@ fn test_sign() -> i64 =
 fn test_pow() -> i64 =
     if pow(2, 0) == 1 and pow(2, 10) == 1024 and pow(3, 4) == 81 { 1 } else { 0 };
 
-// Note: sqrt returns float-coerced i64 in interpreter, so == comparison fails.
-// Using >= and <= as workaround for interpreter bug (ISSUE: int/float == mismatch).
+// v0.89.4: Simplified after float/int == fix (Cycle 42)
 fn test_sqrt() -> i64 = {
     let s0 = sqrt(0);
     let s1 = sqrt(1);
     let s4 = sqrt(4);
     let s100 = sqrt(100);
-    if s0 >= 0 and s0 <= 0 and s1 >= 1 and s1 <= 1
-       and s4 >= 2 and s4 <= 2 and s100 >= 10 and s100 <= 10 { 1 } else { 0 }
+    if s0 == 0 and s1 == 1 and s4 == 2 and s100 == 10 { 1 } else { 0 }
 };
 
 fn test_gcd() -> i64 =

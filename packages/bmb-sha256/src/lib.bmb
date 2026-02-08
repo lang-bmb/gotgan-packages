@@ -8,9 +8,9 @@
 //   let hash = sha256_string("hello");
 //   // hash == "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
 
-// Wrappers for builtins that return unit
-fn drop(ptr: i64) -> i64 = { let _f = free(ptr); 0 };
-fn st(addr: i64, val: i64) -> i64 = { let _s = store_i64(addr, val); 0 };
+// v0.89.4: free/store_i64 now return i64(0) directly - wrappers kept for readability
+fn drop(ptr: i64) -> i64 = free(ptr);
+fn st(addr: i64, val: i64) -> i64 = store_i64(addr, val);
 
 // 32-bit mask
 fn MASK32() -> i64 = 4294967295;

@@ -1,0 +1,599 @@
+// bmb-hashmap: High-performance hash map with string keys
+// v0.1.0
+//
+// Open-addressing hash table with Robin Hood probing and dynamic resizing.
+// Uses while-loop imperative style for interpreter compatibility.
+//
+// Memory layout:
+//   Map header: [entries_ptr, count, capacity] = 3 * 8 = 24 bytes
+//   Entry: [hash, key_ptr, key_len, value, dist] = 5 * 8 = 40 bytes
+//     key_ptr: pointer to key string data
+//     key_len: length of key string (0 for empty slot)
+//     dist: probe distance from ideal position (-1 = empty)
+//
+// Usage:
+//   let m = smap_new(64);
+//   let _r = smap_put(m, "key", 42);
+//   let val = smap_get(m, "key");     // 42
+//   let _d = smap_delete(m, "key");
+//   let _f = smap_free(m);
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+// v0.89.4: free() now returns i64(0) directly - wrapper kept for backward compat
+fn free_and_zero(ptr: i64) -> i64 = free(ptr);
+
+fn SMAP_NOT_FOUND() -> i64 = 0 - 9223372036854775807 - 1;
+fn SMAP_ENTRY_SIZE() -> i64 = 40;
+fn SMAP_EMPTY_DIST() -> i64 = 0 - 1;
+
+// ============================================================================
+// FNV-1a Hash Function (for strings)
+// ============================================================================
+
+fn FNV_OFFSET_BASIS() -> i64 = 0 - 3750763034362895579;
+fn FNV_PRIME() -> i64 = 1099511628211;
+
+fn fnv1a_string(s: String) -> i64 = fnv1a_loop(s, 0, FNV_OFFSET_BASIS());
+
+fn fnv1a_loop(s: String, pos: i64, hash: i64) -> i64 =
+    if pos >= s.len() { hash }
+    else {
+        let h = (hash bxor s.byte_at(pos)) * FNV_PRIME();
+        fnv1a_loop(s, pos + 1, h)
+    };
+
+// ============================================================================
+// Entry Access Helpers
+// ============================================================================
+
+fn e_addr(entries: i64, idx: i64) -> i64 = entries + idx * SMAP_ENTRY_SIZE();
+
+fn e_get_hash(entries: i64, idx: i64) -> i64 = load_i64(e_addr(entries, idx));
+fn e_get_kptr(entries: i64, idx: i64) -> i64 = load_i64(e_addr(entries, idx) + 8);
+fn e_get_klen(entries: i64, idx: i64) -> i64 = load_i64(e_addr(entries, idx) + 16);
+fn e_get_val(entries: i64, idx: i64) -> i64 = load_i64(e_addr(entries, idx) + 24);
+fn e_get_dist(entries: i64, idx: i64) -> i64 = load_i64(e_addr(entries, idx) + 32);
+
+fn e_set(entries: i64, idx: i64, hash: i64, kptr: i64, klen: i64, val: i64, dist: i64) -> i64 = {
+    let a = e_addr(entries, idx);
+    let _s1 = store_i64(a, hash);
+    let _s2 = store_i64(a + 8, kptr);
+    let _s3 = store_i64(a + 16, klen);
+    let _s4 = store_i64(a + 24, val);
+    let _s5 = store_i64(a + 32, dist);
+    0
+};
+
+fn e_set_empty(entries: i64, idx: i64) -> i64 = {
+    let a = e_addr(entries, idx);
+    let _s1 = store_i64(a, 0);
+    let _s2 = store_i64(a + 8, 0);
+    let _s3 = store_i64(a + 16, 0);
+    let _s4 = store_i64(a + 24, 0);
+    let _s5 = store_i64(a + 32, SMAP_EMPTY_DIST());
+    0
+};
+
+// ============================================================================
+// String Key Helpers
+// ============================================================================
+
+fn key_eq(kptr: i64, klen: i64, s: String) -> bool =
+    if klen != s.len() { false }
+    else { key_eq_loop(kptr, s, 0, klen) };
+
+fn key_eq_loop(kptr: i64, s: String, pos: i64, len: i64) -> bool =
+    if pos >= len { true }
+    else if load_i64(kptr + pos * 8) != s.byte_at(pos) { false }
+    else { key_eq_loop(kptr, s, pos + 1, len) };
+
+fn alloc_key(s: String) -> i64 = {
+    let len = s.len();
+    let ptr = malloc(len * 8);
+    let _c = copy_key(ptr, s, 0, len);
+    ptr
+};
+
+fn copy_key(ptr: i64, s: String, pos: i64, len: i64) -> i64 =
+    if pos >= len { 0 }
+    else {
+        let _s = store_i64(ptr + pos * 8, s.byte_at(pos));
+        copy_key(ptr, s, pos + 1, len)
+    };
+
+// ============================================================================
+// Constructor / Destructor
+// ============================================================================
+
+fn smap_new(capacity: i64) -> i64
+  pre capacity > 0
+  post ret != 0
+= {
+    let m = malloc(24);
+    let entries = malloc(capacity * SMAP_ENTRY_SIZE());
+    let _init = smap_init(entries, capacity, 0);
+    let _s1 = store_i64(m, entries);
+    let _s2 = store_i64(m + 8, 0);
+    let _s3 = store_i64(m + 16, capacity);
+    m
+};
+
+fn smap_init(entries: i64, cap: i64, idx: i64) -> i64 =
+    if idx >= cap { 0 }
+    else {
+        let _e = e_set_empty(entries, idx);
+        smap_init(entries, cap, idx + 1)
+    };
+
+fn smap_default() -> i64
+  post ret != 0
+= smap_new(64);
+
+fn smap_free(m: i64) -> i64
+  pre m != 0
+= {
+    let entries = load_i64(m);
+    let cap = load_i64(m + 16);
+    let _fk = smap_free_keys(entries, cap, 0);
+    let _fe = free(entries);
+    let _fm = free(m);
+    0
+};
+
+fn smap_free_keys(entries: i64, cap: i64, idx: i64) -> i64 =
+    if idx >= cap { 0 }
+    else {
+        let _f = smap_free_key_at(entries, idx);
+        smap_free_keys(entries, cap, idx + 1)
+    };
+
+fn smap_free_key_at(entries: i64, idx: i64) -> i64 = {
+    let d = e_get_dist(entries, idx);
+    if d == SMAP_EMPTY_DIST() { 0 }
+    else {
+        let klen = e_get_klen(entries, idx);
+        if klen > 0 { free_and_zero(e_get_kptr(entries, idx)) } else { 0 }
+    }
+};
+
+// ============================================================================
+// Core Operations (while-loop style)
+// ============================================================================
+
+fn smap_len(m: i64) -> i64
+  pre m != 0
+  post ret >= 0
+= load_i64(m + 8);
+
+fn smap_put(m: i64, key: String, value: i64) -> i64
+  pre m != 0 and key.len() > 0
+= {
+    // Check load factor: count * 10 >= cap * 7
+    let count = load_i64(m + 8);
+    let cap = load_i64(m + 16);
+    let _rz = if count * 10 >= cap * 7 { smap_grow(m) } else { 0 };
+
+    let hash = fnv1a_string(key);
+    let cap2 = load_i64(m + 16);
+    let entries = load_i64(m);
+    let ideal = (hash band 9223372036854775807) - ((hash band 9223372036854775807) / cap2) * cap2;
+
+    smap_put_at(m, entries, cap2, key, value, hash, ideal, 0)
+};
+
+fn smap_put_at(m: i64, entries: i64, cap: i64, key: String, value: i64, hash: i64, idx: i64, dist: i64) -> i64 = {
+    let ai = idx - (idx / cap) * cap;
+    let ed = e_get_dist(entries, ai);
+
+    if ed == SMAP_EMPTY_DIST() {
+        // Empty slot - insert
+        let kp = alloc_key(key);
+        let _e = e_set(entries, ai, hash, kp, key.len(), value, dist);
+        let _c = store_i64(m + 8, load_i64(m + 8) + 1);
+        SMAP_NOT_FOUND()
+    } else if ed < dist {
+        // Robin Hood: steal slot, reinsert displaced entry
+        let oh = e_get_hash(entries, ai);
+        let okp = e_get_kptr(entries, ai);
+        let okl = e_get_klen(entries, ai);
+        let ov = e_get_val(entries, ai);
+        let od = ed;
+        let kp = alloc_key(key);
+        let _e = e_set(entries, ai, hash, kp, key.len(), value, dist);
+        let _c = store_i64(m + 8, load_i64(m + 8) + 1);
+        let _ri = smap_reinsert(entries, cap, oh, okp, okl, ov, idx + 1, od + 1);
+        SMAP_NOT_FOUND()
+    } else if e_get_hash(entries, ai) == hash and key_eq(e_get_kptr(entries, ai), e_get_klen(entries, ai), key) {
+        // Key exists - update value
+        let old_val = e_get_val(entries, ai);
+        let _sv = store_i64(e_addr(entries, ai) + 24, value);
+        old_val
+    } else {
+        // Continue probing
+        smap_put_at(m, entries, cap, key, value, hash, idx + 1, dist + 1)
+    }
+};
+
+// Reinsert a displaced entry (used during Robin Hood insertion) - recursive
+fn smap_reinsert(entries: i64, cap: i64, hash: i64, kptr: i64, klen: i64, val: i64, idx: i64, dist: i64) -> i64 = {
+    let ai = idx - (idx / cap) * cap;
+    let ed = e_get_dist(entries, ai);
+    if ed == SMAP_EMPTY_DIST() {
+        e_set(entries, ai, hash, kptr, klen, val, dist)
+    } else if ed < dist {
+        // Swap current with displaced, continue with displaced
+        let oh = e_get_hash(entries, ai);
+        let okp = e_get_kptr(entries, ai);
+        let okl = e_get_klen(entries, ai);
+        let ov = e_get_val(entries, ai);
+        let od = ed;
+        let _e = e_set(entries, ai, hash, kptr, klen, val, dist);
+        smap_reinsert(entries, cap, oh, okp, okl, ov, idx + 1, od + 1)
+    } else {
+        smap_reinsert(entries, cap, hash, kptr, klen, val, idx + 1, dist + 1)
+    }
+};
+
+fn smap_get(m: i64, key: String) -> i64
+  pre m != 0 and key.len() > 0
+= {
+    let hash = fnv1a_string(key);
+    let cap = load_i64(m + 16);
+    let entries = load_i64(m);
+    let ideal = (hash band 9223372036854775807) - ((hash band 9223372036854775807) / cap) * cap;
+    smap_get_at(entries, cap, key, hash, ideal, 0)
+};
+
+fn smap_get_at(entries: i64, cap: i64, key: String, hash: i64, idx: i64, dist: i64) -> i64 = {
+    let ai = idx - (idx / cap) * cap;
+    let ed = e_get_dist(entries, ai);
+    if ed == SMAP_EMPTY_DIST() { SMAP_NOT_FOUND() }
+    else if ed < dist { SMAP_NOT_FOUND() }
+    else if e_get_hash(entries, ai) == hash and key_eq(e_get_kptr(entries, ai), e_get_klen(entries, ai), key) {
+        e_get_val(entries, ai)
+    } else {
+        smap_get_at(entries, cap, key, hash, idx + 1, dist + 1)
+    }
+};
+
+fn smap_contains(m: i64, key: String) -> bool
+  pre m != 0 and key.len() > 0
+= smap_get(m, key) != SMAP_NOT_FOUND();
+
+fn smap_delete(m: i64, key: String) -> i64
+  pre m != 0 and key.len() > 0
+= {
+    let hash = fnv1a_string(key);
+    let cap = load_i64(m + 16);
+    let entries = load_i64(m);
+    let ideal = (hash band 9223372036854775807) - ((hash band 9223372036854775807) / cap) * cap;
+    smap_del_at(m, entries, cap, key, hash, ideal, 0)
+};
+
+fn smap_del_at(m: i64, entries: i64, cap: i64, key: String, hash: i64, idx: i64, dist: i64) -> i64 = {
+    let ai = idx - (idx / cap) * cap;
+    let ed = e_get_dist(entries, ai);
+    if ed == SMAP_EMPTY_DIST() { SMAP_NOT_FOUND() }
+    else if ed < dist { SMAP_NOT_FOUND() }
+    else if e_get_hash(entries, ai) == hash and key_eq(e_get_kptr(entries, ai), e_get_klen(entries, ai), key) {
+        let old_val = e_get_val(entries, ai);
+        let ekl = e_get_klen(entries, ai);
+        let ekp = e_get_kptr(entries, ai);
+        let _fk = if ekl > 0 { free_and_zero(ekp) } else { 0 };
+        let _bs = smap_backshift(entries, cap, idx + 1);
+        let _ec = e_set_empty(entries, ai);
+        let _mc = store_i64(m + 8, load_i64(m + 8) - 1);
+        old_val
+    } else {
+        smap_del_at(m, entries, cap, key, hash, idx + 1, dist + 1)
+    }
+};
+
+fn smap_backshift(entries: i64, cap: i64, idx: i64) -> i64 = {
+    let ai = idx - (idx / cap) * cap;
+    let pi = (idx - 1) - ((idx - 1) / cap) * cap;
+    let ed = e_get_dist(entries, ai);
+    if ed <= 0 {
+        e_set_empty(entries, pi)
+    } else {
+        let _e = e_set(entries, pi,
+            e_get_hash(entries, ai), e_get_kptr(entries, ai),
+            e_get_klen(entries, ai), e_get_val(entries, ai),
+            ed - 1);
+        smap_backshift(entries, cap, idx + 1)
+    }
+};
+
+// ============================================================================
+// Dynamic Resizing
+// ============================================================================
+
+fn smap_grow(m: i64) -> i64 = {
+    let old_entries = load_i64(m);
+    let old_cap = load_i64(m + 16);
+    let new_cap = old_cap * 2;
+
+    let new_entries = malloc(new_cap * SMAP_ENTRY_SIZE());
+    let _init = smap_init(new_entries, new_cap, 0);
+
+    let _s1 = store_i64(m, new_entries);
+    let _s2 = store_i64(m + 8, 0);
+    let _s3 = store_i64(m + 16, new_cap);
+
+    let _rh = smap_rehash(m, old_entries, old_cap, new_entries, new_cap, 0);
+    let _fo = free(old_entries);
+    0
+};
+
+fn smap_rehash(m: i64, old_e: i64, old_cap: i64, new_e: i64, new_cap: i64, idx: i64) -> i64 =
+    if idx >= old_cap { 0 }
+    else {
+        let d = e_get_dist(old_e, idx);
+        let _r = if d != SMAP_EMPTY_DIST() {
+            let h = e_get_hash(old_e, idx);
+            let kp = e_get_kptr(old_e, idx);
+            let kl = e_get_klen(old_e, idx);
+            let v = e_get_val(old_e, idx);
+            let ideal = (h band 9223372036854775807) - ((h band 9223372036854775807) / new_cap) * new_cap;
+            let _ins = smap_reinsert(new_e, new_cap, h, kp, kl, v, ideal, 0);
+            let _c = store_i64(m + 8, load_i64(m + 8) + 1);
+            0
+        } else { 0 };
+        smap_rehash(m, old_e, old_cap, new_e, new_cap, idx + 1)
+    };
+
+// ============================================================================
+// Integer-keyed convenience (uses interpreter builtins)
+// ============================================================================
+
+fn imap_new(capacity: i64) -> i64
+  pre capacity > 0
+  post ret != 0
+= hmap_new(capacity);
+
+fn imap_put(m: i64, key: i64, value: i64) -> i64 = hmap_put(m, key, value);
+fn imap_get(m: i64, key: i64) -> i64 = hmap_get(m, key);
+fn imap_contains(m: i64, key: i64) -> bool = hmap_contains(m, key);
+fn imap_delete(m: i64, key: i64) -> i64 = hmap_delete(m, key);
+fn imap_len(m: i64) -> i64 = hmap_len(m);
+fn imap_free(m: i64) -> i64 = hmap_free(m);
+
+// i64 hash map (imperative while-loop style from bmb-hash)
+fn hmap_new(capacity: i64) -> i64 = {
+    let m = malloc(24);
+    let entries = malloc(capacity * 24);
+    let _init = hmap_init_loop(entries, capacity);
+    let _s1 = store_i64(m, entries);
+    let _s2 = store_i64(m + 8, 0);
+    let _s3 = store_i64(m + 16, capacity);
+    m
+};
+
+fn hmap_init_loop(entries: i64, cap: i64) -> i64 = {
+    let mut i: i64 = 0;
+    while i < cap {
+        { store_i64(entries + i * 24 + 16, 0); i = i + 1; 0 }
+    };
+    0
+};
+
+fn hmap_put(m: i64, key: i64, value: i64) -> i64 = {
+    let hash = key * 5871781006564002453;
+    let h = hash bxor (hash >> 32);
+    let cap = load_i64(m + 16);
+    let mask = cap - 1;
+    let entries = load_i64(m);
+    let mut idx: i64 = h band mask;
+    let mut i: i64 = 0;
+    let mut result: i64 = 0;
+    while i < cap {
+        let e = entries + idx * 24;
+        let state = load_i64(e + 16);
+        if state == 0 or state == 2 {
+            { store_i64(e, key); store_i64(e + 8, value); store_i64(e + 16, 1);
+              store_i64(m + 8, load_i64(m + 8) + 1); result = 1; i = cap; 0 }
+        } else if state == 1 and load_i64(e) == key {
+            { store_i64(e + 8, value); result = 0; i = cap; 0 }
+        } else {
+            { idx = (idx + 1) band mask; i = i + 1; 0 }
+        }
+    };
+    result
+};
+
+fn hmap_get(m: i64, key: i64) -> i64 = {
+    let hash = key * 5871781006564002453;
+    let h = hash bxor (hash >> 32);
+    let cap = load_i64(m + 16);
+    let mask = cap - 1;
+    let entries = load_i64(m);
+    let mut idx: i64 = h band mask;
+    let mut i: i64 = 0;
+    let mut result: i64 = SMAP_NOT_FOUND();
+    while i < cap {
+        let e = entries + idx * 24;
+        let state = load_i64(e + 16);
+        if state == 0 { { i = cap; 0 } }
+        else if state == 1 and load_i64(e) == key { { result = load_i64(e + 8); i = cap; 0 } }
+        else { { idx = (idx + 1) band mask; i = i + 1; 0 } }
+    };
+    result
+};
+
+fn hmap_contains(m: i64, key: i64) -> bool = hmap_get(m, key) != SMAP_NOT_FOUND();
+
+fn hmap_delete(m: i64, key: i64) -> i64 = {
+    let hash = key * 5871781006564002453;
+    let h = hash bxor (hash >> 32);
+    let cap = load_i64(m + 16);
+    let mask = cap - 1;
+    let entries = load_i64(m);
+    let mut idx: i64 = h band mask;
+    let mut i: i64 = 0;
+    let mut result: i64 = 0;
+    while i < cap {
+        let e = entries + idx * 24;
+        let state = load_i64(e + 16);
+        if state == 0 { { i = cap; 0 } }
+        else if state == 1 and load_i64(e) == key {
+            { store_i64(e + 16, 2); store_i64(m + 8, load_i64(m + 8) - 1); result = 1; i = cap; 0 }
+        } else {
+            { idx = (idx + 1) band mask; i = i + 1; 0 }
+        }
+    };
+    result
+};
+
+fn hmap_len(m: i64) -> i64 = load_i64(m + 8);
+
+fn hmap_free(m: i64) -> i64 = {
+    let entries = load_i64(m);
+    let _fe = free(entries);
+    let _fm = free(m);
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_smap_basic() -> i64 = {
+    let m = smap_new(16);
+    let _r1 = smap_put(m, "hello", 1);
+    let _r2 = smap_put(m, "world", 2);
+    let _r3 = smap_put(m, "foo", 3);
+    let v1 = smap_get(m, "hello");
+    let v2 = smap_get(m, "world");
+    let v3 = smap_get(m, "foo");
+    let len = smap_len(m);
+    let _f = smap_free(m);
+    if v1 == 1 and v2 == 2 and v3 == 3 and len == 3 { 1 } else { 0 }
+};
+
+fn test_smap_update() -> i64 = {
+    let m = smap_new(16);
+    let _r1 = smap_put(m, "key", 100);
+    let _r2 = smap_put(m, "key", 200);
+    let v = smap_get(m, "key");
+    let len = smap_len(m);
+    let _f = smap_free(m);
+    if v == 200 and len == 1 { 1 } else { 0 }
+};
+
+fn test_smap_not_found() -> i64 = {
+    let m = smap_new(16);
+    let _r = smap_put(m, "a", 1);
+    let v = smap_get(m, "b");
+    let _f = smap_free(m);
+    if v == SMAP_NOT_FOUND() { 1 } else { 0 }
+};
+
+fn test_smap_contains() -> i64 = {
+    let m = smap_new(16);
+    let _r = smap_put(m, "x", 42);
+    let has_x = smap_contains(m, "x");
+    let has_y = smap_contains(m, "y");
+    let _f = smap_free(m);
+    if has_x and not has_y { 1 } else { 0 }
+};
+
+fn test_smap_delete() -> i64 = {
+    let m = smap_new(16);
+    let _r1 = smap_put(m, "a", 1);
+    let _r2 = smap_put(m, "b", 2);
+    let _r3 = smap_put(m, "c", 3);
+    let _d = smap_delete(m, "b");
+    let va = smap_get(m, "a");
+    let vb = smap_get(m, "b");
+    let vc = smap_get(m, "c");
+    let len = smap_len(m);
+    let _f = smap_free(m);
+    if va == 1 and vb == SMAP_NOT_FOUND() and vc == 3 and len == 2 { 1 } else { 0 }
+};
+
+fn test_smap_many() -> i64 = {
+    let m = smap_new(8);
+    let _r1 = smap_put(m, "k1", 1);
+    let _r2 = smap_put(m, "k2", 2);
+    let _r3 = smap_put(m, "k3", 3);
+    let _r4 = smap_put(m, "k4", 4);
+    let _r5 = smap_put(m, "k5", 5);
+    let _r6 = smap_put(m, "k6", 6);
+    let _r7 = smap_put(m, "k7", 7);
+    let _r8 = smap_put(m, "k8", 8);
+    let _r9 = smap_put(m, "k9", 9);
+    let _r10 = smap_put(m, "k10", 10);
+    let ok = smap_get(m, "k1") == 1 and smap_get(m, "k5") == 5 and
+             smap_get(m, "k10") == 10 and smap_len(m) == 10;
+    let _f = smap_free(m);
+    if ok { 1 } else { 0 }
+};
+
+fn test_smap_long_keys() -> i64 = {
+    let m = smap_new(16);
+    let _r1 = smap_put(m, "this_is_a_very_long_key_name", 42);
+    let _r2 = smap_put(m, "another_quite_long_key_name", 99);
+    let v1 = smap_get(m, "this_is_a_very_long_key_name");
+    let v2 = smap_get(m, "another_quite_long_key_name");
+    let _f = smap_free(m);
+    if v1 == 42 and v2 == 99 { 1 } else { 0 }
+};
+
+fn test_imap_basic() -> i64 = {
+    let m = imap_new(64);
+    let _r1 = imap_put(m, 1, 100);
+    let _r2 = imap_put(m, 2, 200);
+    let v1 = imap_get(m, 1);
+    let v2 = imap_get(m, 2);
+    let len = imap_len(m);
+    let _f = imap_free(m);
+    if v1 == 100 and v2 == 200 and len == 2 { 1 } else { 0 }
+};
+
+fn test_imap_delete() -> i64 = {
+    let m = imap_new(64);
+    let _r1 = imap_put(m, 10, 100);
+    let _r2 = imap_put(m, 20, 200);
+    let _d = imap_delete(m, 10);
+    let v1 = imap_get(m, 10);
+    let v2 = imap_get(m, 20);
+    let has_10 = imap_contains(m, 10);
+    let has_20 = imap_contains(m, 20);
+    let _f = imap_free(m);
+    if not has_10 and has_20 and v2 == 200 { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("smap_basic", test_smap_basic());
+    let t2 = report("smap_update", test_smap_update());
+    let t3 = report("smap_not_found", test_smap_not_found());
+    let t4 = report("smap_contains", test_smap_contains());
+    let t5 = report("smap_delete", test_smap_delete());
+    let t6 = report("smap_many", test_smap_many());
+    let t7 = report("smap_long_keys", test_smap_long_keys());
+    let t8 = report("imap_basic", test_imap_basic());
+    let t9 = report("imap_delete", test_imap_delete());
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+    let total = 9;
+
+    let _p1 = print_str("bmb-hashmap: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+
+    if passed == total { 0 } else { 1 }
+};
