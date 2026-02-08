@@ -184,29 +184,47 @@ fn heap_sort(arr: *i64, n: i64) -> i64 = {
 };
 
 fn heapify(arr: *i64, n: i64, root: i64) -> i64 = {
-    let left = 2 * root + 1;
-    let right = 2 * root + 2;
-
-    // Find largest among root, left child, right child
-    let largest1 = if left < n and arr[left] > arr[root] { left } else { root };
-    let largest2 = if right < n and arr[right] > arr[largest1] { right } else { largest1 };
-
-    if largest2 != root {
-        let _sw = swap(arr, root, largest2);
-        heapify(arr, n, largest2)
-    } else { 0 }
+    let mut current = root;
+    let mut done = false;
+    while not done {
+        let left = 2 * current + 1;
+        let right = 2 * current + 2;
+        let largest1 = if left < n and arr[left] > arr[current] { left } else { current };
+        let largest2 = if right < n and arr[right] > arr[largest1] { right } else { largest1 };
+        let _r = if largest2 != current {
+            {
+                let _sw = swap(arr, current, largest2);
+                current = largest2;
+                0
+            }
+        } else {
+            { done = true; 0 }
+        };
+        0
+    };
+    0
 };
 
 // ============================================================================
 // Tests
 // ============================================================================
 
-fn is_sorted(arr: *i64, n: i64) -> bool = is_sorted_helper(arr, n, 0);
-
-fn is_sorted_helper(arr: *i64, n: i64, i: i64) -> bool =
-    if i >= n - 1 { true }
-    else if arr[i] > arr[i + 1] { false }
-    else { is_sorted_helper(arr, n, i + 1) };
+fn is_sorted(arr: *i64, n: i64) -> bool = {
+    let mut i = 0;
+    let mut sorted = true;
+    let mut done = false;
+    while not done {
+        let _r = if i >= n - 1 {
+            { done = true; 0 }
+        } else if arr[i] > arr[i + 1] {
+            { sorted = false; done = true; 0 }
+        } else {
+            { i = i + 1; 0 }
+        };
+        0
+    };
+    sorted
+};
 
 fn fill_reverse(arr: *i64, n: i64) -> i64 = {
     let mut i = 0;

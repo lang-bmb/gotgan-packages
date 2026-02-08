@@ -28,20 +28,42 @@ fn has_arg(idx: i64) -> bool
 // ============================================================================
 
 // Check if a flag exists (e.g., "-v", "--verbose")
-fn has_flag_at(flag: String, idx: i64) -> bool =
-    if idx >= arg_count() { false }
-    else if get_arg(idx) == flag { true }
-    else { has_flag_at(flag, idx + 1) };
-
-fn has_flag(flag: String) -> bool = has_flag_at(flag, 1);
+fn has_flag(flag: String) -> bool = {
+    let count = arg_count();
+    let mut idx = 1;
+    let mut found = false;
+    let mut done = false;
+    while not done {
+        let _r = if idx >= count {
+            { done = true; 0 }
+        } else if get_arg(idx) == flag {
+            { found = true; done = true; 0 }
+        } else {
+            { idx = idx + 1; 0 }
+        };
+        0
+    };
+    found
+};
 
 // Find index of a flag, returns -1 if not found
-fn find_flag_at(flag: String, idx: i64) -> i64 =
-    if idx >= arg_count() { 0 - 1 }
-    else if get_arg(idx) == flag { idx }
-    else { find_flag_at(flag, idx + 1) };
-
-fn find_flag(flag: String) -> i64 = find_flag_at(flag, 1);
+fn find_flag(flag: String) -> i64 = {
+    let count = arg_count();
+    let mut idx = 1;
+    let mut result = 0 - 1;
+    let mut done = false;
+    while not done {
+        let _r = if idx >= count {
+            { done = true; 0 }
+        } else if get_arg(idx) == flag {
+            { result = idx; done = true; 0 }
+        } else {
+            { idx = idx + 1; 0 }
+        };
+        0
+    };
+    result
+};
 
 // Get value after a flag (e.g., "--file input.txt" returns "input.txt")
 fn get_flag_value(flag: String) -> String =
@@ -66,29 +88,48 @@ fn is_flag_arg(arg: String) -> bool =
     else { arg.byte_at(0) == 45 };
 
 // Count positional arguments (arguments not starting with -)
-fn count_positional_rec(idx: i64, count: i64) -> i64 =
-    if idx >= arg_count() { count }
-    else {
+fn count_positional() -> i64 = {
+    let total = arg_count();
+    let mut idx = 1;
+    let mut count = 0;
+    while idx < total {
         let arg = get_arg(idx);
-        let new_count = if is_flag_arg(arg) { count } else { count + 1 };
-        count_positional_rec(idx + 1, new_count)
+        let _r = if not is_flag_arg(arg) { { count = count + 1; 0 } } else { 0 };
+        idx = idx + 1;
+        0
     };
-
-fn count_positional() -> i64 = count_positional_rec(1, 0);
+    count
+};
 
 // Get nth positional argument (0-indexed, skips flags)
-fn get_positional_rec(n: i64, idx: i64, current: i64) -> String =
-    if idx >= arg_count() { "" }
-    else {
-        let arg = get_arg(idx);
-        if is_flag_arg(arg) { get_positional_rec(n, idx + 1, current) }
-        else if current == n { arg }
-        else { get_positional_rec(n, idx + 1, current + 1) }
-    };
-
 fn get_positional(n: i64) -> String
   pre n >= 0
-= get_positional_rec(n, 1, 0);
+= {
+    let total = arg_count();
+    let mut idx = 1;
+    let mut current = 0;
+    let mut result = "";
+    let mut done = false;
+    while not done {
+        let _r = if idx >= total {
+            { done = true; 0 }
+        } else {
+            {
+                let arg = get_arg(idx);
+                let _r2 = if is_flag_arg(arg) {
+                    { idx = idx + 1; 0 }
+                } else if current == n {
+                    { result = arg; done = true; 0 }
+                } else {
+                    { current = current + 1; idx = idx + 1; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    result
+};
 
 // ============================================================================
 // Integer Parsing Helpers
@@ -102,20 +143,35 @@ fn digit_char_to_int(c: i64) -> i64
 // Check if character is a digit
 fn is_digit_char(c: i64) -> bool = c >= 48 and c <= 57;
 
-// Parse positive integer from string at position
-fn parse_int_rec(s: String, pos: i64, acc: i64) -> i64 =
-    if pos >= s.len() { acc }
-    else {
-        let c = s.byte_at(pos);
-        if is_digit_char(c) { parse_int_rec(s, pos + 1, acc * 10 + digit_char_to_int(c)) }
-        else { acc }
-    };
-
 // Parse integer from string (supports negative numbers)
 fn parse_int(s: String) -> i64 =
     if s.len() == 0 { 0 }
-    else if s.byte_at(0) == 45 { 0 - parse_int_rec(s, 1, 0) }
-    else { parse_int_rec(s, 0, 0) };
+    else {
+        {
+            let start = if s.byte_at(0) == 45 { 1 } else { 0 };
+            let len = s.len();
+            let mut pos = start;
+            let mut acc = 0;
+            let mut done = false;
+            while not done {
+                let _r = if pos >= len {
+                    { done = true; 0 }
+                } else {
+                    {
+                        let c = s.byte_at(pos);
+                        let _r2 = if is_digit_char(c) {
+                            { acc = acc * 10 + digit_char_to_int(c); pos = pos + 1; 0 }
+                        } else {
+                            { done = true; 0 }
+                        };
+                        0
+                    }
+                };
+                0
+            };
+            if s.byte_at(0) == 45 { 0 - acc } else { acc }
+        }
+    };
 
 // Get flag value as integer (e.g., "--count 42")
 fn get_flag_int(flag: String, default_val: i64) -> i64 =

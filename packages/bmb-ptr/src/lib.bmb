@@ -86,33 +86,39 @@ fn i64_array_sum(arr: *i64, n: i64) -> i64 = {
     sum
 };
 
-// Find min element helper
-fn i64_array_min_loop(arr: *i64, n: i64, i: i64, min_val: i64) -> i64 =
-    if i >= n { min_val }
-    else {
-        let val = arr[i];
-        let new_min = if val < min_val { val } else { min_val };
-        i64_array_min_loop(arr, n, i + 1, new_min)
-    };
-
 // Find min element (returns 0 if n <= 0)
 fn i64_array_min(arr: *i64, n: i64) -> i64 =
     if n <= 0 { 0 }
-    else { i64_array_min_loop(arr, n, 1, arr[0]) };
-
-// Find max element helper
-fn i64_array_max_loop(arr: *i64, n: i64, i: i64, max_val: i64) -> i64 =
-    if i >= n { max_val }
     else {
-        let val = arr[i];
-        let new_max = if val > max_val { val } else { max_val };
-        i64_array_max_loop(arr, n, i + 1, new_max)
+        {
+            let mut i = 1;
+            let mut min_val = arr[0];
+            while i < n {
+                let val = arr[i];
+                let _r = if val < min_val { { min_val = val; 0 } } else { 0 };
+                i = i + 1;
+                0
+            };
+            min_val
+        }
     };
 
 // Find max element (returns 0 if n <= 0)
 fn i64_array_max(arr: *i64, n: i64) -> i64 =
     if n <= 0 { 0 }
-    else { i64_array_max_loop(arr, n, 1, arr[0]) };
+    else {
+        {
+            let mut i = 1;
+            let mut max_val = arr[0];
+            while i < n {
+                let val = arr[i];
+                let _r = if val > max_val { { max_val = val; 0 } } else { 0 };
+                i = i + 1;
+                0
+            };
+            max_val
+        }
+    };
 
 // ============================================================================
 // i32 Array Operations (for memory-efficient use cases)
