@@ -114,3 +114,110 @@ fn run_test(name_code: i64, result: bool) -> i64 = {
     let u2 = print_str("] Test ");
     let u3 = println(name_code);
     if result { 1 } else { 0 }};
+
+// --- Tests ---
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_result_codes() -> i64 =
+    if result_pass() == 0 and result_fail() == 1 and result_skip() == 2 { 1 } else { 0 };
+
+fn test_assert_eq_pass() -> i64 =
+    if b2i(assert_eq(42, 42)) == 1 and b2i(assert_eq(0, 0)) == 1
+       and b2i(assert_eq(0 - 1, 0 - 1)) == 1 { 1 } else { 0 };
+
+fn test_assert_eq_fail() -> i64 =
+    if b2i(assert_eq(1, 2)) == 0 and b2i(assert_eq(0, 1)) == 0 { 1 } else { 0 };
+
+fn test_assert_ne_pass() -> i64 =
+    if b2i(assert_ne(1, 2)) == 1 and b2i(assert_ne(0, 1)) == 1 { 1 } else { 0 };
+
+fn test_assert_ne_fail() -> i64 =
+    if b2i(assert_ne(42, 42)) == 0 { 1 } else { 0 };
+
+fn test_assert_true_pass() -> i64 =
+    if b2i(assert_true(true)) == 1 and b2i(assert_true(1 == 1)) == 1 { 1 } else { 0 };
+
+fn test_assert_true_fail() -> i64 =
+    if b2i(assert_true(false)) == 0 { 1 } else { 0 };
+
+fn test_assert_false_pass() -> i64 =
+    if b2i(assert_false(false)) == 1 and b2i(assert_false(1 == 2)) == 1 { 1 } else { 0 };
+
+fn test_assert_false_fail() -> i64 =
+    if b2i(assert_false(true)) == 0 { 1 } else { 0 };
+
+fn test_assert_gt() -> i64 =
+    if b2i(assert_gt(10, 5)) == 1 and b2i(assert_gt(5, 5)) == 0
+       and b2i(assert_gt(3, 5)) == 0 { 1 } else { 0 };
+
+fn test_assert_gte() -> i64 =
+    if b2i(assert_gte(10, 5)) == 1 and b2i(assert_gte(5, 5)) == 1
+       and b2i(assert_gte(3, 5)) == 0 { 1 } else { 0 };
+
+fn test_assert_lt() -> i64 =
+    if b2i(assert_lt(3, 5)) == 1 and b2i(assert_lt(5, 5)) == 0
+       and b2i(assert_lt(10, 5)) == 0 { 1 } else { 0 };
+
+fn test_assert_lte() -> i64 =
+    if b2i(assert_lte(3, 5)) == 1 and b2i(assert_lte(5, 5)) == 1
+       and b2i(assert_lte(10, 5)) == 0 { 1 } else { 0 };
+
+fn test_assert_in_range() -> i64 =
+    if b2i(assert_in_range(5, 1, 10)) == 1 and b2i(assert_in_range(1, 1, 10)) == 1
+       and b2i(assert_in_range(10, 1, 10)) == 1 and b2i(assert_in_range(0, 1, 10)) == 0
+       and b2i(assert_in_range(11, 1, 10)) == 0 { 1 } else { 0 };
+
+fn test_count_passed() -> i64 =
+    if count_passed(5, 10) == 5 and count_passed(0, 0) == 0 { 1 } else { 0 };
+
+fn test_run_test_pass() -> i64 =
+    if run_test(1, true) == 1 { 1 } else { 0 };
+
+fn test_run_test_fail() -> i64 =
+    if run_test(2, false) == 0 { 1 } else { 0 };
+
+fn test_report_summary_all_pass() -> i64 =
+    if report_summary(5, 5) == 0 { 1 } else { 0 };
+
+fn test_report_summary_some_fail() -> i64 =
+    if report_summary(3, 5) == 1 { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("result_codes", test_result_codes());
+    let t2 = report("assert_eq_pass", test_assert_eq_pass());
+    let t3 = report("assert_eq_fail", test_assert_eq_fail());
+    let t4 = report("assert_ne_pass", test_assert_ne_pass());
+    let t5 = report("assert_ne_fail", test_assert_ne_fail());
+    let t6 = report("assert_true_pass", test_assert_true_pass());
+    let t7 = report("assert_true_fail", test_assert_true_fail());
+    let t8 = report("assert_false_pass", test_assert_false_pass());
+    let t9 = report("assert_false_fail", test_assert_false_fail());
+    let t10 = report("assert_gt", test_assert_gt());
+    let t11 = report("assert_gte", test_assert_gte());
+    let t12 = report("assert_lt", test_assert_lt());
+    let t13 = report("assert_lte", test_assert_lte());
+    let t14 = report("assert_in_range", test_assert_in_range());
+    let t15 = report("count_passed", test_count_passed());
+    let t16 = report("run_test_pass", test_run_test_pass());
+    let t17 = report("run_test_fail", test_run_test_fail());
+    let t18 = report("report_summary_all_pass", test_report_summary_all_pass());
+    let t19 = report("report_summary_some_fail", test_report_summary_some_fail());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18 + t19;
+    let total = 19;
+    let _p1 = print_str("bmb-testing: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};
