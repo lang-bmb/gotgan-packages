@@ -1,0 +1,9 @@
+[package]
+name = "bmb-memchr"
+version = "0.1.0"
+description = "Fast byte and substring search utilities"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

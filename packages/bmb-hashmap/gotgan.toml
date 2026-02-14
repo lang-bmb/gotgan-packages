@@ -1,0 +1,9 @@
+[package]
+name = "bmb-hashmap"
+version = "0.1.0"
+description = "High-performance hash map with string keys, dynamic resizing, and Robin Hood probing"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]
