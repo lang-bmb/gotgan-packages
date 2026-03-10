@@ -1,0 +1,9 @@
+[package]
+name = "bmb-segment"
+version = "0.1.0"
+description = "Segment tree for range queries (min/max/sum) on arrays"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

@@ -1,0 +1,248 @@
+// bmb-bloom: Bloom filter
+// v0.1.0
+//
+// Probabilistic set membership. No false negatives; small false positive rate.
+// Uses 3 independent hash functions (bit-mixing with shifts and xors).
+//
+// Memory layout:
+//   Header (16 bytes): [size, _pad]
+//     size = number of bits in the filter
+//   Bit array: ceil(size/64) * 8 bytes (packed i64 words)
+//
+// Total: 16 + ceil(size/64)*8 bytes
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+fn BLOOM_WORD_BITS() -> i64 = 64;
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+fn bloom_size(bf: i64) -> i64 = load_i64(bf);
+fn bloom_set_size(bf: i64, v: i64) -> i64 = store_i64(bf, v);
+
+fn bloom_words(bf: i64) -> i64 = {
+    let sz = bloom_size(bf);
+    (sz + BLOOM_WORD_BITS() - 1) / BLOOM_WORD_BITS()
+};
+
+fn bloom_bits_base(bf: i64) -> i64 = bf + 16;
+
+fn bloom_word_at(bf: i64, w: i64) -> i64 =
+    load_i64(bloom_bits_base(bf) + w * 8);
+
+fn bloom_set_word(bf: i64, w: i64, v: i64) -> i64 =
+    store_i64(bloom_bits_base(bf) + w * 8, v);
+
+// Set bit at position pos (0-indexed)
+fn bloom_set_bit(bf: i64, pos: i64) -> i64 = {
+    let w = pos / BLOOM_WORD_BITS();
+    let b = pos - w * BLOOM_WORD_BITS();
+    let old = bloom_word_at(bf, w);
+    bloom_set_word(bf, w, old bor (1 << b))
+};
+
+// Test bit at position pos
+fn bloom_test_bit(bf: i64, pos: i64) -> bool = {
+    let w = pos / BLOOM_WORD_BITS();
+    let b = pos - w * BLOOM_WORD_BITS();
+    ((bloom_word_at(bf, w) >> b) band 1) == 1
+};
+
+// Reduce hash to [0, size)
+fn bloom_reduce(h: i64, size: i64) -> i64 = {
+    let pos = h band 9223372036854775807;
+    pos - (pos / size) * size
+};
+
+// ============================================================================
+// Three independent hash functions
+// ============================================================================
+
+// Hash 1: FNV-1a inspired mix
+fn bloom_hash1(key: i64) -> i64 = {
+    let h = key bxor (key >> 30);
+    let h2 = h * (0 - 4658895341748023809);
+    let h3 = h2 bxor (h2 >> 27);
+    let h4 = h3 * 3266489917;
+    h4 bxor (h4 >> 31)
+};
+
+// Hash 2: murmur-inspired finalizer
+fn bloom_hash2(key: i64) -> i64 = {
+    let h = key * 6364136223846793005;
+    let h2 = h bxor (h >> 32);
+    let h3 = h2 * (0 - 4658895341748023809);
+    h3 bxor (h3 >> 33)
+};
+
+// Hash 3: splitmix64-inspired
+fn bloom_hash3(key: i64) -> i64 = {
+    let h = key + (0 - 7046029254386353131);
+    let h2 = (h bxor (h >> 30)) * (0 - 4658895341748023809);
+    let h3 = (h2 bxor (h2 >> 27)) * 3266489917;
+    h3 bxor (h3 >> 31)
+};
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+fn bloom_new(size: i64) -> i64
+  pre size > 0
+  post ret != 0
+= {
+    let words = (size + BLOOM_WORD_BITS() - 1) / BLOOM_WORD_BITS();
+    let total = 16 + words * 8;
+    let bf = malloc(total);
+    let _ss = bloom_set_size(bf, size);
+    // Zero the bit array
+    let mut i = 0;
+    while i < words {
+        let _s = bloom_set_word(bf, i, 0);
+        i = i + 1;
+        0
+    };
+    bf
+};
+
+fn bloom_add(bf: i64, key: i64) -> i64
+  pre bf != 0
+= {
+    let sz = bloom_size(bf);
+    let p1 = bloom_reduce(bloom_hash1(key), sz);
+    let p2 = bloom_reduce(bloom_hash2(key), sz);
+    let p3 = bloom_reduce(bloom_hash3(key), sz);
+    let _s1 = bloom_set_bit(bf, p1);
+    let _s2 = bloom_set_bit(bf, p2);
+    let _s3 = bloom_set_bit(bf, p3);
+    0
+};
+
+fn bloom_may_contain(bf: i64, key: i64) -> bool
+  pre bf != 0
+= {
+    let sz = bloom_size(bf);
+    let p1 = bloom_reduce(bloom_hash1(key), sz);
+    let p2 = bloom_reduce(bloom_hash2(key), sz);
+    let p3 = bloom_reduce(bloom_hash3(key), sz);
+    bloom_test_bit(bf, p1) and bloom_test_bit(bf, p2) and bloom_test_bit(bf, p3)
+};
+
+fn bloom_clear(bf: i64) -> i64
+  pre bf != 0
+= {
+    let words = bloom_words(bf);
+    let mut i = 0;
+    while i < words {
+        let _s = bloom_set_word(bf, i, 0);
+        i = i + 1;
+        0
+    };
+    0
+};
+
+fn bloom_free(bf: i64) -> i64
+  pre bf != 0
+= { let _f = free(bf); 0 };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic() -> i64 = {
+    let bf = bloom_new(1024);
+    let _a1 = bloom_add(bf, 42);
+    let _a2 = bloom_add(bf, 100);
+    let _a3 = bloom_add(bf, 999);
+    if b2i(bloom_may_contain(bf, 42)) != 1 { let _f = bloom_free(bf); 0 }
+    else if b2i(bloom_may_contain(bf, 100)) != 1 { let _f = bloom_free(bf); 0 }
+    else if b2i(bloom_may_contain(bf, 999)) != 1 { let _f = bloom_free(bf); 0 }
+    else { let _f = bloom_free(bf); 1 }
+};
+
+fn test_not_added() -> i64 = {
+    // With large filter (8192 bits), false positives for nearby ints very rare
+    let bf = bloom_new(8192);
+    let _a = bloom_add(bf, 12345);
+    let found = bloom_may_contain(bf, 12345);
+    // Key 0 not added - should not be found (very high probability with 8192 bits)
+    let not_found = bloom_may_contain(bf, 0);
+    let _f = bloom_free(bf);
+    if b2i(found) == 1 and b2i(not_found) == 0 { 1 } else { 0 }
+};
+
+fn test_clear() -> i64 = {
+    let bf = bloom_new(512);
+    let _a1 = bloom_add(bf, 1);
+    let _a2 = bloom_add(bf, 2);
+    let _a3 = bloom_add(bf, 3);
+    let _c = bloom_clear(bf);
+    // After clear all bits are 0, so may_contain returns false
+    if b2i(bloom_may_contain(bf, 1)) != 0 { let _f = bloom_free(bf); 0 }
+    else if b2i(bloom_may_contain(bf, 2)) != 0 { let _f = bloom_free(bf); 0 }
+    else if b2i(bloom_may_contain(bf, 3)) != 0 { let _f = bloom_free(bf); 0 }
+    else { let _f = bloom_free(bf); 1 }
+};
+
+fn test_many_keys() -> i64 = {
+    let bf = bloom_new(4096);
+    // Insert 50 keys
+    let mut i = 0;
+    while i < 50 {
+        let _a = bloom_add(bf, i * 37 + 7);
+        i = i + 1;
+        0
+    };
+    // All inserted keys must be found (no false negatives)
+    let mut ok = 1;
+    let mut j = 0;
+    while j < 50 {
+        let found = bloom_may_contain(bf, j * 37 + 7);
+        if b2i(found) == 0 { ok = 0; 0 } else { 0 };
+        j = j + 1;
+        0
+    };
+    let _f = bloom_free(bf);
+    ok
+};
+
+fn test_small_filter() -> i64 = {
+    // Even a very small filter has no false negatives
+    let bf = bloom_new(64);
+    let _a1 = bloom_add(bf, 7);
+    let _a2 = bloom_add(bf, 13);
+    if b2i(bloom_may_contain(bf, 7)) != 1 { let _f = bloom_free(bf); 0 }
+    else if b2i(bloom_may_contain(bf, 13)) != 1 { let _f = bloom_free(bf); 0 }
+    else { let _f = bloom_free(bf); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("not_added", test_not_added());
+    let t3 = report("clear", test_clear());
+    let t4 = report("many_keys", test_many_keys());
+    let t5 = report("small_filter", test_small_filter());
+    let passed = t1 + t2 + t3 + t4 + t5;
+    let total = 5;
+    let _p1 = print_str("bmb-bloom: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

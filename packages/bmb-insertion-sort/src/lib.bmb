@@ -1,0 +1,331 @@
+// bmb-insertion-sort: Insertion sort with binary search optimization
+// v0.1.0
+//
+// Implements both standard insertion sort and binary insertion sort.
+// Binary insertion sort uses binary search to find the correct position,
+// reducing comparisons from O(n^2) to O(n log n), though shifts remain O(n^2).
+// Efficient for small arrays and nearly-sorted data.
+//
+// Usage:
+//   let arr = malloc(100 * 8) as *i64;
+//   // ... fill array ...
+//   let _s = binary_insertion_sort(arr, 100);
+
+// ============================================================================
+// Utility
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// Standard Insertion Sort - O(n^2) comparisons and shifts
+// ============================================================================
+
+fn insertion_sort(arr: *i64, n: i64) -> i64
+  pre n >= 0
+= {
+    let mut i = 1;
+    while i < n {
+        let key = arr[i];
+        let mut j = i - 1;
+        while j >= 0 and arr[j] > key {
+            set arr[j + 1] = arr[j];
+            { j = j - 1; 0 }
+        };
+        set arr[j + 1] = key;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// ============================================================================
+// Binary Search for insertion position
+// ============================================================================
+
+// Find the index where `key` should be inserted in sorted arr[lo..hi)
+// to maintain sorted order. Returns the leftmost valid position (stable).
+@inline
+fn binary_search_insert_pos(arr: *i64, lo: i64, hi: i64, key: i64) -> i64 = {
+    let mut low = lo;
+    let mut high = hi;
+    while low < high {
+        let mid = low + (high - low) / 2;
+        let _c = if arr[mid] <= key {
+            { low = mid + 1; 0 }
+        } else {
+            { high = mid; 0 }
+        };
+        0
+    };
+    low
+};
+
+// ============================================================================
+// Binary Insertion Sort - O(n log n) comparisons, O(n^2) shifts
+// ============================================================================
+
+// Uses binary search to find the correct insertion position,
+// then shifts elements to make room.
+fn binary_insertion_sort(arr: *i64, n: i64) -> i64
+  pre n >= 0
+= {
+    let mut i = 1;
+    while i < n {
+        let key = arr[i];
+        // Binary search for correct position in arr[0..i)
+        let pos = binary_search_insert_pos(arr, 0, i, key);
+        // Shift elements from pos to i-1 one position to the right
+        let mut j = i;
+        while j > pos {
+            set arr[j] = arr[j - 1];
+            { j = j - 1; 0 }
+        };
+        set arr[pos] = key;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// ============================================================================
+// Bounded insertion sort: sort only a subarray arr[lo..hi] (inclusive)
+// Useful as a building block for hybrid sorting algorithms.
+// ============================================================================
+
+fn insertion_sort_range(arr: *i64, lo: i64, hi: i64) -> i64 = {
+    let mut i = lo + 1;
+    while i <= hi {
+        let key = arr[i];
+        let mut j = i - 1;
+        while j >= lo and arr[j] > key {
+            set arr[j + 1] = arr[j];
+            { j = j - 1; 0 }
+        };
+        set arr[j + 1] = key;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn is_sorted(arr: *i64, n: i64) -> bool = {
+    let mut i = 0;
+    let mut sorted = true;
+    let mut done = false;
+    while not done {
+        let _r = if i >= n - 1 {
+            { done = true; 0 }
+        } else if arr[i] > arr[i + 1] {
+            { sorted = false; done = true; 0 }
+        } else {
+            { i = i + 1; 0 }
+        };
+        0
+    };
+    sorted
+};
+
+fn fill_reverse(arr: *i64, n: i64) -> i64 = {
+    let mut i = 0;
+    while i < n {
+        set arr[i] = n - i;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+fn test_standard_basic() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 50;
+    set arr[1] = 20;
+    set arr[2] = 40;
+    set arr[3] = 10;
+    set arr[4] = 30;
+    let _s = insertion_sort(arr, 5);
+    let ok = arr[0] == 10 and arr[1] == 20 and arr[2] == 30
+             and arr[3] == 40 and arr[4] == 50;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_binary_basic() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 50;
+    set arr[1] = 20;
+    set arr[2] = 40;
+    set arr[3] = 10;
+    set arr[4] = 30;
+    let _s = binary_insertion_sort(arr, 5);
+    let ok = arr[0] == 10 and arr[1] == 20 and arr[2] == 30
+             and arr[3] == 40 and arr[4] == 50;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_standard_reverse() -> i64 = {
+    let arr = malloc(10 * 8) as *i64;
+    let _fill = fill_reverse(arr, 10);
+    let _s = insertion_sort(arr, 10);
+    let sorted = is_sorted(arr, 10);
+    let _f = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
+
+fn test_binary_reverse() -> i64 = {
+    let arr = malloc(10 * 8) as *i64;
+    let _fill = fill_reverse(arr, 10);
+    let _s = binary_insertion_sort(arr, 10);
+    let sorted = is_sorted(arr, 10);
+    let _f = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
+
+fn test_already_sorted() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 1;
+    set arr[1] = 2;
+    set arr[2] = 3;
+    set arr[3] = 4;
+    set arr[4] = 5;
+    let _s = binary_insertion_sort(arr, 5);
+    let ok = arr[0] == 1 and arr[1] == 2 and arr[2] == 3
+             and arr[3] == 4 and arr[4] == 5;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_single() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    set arr[0] = 42;
+    let _s = binary_insertion_sort(arr, 1);
+    let ok = arr[0] == 42;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_empty() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    let _s = binary_insertion_sort(arr, 0);
+    let _f = free(arr as i64);
+    1
+};
+
+fn test_duplicates() -> i64 = {
+    let arr = malloc(6 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 1;
+    set arr[2] = 3;
+    set arr[3] = 1;
+    set arr[4] = 2;
+    set arr[5] = 2;
+    let _s = binary_insertion_sort(arr, 6);
+    let ok = arr[0] == 1 and arr[1] == 1 and arr[2] == 2
+             and arr[3] == 2 and arr[4] == 3 and arr[5] == 3;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_negatives() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 0 - 1;
+    set arr[2] = 4;
+    set arr[3] = 0 - 5;
+    set arr[4] = 2;
+    let _s = binary_insertion_sort(arr, 5);
+    let ok = arr[0] == (0 - 5) and arr[1] == (0 - 1) and arr[2] == 2
+             and arr[3] == 3 and arr[4] == 4;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_range_sort() -> i64 = {
+    let arr = malloc(8 * 8) as *i64;
+    set arr[0] = 99;
+    set arr[1] = 98;
+    set arr[2] = 50;
+    set arr[3] = 30;
+    set arr[4] = 40;
+    set arr[5] = 10;
+    set arr[6] = 20;
+    set arr[7] = 97;
+    // Sort only arr[2..6] (inclusive)
+    let _s = insertion_sort_range(arr, 2, 6);
+    // arr[2..6] should be sorted: 10,20,30,40,50
+    let ok = arr[0] == 99 and arr[1] == 98
+             and arr[2] == 10 and arr[3] == 20 and arr[4] == 30
+             and arr[5] == 40 and arr[6] == 50
+             and arr[7] == 97;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_stability() -> i64 = {
+    // Insertion sort is stable: equal elements preserve original order.
+    let arr = malloc(4 * 8) as *i64;
+    set arr[0] = 5;
+    set arr[1] = 5;
+    set arr[2] = 5;
+    set arr[3] = 5;
+    let _s = binary_insertion_sort(arr, 4);
+    let ok = arr[0] == 5 and arr[1] == 5 and arr[2] == 5 and arr[3] == 5;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_both_agree() -> i64 = {
+    // Standard and binary insertion sort should produce the same result.
+    let arr1 = malloc(6 * 8) as *i64;
+    let arr2 = malloc(6 * 8) as *i64;
+    set arr1[0] = 42; set arr2[0] = 42;
+    set arr1[1] = 7;  set arr2[1] = 7;
+    set arr1[2] = 99; set arr2[2] = 99;
+    set arr1[3] = 1;  set arr2[3] = 1;
+    set arr1[4] = 55; set arr2[4] = 55;
+    set arr1[5] = 23; set arr2[5] = 23;
+    let _s1 = insertion_sort(arr1, 6);
+    let _s2 = binary_insertion_sort(arr2, 6);
+    let mut ok = true;
+    let mut i = 0;
+    while i < 6 {
+        let _c = if arr1[i] != arr2[i] { { ok = false; 0 } } else { 0 };
+        { i = i + 1; 0 }
+    };
+    let _f1 = free(arr1 as i64);
+    let _f2 = free(arr2 as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("standard_basic", test_standard_basic());
+    let t2 = report("binary_basic", test_binary_basic());
+    let t3 = report("standard_reverse", test_standard_reverse());
+    let t4 = report("binary_reverse", test_binary_reverse());
+    let t5 = report("already_sorted", test_already_sorted());
+    let t6 = report("single", test_single());
+    let t7 = report("empty", test_empty());
+    let t8 = report("duplicates", test_duplicates());
+    let t9 = report("negatives", test_negatives());
+    let t10 = report("range_sort", test_range_sort());
+    let t11 = report("stability", test_stability());
+    let t12 = report("both_agree", test_both_agree());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+    let total = 12;
+    let _p1 = print_str("bmb-insertion-sort: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

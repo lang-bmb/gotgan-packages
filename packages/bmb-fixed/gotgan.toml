@@ -1,0 +1,9 @@
+[package]
+name = "bmb-fixed"
+version = "0.1.0"
+description = "Q16.16 fixed-point arithmetic using i64 with scale factor 65536"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

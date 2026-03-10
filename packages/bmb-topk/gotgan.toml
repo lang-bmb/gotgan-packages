@@ -1,0 +1,9 @@
+[package]
+name = "bmb-topk"
+version = "0.1.0"
+description = "Top-K selection using a min-heap to find K largest elements"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

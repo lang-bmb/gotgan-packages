@@ -1,0 +1,8 @@
+[package]
+name = "bmb-search"
+version = "0.1.0"
+description = "Search algorithms for BMB"
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

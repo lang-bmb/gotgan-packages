@@ -1,0 +1,9 @@
+[package]
+name = "bmb-lcs"
+version = "0.1.0"
+description = "Longest Common Subsequence between two vecs of i64"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

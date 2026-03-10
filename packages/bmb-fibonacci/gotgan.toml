@@ -1,0 +1,9 @@
+[package]
+name = "bmb-fibonacci"
+version = "0.1.0"
+description = "Fibonacci number computation: iterative and fast doubling methods"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

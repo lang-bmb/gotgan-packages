@@ -1,0 +1,245 @@
+// bmb-rotate: Array rotation utilities
+// v0.1.0
+//
+// Functions:
+//   reverse(arr, lo, hi)             -> i64  reverse arr[lo..hi] in-place
+//   rotate_left(arr, n, k)           -> i64  rotate arr left by k positions
+//   rotate_right(arr, n, k)          -> i64  rotate arr right by k positions
+//   block_swap(arr, fi, si, count)   -> i64  swap two blocks of size count
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// Core: in-place reverse of arr[lo..hi] (inclusive)
+// ============================================================================
+
+fn reverse(arr: *i64, lo: i64, hi: i64) -> i64
+  pre lo >= 0
+= {
+    let mut l = lo;
+    let mut r = hi;
+    while l < r {
+        let tmp = arr[l];
+        set arr[l] = arr[r];
+        set arr[r] = tmp;
+        { l = l + 1; r = r - 1; 0 }
+    };
+    0
+};
+
+// ============================================================================
+// rotate_left: rotate arr[0..n) left by k positions
+// [1,2,3,4,5] rotated left by 2 => [3,4,5,1,2]
+// Uses the three-reversal algorithm: O(n) time, O(1) space
+// ============================================================================
+
+fn rotate_left(arr: *i64, n: i64, k: i64) -> i64
+  pre n >= 0 and k >= 0
+= {
+    if n <= 1 { 0 }
+    else {
+        let d = k % n;
+        if d == 0 { 0 }
+        else {
+            let _r1 = reverse(arr, 0, d - 1);
+            let _r2 = reverse(arr, d, n - 1);
+            let _r3 = reverse(arr, 0, n - 1);
+            0
+        }
+    }
+};
+
+// ============================================================================
+// rotate_right: rotate arr[0..n) right by k positions
+// [1,2,3,4,5] rotated right by 2 => [4,5,1,2,3]
+// ============================================================================
+
+fn rotate_right(arr: *i64, n: i64, k: i64) -> i64
+  pre n >= 0 and k >= 0
+= {
+    if n <= 1 { 0 }
+    else {
+        let d = k % n;
+        if d == 0 { 0 }
+        else {
+            rotate_left(arr, n, n - d)
+        }
+    }
+};
+
+// ============================================================================
+// block_swap: swap arr[fi..fi+count) with arr[si..si+count)
+// Requires: non-overlapping ranges
+// ============================================================================
+
+fn block_swap(arr: *i64, fi: i64, si: i64, count: i64) -> i64
+  pre fi >= 0 and si >= 0 and count >= 0
+= {
+    let mut i = 0;
+    while i < count {
+        let tmp = arr[fi + i];
+        set arr[fi + i] = arr[si + i];
+        set arr[si + i] = tmp;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn make_arr(n: i64) -> *i64 = malloc(n * 8) as *i64;
+
+fn free_arr(arr: *i64) -> i64 = free(arr as i64);
+
+fn fill5(arr: *i64, v0: i64, v1: i64, v2: i64, v3: i64, v4: i64) -> i64 = {
+    set arr[0] = v0;
+    set arr[1] = v1;
+    set arr[2] = v2;
+    set arr[3] = v3;
+    set arr[4] = v4;
+    0
+};
+
+fn test_reverse_basic() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = reverse(arr, 0, 4);
+    // Expected: [5, 4, 3, 2, 1]
+    let ok = arr[0] == 5 and arr[1] == 4 and arr[2] == 3
+             and arr[3] == 2 and arr[4] == 1;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_reverse_partial() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = reverse(arr, 1, 3);
+    // Expected: [1, 4, 3, 2, 5]
+    let ok = arr[0] == 1 and arr[1] == 4 and arr[2] == 3
+             and arr[3] == 2 and arr[4] == 5;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_rotate_left_basic() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = rotate_left(arr, 5, 2);
+    // Expected: [3, 4, 5, 1, 2]
+    let ok = arr[0] == 3 and arr[1] == 4 and arr[2] == 5
+             and arr[3] == 1 and arr[4] == 2;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_rotate_left_full() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = rotate_left(arr, 5, 5);
+    // k == n, should be unchanged: [1, 2, 3, 4, 5]
+    let ok = arr[0] == 1 and arr[1] == 2 and arr[2] == 3
+             and arr[3] == 4 and arr[4] == 5;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_rotate_left_wrap() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = rotate_left(arr, 5, 7);
+    // 7 % 5 = 2, same as rotate_left by 2: [3, 4, 5, 1, 2]
+    let ok = arr[0] == 3 and arr[1] == 4 and arr[2] == 5
+             and arr[3] == 1 and arr[4] == 2;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_rotate_right_basic() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = rotate_right(arr, 5, 2);
+    // Expected: [4, 5, 1, 2, 3]
+    let ok = arr[0] == 4 and arr[1] == 5 and arr[2] == 1
+             and arr[3] == 2 and arr[4] == 3;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_rotate_right_one() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = rotate_right(arr, 5, 1);
+    // Expected: [5, 1, 2, 3, 4]
+    let ok = arr[0] == 5 and arr[1] == 1 and arr[2] == 2
+             and arr[3] == 3 and arr[4] == 4;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_block_swap_basic() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 10, 20, 30, 40, 50);
+    let _s = block_swap(arr, 0, 3, 2);
+    // Swap arr[0..2) with arr[3..5): [40, 50, 30, 10, 20]
+    let ok = arr[0] == 40 and arr[1] == 50 and arr[2] == 30
+             and arr[3] == 10 and arr[4] == 20;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_rotate_single() -> i64 = {
+    let arr = make_arr(1);
+    set arr[0] = 42;
+    let _r = rotate_left(arr, 1, 3);
+    let ok = arr[0] == 42;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+fn test_rotate_left_by_one() -> i64 = {
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 2, 3, 4, 5);
+    let _r = rotate_left(arr, 5, 1);
+    // Expected: [2, 3, 4, 5, 1]
+    let ok = arr[0] == 2 and arr[1] == 3 and arr[2] == 4
+             and arr[3] == 5 and arr[4] == 1;
+    let _free = free_arr(arr);
+    b2i(ok)
+};
+
+// ============================================================================
+// Report and main
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("reverse_basic", test_reverse_basic());
+    let t2 = report("reverse_partial", test_reverse_partial());
+    let t3 = report("rotate_left_basic", test_rotate_left_basic());
+    let t4 = report("rotate_left_full", test_rotate_left_full());
+    let t5 = report("rotate_left_wrap", test_rotate_left_wrap());
+    let t6 = report("rotate_right_basic", test_rotate_right_basic());
+    let t7 = report("rotate_right_one", test_rotate_right_one());
+    let t8 = report("block_swap_basic", test_block_swap_basic());
+    let t9 = report("rotate_single", test_rotate_single());
+    let t10 = report("rotate_left_by_one", test_rotate_left_by_one());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let total = 10;
+    let _p1 = print_str("bmb-rotate: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

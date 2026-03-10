@@ -1,0 +1,9 @@
+[package]
+name = "bmb-prefix-sum"
+version = "0.1.0"
+description = "Prefix sum (cumulative sum) computations on vecs"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

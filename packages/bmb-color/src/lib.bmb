@@ -1,0 +1,190 @@
+// bmb-color: Color manipulation utilities
+// All color components are integers in range 0-255.
+// Packed format: 0xRRGGBB stored as i64.
+
+// Pack r, g, b components into 0xRRGGBB
+fn rgb_pack(r: i64, g: i64, b: i64) -> i64
+  pre r >= 0 and r <= 255 and g >= 0 and g <= 255 and b >= 0 and b <= 255
+  post ret >= 0
+= (r << 16) bor (g << 8) bor b;
+
+// Extract red component from packed color
+fn rgb_unpack_r(color: i64) -> i64
+  pre color >= 0
+  post ret >= 0 and ret <= 255
+= (color >> 16) band 255;
+
+// Extract green component from packed color
+fn rgb_unpack_g(color: i64) -> i64
+  pre color >= 0
+  post ret >= 0 and ret <= 255
+= (color >> 8) band 255;
+
+// Extract blue component from packed color
+fn rgb_unpack_b(color: i64) -> i64
+  pre color >= 0
+  post ret >= 0 and ret <= 255
+= color band 255;
+
+// Linear interpolation between two colors.
+// t in 0..255: t=0 -> c1, t=255 -> c2.
+fn rgb_lerp(c1: i64, c2: i64, t: i64) -> i64
+  pre t >= 0 and t <= 255
+= {
+    let r1 = rgb_unpack_r(c1);
+    let g1 = rgb_unpack_g(c1);
+    let b1 = rgb_unpack_b(c1);
+    let r2 = rgb_unpack_r(c2);
+    let g2 = rgb_unpack_g(c2);
+    let b2 = rgb_unpack_b(c2);
+    let r = r1 + (r2 - r1) * t / 255;
+    let g = g1 + (g2 - g1) * t / 255;
+    let b = b1 + (b2 - b1) * t / 255;
+    rgb_pack(r, g, b)
+};
+
+// Weighted luminance (brightness) using ITU-R BT.601 approximation.
+// Returns value in 0-255 range.
+// Weights: R*299 + G*587 + B*114, then divide by 1000.
+fn rgb_brightness(color: i64) -> i64
+  pre color >= 0
+  post ret >= 0 and ret <= 255
+= {
+    let r = rgb_unpack_r(color);
+    let g = rgb_unpack_g(color);
+    let b = rgb_unpack_b(color);
+    (r * 299 + g * 587 + b * 114) / 1000
+};
+
+// Simplified integer HSV -> RGB conversion.
+// h: 0-359 (hue degrees), s: 0-255 (saturation), v: 0-255 (value/brightness).
+// Returns packed 0xRRGGBB color.
+fn hsv_to_rgb_approx(h: i64, s: i64, v: i64) -> i64
+  pre h >= 0 and h <= 359 and s >= 0 and s <= 255 and v >= 0 and v <= 255
+= {
+    // If saturation is zero: grayscale
+    if s == 0 {
+        rgb_pack(v, v, v)
+    } else {
+        // Sector of the color wheel: 0-5
+        let sector = h / 60;
+        // Fractional part of sector (0-255 scale)
+        let frac = (h - sector * 60) * 255 / 60;
+        // Intermediate values scaled to 0-255
+        let p = v * (255 - s) / 255;
+        let q = v * (255 - s * frac / 255) / 255;
+        let t_val = v * (255 - s * (255 - frac) / 255) / 255;
+        if sector == 0 { rgb_pack(v, t_val, p) }
+        else if sector == 1 { rgb_pack(q, v, p) }
+        else if sector == 2 { rgb_pack(p, v, t_val) }
+        else if sector == 3 { rgb_pack(p, q, v) }
+        else if sector == 4 { rgb_pack(t_val, p, v) }
+        else { rgb_pack(v, p, q) }
+    }
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_pack_unpack() -> i64 = {
+    let color = rgb_pack(255, 128, 0);
+    let r = rgb_unpack_r(color);
+    let g = rgb_unpack_g(color);
+    let b = rgb_unpack_b(color);
+    if r == 255 and g == 128 and b == 0 { 1 } else { 0 }
+};
+
+fn test_pack_black_white() -> i64 = {
+    let black = rgb_pack(0, 0, 0);
+    let white = rgb_pack(255, 255, 255);
+    if black == 0 and white == 16777215 { 1 } else { 0 }
+};
+
+fn test_lerp_endpoints() -> i64 = {
+    let red = rgb_pack(255, 0, 0);
+    let blue = rgb_pack(0, 0, 255);
+    // t=0 should give red, t=255 should give blue
+    let at0 = rgb_lerp(red, blue, 0);
+    let at255 = rgb_lerp(red, blue, 255);
+    if at0 == red and at255 == blue { 1 } else { 0 }
+};
+
+fn test_lerp_midpoint() -> i64 = {
+    let black = rgb_pack(0, 0, 0);
+    let white = rgb_pack(254, 254, 254);
+    // t=127 -> approximately (127, 127, 127)
+    // (0 + 254 * 127 / 255) = 126
+    let mid = rgb_lerp(black, white, 127);
+    let r = rgb_unpack_r(mid);
+    // r should be around 126-127
+    if r >= 125 and r <= 128 { 1 } else { 0 }
+};
+
+fn test_brightness_white() -> i64 = {
+    let white = rgb_pack(255, 255, 255);
+    let br = rgb_brightness(white);
+    if br == 255 { 1 } else { 0 }
+};
+
+fn test_brightness_black() -> i64 = {
+    let black = rgb_pack(0, 0, 0);
+    let br = rgb_brightness(black);
+    if br == 0 { 1 } else { 0 }
+};
+
+fn test_brightness_red() -> i64 = {
+    // Pure red: 255*299/1000 = 76
+    let red = rgb_pack(255, 0, 0);
+    let br = rgb_brightness(red);
+    if br == 76 { 1 } else { 0 }
+};
+
+fn test_hsv_red() -> i64 = {
+    // h=0, s=255, v=255 -> pure red (255, 0, 0) approximately
+    let color = hsv_to_rgb_approx(0, 255, 255);
+    let r = rgb_unpack_r(color);
+    let g = rgb_unpack_g(color);
+    let b = rgb_unpack_b(color);
+    if r == 255 and g == 0 and b == 0 { 1 } else { 0 }
+};
+
+fn test_hsv_grayscale() -> i64 = {
+    // s=0 -> grayscale equal to v
+    let color = hsv_to_rgb_approx(180, 0, 128);
+    let r = rgb_unpack_r(color);
+    let g = rgb_unpack_g(color);
+    let b = rgb_unpack_b(color);
+    if r == 128 and g == 128 and b == 128 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("pack_unpack", test_pack_unpack());
+    let t2 = report("pack_black_white", test_pack_black_white());
+    let t3 = report("lerp_endpoints", test_lerp_endpoints());
+    let t4 = report("lerp_midpoint", test_lerp_midpoint());
+    let t5 = report("brightness_white", test_brightness_white());
+    let t6 = report("brightness_black", test_brightness_black());
+    let t7 = report("brightness_red", test_brightness_red());
+    let t8 = report("hsv_red", test_hsv_red());
+    let t9 = report("hsv_grayscale", test_hsv_grayscale());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+    let total = 9;
+    let _p1 = print_str("bmb-color: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

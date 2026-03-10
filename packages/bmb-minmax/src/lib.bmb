@@ -1,0 +1,256 @@
+// bmb-minmax: Min/max tracker with undo support
+// Tracks running min and max over a stream of values.
+// Uses a vec-based stack so values can be undone (popped) and
+// the min/max are recomputed correctly.
+//
+// Layout: values stored in a vec. Min/max recomputed on demand
+// or tracked via parallel min/max stacks for O(1) queries.
+//
+// We maintain 3 vecs:
+//   vals_vec  - the value stack
+//   min_stack - parallel stack: min_stack[i] = min of vals[0..=i]
+//   max_stack - parallel stack: max_stack[i] = max of vals[0..=i]
+//
+// Representation: a single malloc block holding 3 pointers.
+// Layout: [vals_ptr, min_ptr, max_ptr]
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Create a new minmax tracker
+fn mm_new() -> i64
+  post ret != 0
+= {
+    let ptr = malloc(3 * 8);
+    let vals = vec_new();
+    let mins = vec_new();
+    let maxs = vec_new();
+    let _s1 = store_i64(ptr, vals);
+    let _s2 = store_i64(ptr + 8, mins);
+    let _s3 = store_i64(ptr + 16, maxs);
+    ptr
+};
+
+// Get the values vec
+fn mm_vals(mm: i64) -> i64
+  pre mm != 0
+= load_i64(mm);
+
+// Get the min stack
+fn mm_mins(mm: i64) -> i64
+  pre mm != 0
+= load_i64(mm + 8);
+
+// Get the max stack
+fn mm_maxs(mm: i64) -> i64
+  pre mm != 0
+= load_i64(mm + 16);
+
+// Get current size
+fn mm_size(mm: i64) -> i64
+  pre mm != 0
+  post ret >= 0
+= vec_len(mm_vals(mm));
+
+// Check if empty
+fn mm_is_empty(mm: i64) -> bool
+  pre mm != 0
+= mm_size(mm) == 0;
+
+// Push a value onto the tracker
+fn mm_push(mm: i64, value: i64) -> i64
+  pre mm != 0
+= {
+    let vals = mm_vals(mm);
+    let mins = mm_mins(mm);
+    let maxs = mm_maxs(mm);
+    let len = vec_len(vals);
+    let _pv = vec_push(vals, value);
+    let new_min = if len == 0 { value }
+                  else {
+                      let prev_min = vec_get(mins, len - 1);
+                      if value < prev_min { value } else { prev_min }
+                  };
+    let new_max = if len == 0 { value }
+                  else {
+                      let prev_max = vec_get(maxs, len - 1);
+                      if value > prev_max { value } else { prev_max }
+                  };
+    let _pm = vec_push(mins, new_min);
+    let _px = vec_push(maxs, new_max);
+    0
+};
+
+// Pop (undo) the most recent value. Returns the popped value.
+fn mm_pop(mm: i64) -> i64
+  pre mm != 0
+= {
+    let vals = mm_vals(mm);
+    let mins = mm_mins(mm);
+    let maxs = mm_maxs(mm);
+    if vec_len(vals) == 0 { 0 }
+    else {
+        let v = vec_pop(vals);
+        let _m = vec_pop(mins);
+        let _x = vec_pop(maxs);
+        v
+    }
+};
+
+// Get current minimum (0 if empty)
+fn mm_min(mm: i64) -> i64
+  pre mm != 0
+= {
+    let mins = mm_mins(mm);
+    let len = vec_len(mins);
+    if len == 0 { 0 }
+    else { vec_get(mins, len - 1) }
+};
+
+// Get current maximum (0 if empty)
+fn mm_max(mm: i64) -> i64
+  pre mm != 0
+= {
+    let maxs = mm_maxs(mm);
+    let len = vec_len(maxs);
+    if len == 0 { 0 }
+    else { vec_get(maxs, len - 1) }
+};
+
+// Peek at top value (0 if empty)
+fn mm_peek(mm: i64) -> i64
+  pre mm != 0
+= {
+    let vals = mm_vals(mm);
+    let len = vec_len(vals);
+    if len == 0 { 0 }
+    else { vec_get(vals, len - 1) }
+};
+
+// Get range (max - min), 0 if empty
+fn mm_range(mm: i64) -> i64
+  pre mm != 0
+= {
+    if mm_is_empty(mm) { 0 }
+    else { mm_max(mm) - mm_min(mm) }
+};
+
+// Free all memory
+fn mm_free(mm: i64) -> i64
+  pre mm != 0
+= {
+    let _fv = vec_free(mm_vals(mm));
+    let _fm = vec_free(mm_mins(mm));
+    let _fx = vec_free(mm_maxs(mm));
+    let _fp = free(mm);
+    0
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic() -> i64 = {
+    let mm = mm_new();
+    let _p1 = mm_push(mm, 5);
+    let _p2 = mm_push(mm, 3);
+    let _p3 = mm_push(mm, 8);
+    if mm_size(mm) != 3 { let _f = mm_free(mm); 0 }
+    else if mm_min(mm) != 3 { let _f = mm_free(mm); 0 }
+    else if mm_max(mm) != 8 { let _f = mm_free(mm); 0 }
+    else { let _f = mm_free(mm); 1 }
+};
+
+fn test_undo() -> i64 = {
+    let mm = mm_new();
+    let _p1 = mm_push(mm, 10);
+    let _p2 = mm_push(mm, 2);
+    let _p3 = mm_push(mm, 7);
+    // min=2, max=10
+    if mm_min(mm) != 2 { let _f = mm_free(mm); 0 }
+    else {
+        // undo 7 -> min=2, max=10
+        let v1 = mm_pop(mm);
+        if v1 != 7 { let _f = mm_free(mm); 0 }
+        else if mm_min(mm) != 2 { let _f = mm_free(mm); 0 }
+        else if mm_max(mm) != 10 { let _f = mm_free(mm); 0 }
+        else {
+            // undo 2 -> min=10, max=10
+            let v2 = mm_pop(mm);
+            if v2 != 2 { let _f = mm_free(mm); 0 }
+            else if mm_min(mm) != 10 { let _f = mm_free(mm); 0 }
+            else if mm_max(mm) != 10 { let _f = mm_free(mm); 0 }
+            else { let _f = mm_free(mm); 1 }
+        }
+    }
+};
+
+fn test_single() -> i64 = {
+    let mm = mm_new();
+    let _p = mm_push(mm, 42);
+    if mm_min(mm) != 42 { let _f = mm_free(mm); 0 }
+    else if mm_max(mm) != 42 { let _f = mm_free(mm); 0 }
+    else if mm_range(mm) != 0 { let _f = mm_free(mm); 0 }
+    else if mm_peek(mm) != 42 { let _f = mm_free(mm); 0 }
+    else { let _f = mm_free(mm); 1 }
+};
+
+fn test_empty() -> i64 = {
+    let mm = mm_new();
+    if b2i(mm_is_empty(mm)) != 1 { let _f = mm_free(mm); 0 }
+    else if mm_min(mm) != 0 { let _f = mm_free(mm); 0 }
+    else if mm_max(mm) != 0 { let _f = mm_free(mm); 0 }
+    else if mm_pop(mm) != 0 { let _f = mm_free(mm); 0 }
+    else { let _f = mm_free(mm); 1 }
+};
+
+fn test_negative() -> i64 = {
+    let mm = mm_new();
+    let _p1 = mm_push(mm, 0 - 5);
+    let _p2 = mm_push(mm, 0 - 3);
+    let _p3 = mm_push(mm, 0 - 8);
+    if mm_min(mm) != (0 - 8) { let _f = mm_free(mm); 0 }
+    else if mm_max(mm) != (0 - 3) { let _f = mm_free(mm); 0 }
+    else if mm_range(mm) != 5 { let _f = mm_free(mm); 0 }
+    else { let _f = mm_free(mm); 1 }
+};
+
+fn test_push_pop_push() -> i64 = {
+    let mm = mm_new();
+    let _p1 = mm_push(mm, 100);
+    let _p2 = mm_push(mm, 1);
+    // min=1
+    let _pop = mm_pop(mm);
+    // min=100 after undo
+    let _p3 = mm_push(mm, 50);
+    // min=50, max=100
+    if mm_min(mm) != 50 { let _f = mm_free(mm); 0 }
+    else if mm_max(mm) != 100 { let _f = mm_free(mm); 0 }
+    else if mm_size(mm) != 2 { let _f = mm_free(mm); 0 }
+    else { let _f = mm_free(mm); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("undo", test_undo());
+    let t3 = report("single", test_single());
+    let t4 = report("empty", test_empty());
+    let t5 = report("negative", test_negative());
+    let t6 = report("push_pop_push", test_push_pop_push());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-minmax: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

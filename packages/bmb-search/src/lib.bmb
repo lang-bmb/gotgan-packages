@@ -1,0 +1,499 @@
+// bmb-search: Search algorithms for BMB
+// v0.1.0
+//
+// All algorithms operate on raw i64 pointer arrays for maximum performance.
+// Array pointer (arr: i64) points to a block of n * 8 bytes of i64 values.
+//
+// Functions:
+//   linear_search(arr, n, target)       -> i64  index or -1
+//   binary_search(arr, n, target)       -> i64  index or -1 (sorted array)
+//   binary_search_first(arr, n, target) -> i64  first occurrence index or -1
+//   binary_search_last(arr, n, target)  -> i64  last occurrence index or -1
+//   lower_bound(arr, n, target)         -> i64  first index >= target
+//   upper_bound(arr, n, target)         -> i64  first index > target
+//   contains(arr, n, target)            -> bool
+//   count_occurrences(arr, n, target)   -> i64
+
+// ============================================================================
+// Internal helpers
+// ============================================================================
+
+@inline
+fn arr_get(arr: i64, idx: i64) -> i64 = load_i64(arr + idx * 8);
+
+@inline
+fn arr_set(arr: i64, idx: i64, value: i64) -> i64 = {
+    let _s = store_i64(arr + idx * 8, value);
+    0
+};
+
+// ============================================================================
+// linear_search
+// Scans arr[0..n) for target. Returns the index of the first match, or -1.
+// Time: O(n), Space: O(1)
+// Works on unsorted arrays.
+// ============================================================================
+
+fn linear_search(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n >= 0
+= {
+    let mut i = 0;
+    let mut result = 0 - 1;
+    let mut done = false;
+    while not done {
+        let _r = if i >= n {
+            { done = true; 0 }
+        } else if arr_get(arr, i) == target {
+            { result = i; done = true; 0 }
+        } else {
+            { i = i + 1; 0 }
+        };
+        0
+    };
+    result
+};
+
+// ============================================================================
+// binary_search
+// Finds any occurrence of target in the sorted array arr[0..n).
+// Returns the index if found, or -1 if not found.
+// Time: O(log n), Space: O(1)
+// Precondition: array must be sorted in ascending order.
+// ============================================================================
+
+fn binary_search(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n >= 0
+= {
+    let mut lo = 0;
+    let mut hi = n - 1;
+    let mut result = 0 - 1;
+    let mut done = false;
+    while not done {
+        let _r = if lo > hi {
+            { done = true; 0 }
+        } else {
+            {
+                let mid = lo + (hi - lo) / 2;
+                let mid_val = arr_get(arr, mid);
+                let _c = if mid_val == target {
+                    { result = mid; done = true; 0 }
+                } else if mid_val < target {
+                    { lo = mid + 1; 0 }
+                } else {
+                    { hi = mid - 1; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    result
+};
+
+// ============================================================================
+// binary_search_first
+// Finds the FIRST (leftmost) occurrence of target in sorted arr[0..n).
+// Returns the index if found, or -1 if not found.
+// Time: O(log n), Space: O(1)
+// ============================================================================
+
+fn binary_search_first(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n >= 0
+= {
+    let mut lo = 0;
+    let mut hi = n - 1;
+    let mut result = 0 - 1;
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        let mid_val = arr_get(arr, mid);
+        let _c = if mid_val == target {
+            { result = mid; hi = mid - 1; 0 }
+        } else if mid_val < target {
+            { lo = mid + 1; 0 }
+        } else {
+            { hi = mid - 1; 0 }
+        };
+        0
+    };
+    result
+};
+
+// ============================================================================
+// binary_search_last
+// Finds the LAST (rightmost) occurrence of target in sorted arr[0..n).
+// Returns the index if found, or -1 if not found.
+// Time: O(log n), Space: O(1)
+// ============================================================================
+
+fn binary_search_last(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n >= 0
+= {
+    let mut lo = 0;
+    let mut hi = n - 1;
+    let mut result = 0 - 1;
+    while lo <= hi {
+        let mid = lo + (hi - lo) / 2;
+        let mid_val = arr_get(arr, mid);
+        let _c = if mid_val == target {
+            { result = mid; lo = mid + 1; 0 }
+        } else if mid_val < target {
+            { lo = mid + 1; 0 }
+        } else {
+            { hi = mid - 1; 0 }
+        };
+        0
+    };
+    result
+};
+
+// ============================================================================
+// lower_bound
+// Returns the index of the first element >= target in sorted arr[0..n).
+// Returns n if all elements are less than target.
+// Time: O(log n), Space: O(1)
+// ============================================================================
+
+fn lower_bound(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n >= 0
+  post ret >= 0 and ret <= n
+= {
+    let mut lo = 0;
+    let mut hi = n;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let _c = if arr_get(arr, mid) < target {
+            { lo = mid + 1; 0 }
+        } else {
+            { hi = mid; 0 }
+        };
+        0
+    };
+    lo
+};
+
+// ============================================================================
+// upper_bound
+// Returns the index of the first element > target in sorted arr[0..n).
+// Returns n if all elements are <= target.
+// Time: O(log n), Space: O(1)
+// ============================================================================
+
+fn upper_bound(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n >= 0
+  post ret >= 0 and ret <= n
+= {
+    let mut lo = 0;
+    let mut hi = n;
+    while lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let _c = if arr_get(arr, mid) <= target {
+            { lo = mid + 1; 0 }
+        } else {
+            { hi = mid; 0 }
+        };
+        0
+    };
+    lo
+};
+
+// ============================================================================
+// contains
+// Returns true if target exists anywhere in arr[0..n), false otherwise.
+// Works on unsorted arrays (uses linear scan).
+// Time: O(n), Space: O(1)
+// ============================================================================
+
+fn contains(arr: i64, n: i64, target: i64) -> bool
+  pre arr != 0 and n >= 0
+= linear_search(arr, n, target) >= 0;
+
+// ============================================================================
+// count_occurrences
+// Counts the number of elements equal to target in sorted arr[0..n).
+// Uses lower_bound and upper_bound for O(log n) performance.
+// Time: O(log n), Space: O(1)
+// Precondition: array must be sorted in ascending order.
+// ============================================================================
+
+fn count_occurrences(arr: i64, n: i64, target: i64) -> i64
+  pre arr != 0 and n >= 0
+  post ret >= 0
+= {
+    let lb = lower_bound(arr, n, target);
+    let ub = upper_bound(arr, n, target);
+    ub - lb
+};
+
+// ============================================================================
+// Internal test helpers
+// ============================================================================
+
+fn make_arr(n: i64) -> i64
+  pre n > 0
+= malloc(n * 8);
+
+fn free_arr(arr: i64) -> i64
+  pre arr != 0
+= free(arr);
+
+// Fill arr[0..n) with values: arr[i] = values[i] via successive stores
+fn fill5(arr: i64, v0: i64, v1: i64, v2: i64, v3: i64, v4: i64) -> i64 = {
+    let _s0 = arr_set(arr, 0, v0);
+    let _s1 = arr_set(arr, 1, v1);
+    let _s2 = arr_set(arr, 2, v2);
+    let _s3 = arr_set(arr, 3, v3);
+    let _s4 = arr_set(arr, 4, v4);
+    0
+};
+
+fn fill8(arr: i64, v0: i64, v1: i64, v2: i64, v3: i64,
+         v4: i64, v5: i64, v6: i64, v7: i64) -> i64 = {
+    let _s0 = arr_set(arr, 0, v0);
+    let _s1 = arr_set(arr, 1, v1);
+    let _s2 = arr_set(arr, 2, v2);
+    let _s3 = arr_set(arr, 3, v3);
+    let _s4 = arr_set(arr, 4, v4);
+    let _s5 = arr_set(arr, 5, v5);
+    let _s6 = arr_set(arr, 6, v6);
+    let _s7 = arr_set(arr, 7, v7);
+    0
+};
+
+// ============================================================================
+// Individual test functions (each returns 1 on pass, 0 on fail)
+// ============================================================================
+
+fn test_linear_basic() -> i64 = {
+    // arr = [10, 20, 30, 40, 50]
+    let arr = make_arr(5);
+    let _f = fill5(arr, 10, 20, 30, 40, 50);
+    let r1 = linear_search(arr, 5, 30) == 2;  // found at index 2
+    let r2 = linear_search(arr, 5, 10) == 0;  // found at index 0
+    let r3 = linear_search(arr, 5, 50) == 4;  // found at index 4
+    let r4 = linear_search(arr, 5, 99) == (0 - 1);  // not found
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 { 1 } else { 0 }
+};
+
+fn test_linear_first_occurrence() -> i64 = {
+    // arr = [3, 1, 3, 2, 3] — linear_search returns first match
+    let arr = make_arr(5);
+    let _f = fill5(arr, 3, 1, 3, 2, 3);
+    let r1 = linear_search(arr, 5, 3) == 0;   // first 3 at index 0
+    let r2 = linear_search(arr, 5, 1) == 1;   // 1 at index 1
+    let r3 = linear_search(arr, 5, 2) == 3;   // 2 at index 3
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 { 1 } else { 0 }
+};
+
+fn test_linear_empty() -> i64 = {
+    // n=0: any search returns -1
+    let arr = make_arr(1);  // allocate at least 1 byte to get valid pointer
+    let r1 = linear_search(arr, 0, 42) == (0 - 1);
+    let _free = free_arr(arr);
+    if r1 { 1 } else { 0 }
+};
+
+fn test_binary_basic() -> i64 = {
+    // sorted arr = [10, 20, 30, 40, 50]
+    let arr = make_arr(5);
+    let _f = fill5(arr, 10, 20, 30, 40, 50);
+    let r1 = binary_search(arr, 5, 10) == 0;
+    let r2 = binary_search(arr, 5, 30) == 2;
+    let r3 = binary_search(arr, 5, 50) == 4;
+    let r4 = binary_search(arr, 5, 99) == (0 - 1);
+    let r5 = binary_search(arr, 5, 0) == (0 - 1);
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 { 1 } else { 0 }
+};
+
+fn test_binary_single() -> i64 = {
+    let arr = make_arr(1);
+    let _f = arr_set(arr, 0, 42);
+    let r1 = binary_search(arr, 1, 42) == 0;
+    let r2 = binary_search(arr, 1, 7) == (0 - 1);
+    let _free = free_arr(arr);
+    if r1 and r2 { 1 } else { 0 }
+};
+
+fn test_binary_search_first() -> i64 = {
+    // sorted arr = [1, 2, 2, 2, 3, 4]
+    let arr = make_arr(6);
+    let _s0 = arr_set(arr, 0, 1);
+    let _s1 = arr_set(arr, 1, 2);
+    let _s2 = arr_set(arr, 2, 2);
+    let _s3 = arr_set(arr, 3, 2);
+    let _s4 = arr_set(arr, 4, 3);
+    let _s5 = arr_set(arr, 5, 4);
+    let r1 = binary_search_first(arr, 6, 2) == 1;   // first 2 at index 1
+    let r2 = binary_search_first(arr, 6, 1) == 0;
+    let r3 = binary_search_first(arr, 6, 4) == 5;
+    let r4 = binary_search_first(arr, 6, 99) == (0 - 1);
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 { 1 } else { 0 }
+};
+
+fn test_binary_search_last() -> i64 = {
+    // sorted arr = [1, 2, 2, 2, 3, 4]
+    let arr = make_arr(6);
+    let _s0 = arr_set(arr, 0, 1);
+    let _s1 = arr_set(arr, 1, 2);
+    let _s2 = arr_set(arr, 2, 2);
+    let _s3 = arr_set(arr, 3, 2);
+    let _s4 = arr_set(arr, 4, 3);
+    let _s5 = arr_set(arr, 5, 4);
+    let r1 = binary_search_last(arr, 6, 2) == 3;    // last 2 at index 3
+    let r2 = binary_search_last(arr, 6, 1) == 0;
+    let r3 = binary_search_last(arr, 6, 4) == 5;
+    let r4 = binary_search_last(arr, 6, 99) == (0 - 1);
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 { 1 } else { 0 }
+};
+
+fn test_lower_bound() -> i64 = {
+    // sorted arr = [1, 3, 5, 7, 9]
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 3, 5, 7, 9);
+    let r1 = lower_bound(arr, 5, 1) == 0;   // first element >= 1 is index 0
+    let r2 = lower_bound(arr, 5, 4) == 2;   // first element >= 4 is 5 at index 2
+    let r3 = lower_bound(arr, 5, 5) == 2;   // first element >= 5 is 5 at index 2
+    let r4 = lower_bound(arr, 5, 10) == 5;  // no element >= 10, returns n=5
+    let r5 = lower_bound(arr, 5, 0) == 0;   // all elements >= 0, returns 0
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 { 1 } else { 0 }
+};
+
+fn test_upper_bound() -> i64 = {
+    // sorted arr = [1, 3, 5, 7, 9]
+    let arr = make_arr(5);
+    let _f = fill5(arr, 1, 3, 5, 7, 9);
+    let r1 = upper_bound(arr, 5, 1) == 1;   // first element > 1 is 3 at index 1
+    let r2 = upper_bound(arr, 5, 4) == 2;   // first element > 4 is 5 at index 2
+    let r3 = upper_bound(arr, 5, 5) == 3;   // first element > 5 is 7 at index 3
+    let r4 = upper_bound(arr, 5, 9) == 5;   // no element > 9, returns n=5
+    let r5 = upper_bound(arr, 5, 0) == 0;   // first element > 0 is 1 at index 0
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 { 1 } else { 0 }
+};
+
+fn test_contains() -> i64 = {
+    // arr = [7, 2, 9, 4, 1]  (unsorted)
+    let arr = make_arr(5);
+    let _f = fill5(arr, 7, 2, 9, 4, 1);
+    let r1 = contains(arr, 5, 9) == true;
+    let r2 = contains(arr, 5, 7) == true;
+    let r3 = contains(arr, 5, 1) == true;
+    let r4 = contains(arr, 5, 5) == false;
+    let r5 = contains(arr, 5, 0) == false;
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 { 1 } else { 0 }
+};
+
+fn test_count_occurrences() -> i64 = {
+    // sorted arr = [1, 2, 2, 3, 3, 3, 4]
+    let arr = make_arr(7);
+    let _s0 = arr_set(arr, 0, 1);
+    let _s1 = arr_set(arr, 1, 2);
+    let _s2 = arr_set(arr, 2, 2);
+    let _s3 = arr_set(arr, 3, 3);
+    let _s4 = arr_set(arr, 4, 3);
+    let _s5 = arr_set(arr, 5, 3);
+    let _s6 = arr_set(arr, 6, 4);
+    let r1 = count_occurrences(arr, 7, 1) == 1;
+    let r2 = count_occurrences(arr, 7, 2) == 2;
+    let r3 = count_occurrences(arr, 7, 3) == 3;
+    let r4 = count_occurrences(arr, 7, 4) == 1;
+    let r5 = count_occurrences(arr, 7, 5) == 0;  // not present
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 { 1 } else { 0 }
+};
+
+fn test_count_all_same() -> i64 = {
+    // sorted arr = [5, 5, 5, 5, 5]
+    let arr = make_arr(5);
+    let _f = fill5(arr, 5, 5, 5, 5, 5);
+    let r1 = count_occurrences(arr, 5, 5) == 5;
+    let r2 = count_occurrences(arr, 5, 4) == 0;
+    let r3 = binary_search_first(arr, 5, 5) == 0;
+    let r4 = binary_search_last(arr, 5, 5) == 4;
+    let r5 = lower_bound(arr, 5, 5) == 0;
+    let r6 = upper_bound(arr, 5, 5) == 5;
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 and r6 { 1 } else { 0 }
+};
+
+fn test_bounds_duplicates() -> i64 = {
+    // sorted arr = [2, 2, 4, 4, 6, 6]
+    let arr = make_arr(6);
+    let _s0 = arr_set(arr, 0, 2);
+    let _s1 = arr_set(arr, 1, 2);
+    let _s2 = arr_set(arr, 2, 4);
+    let _s3 = arr_set(arr, 3, 4);
+    let _s4 = arr_set(arr, 4, 6);
+    let _s5 = arr_set(arr, 5, 6);
+    // lower_bound(3) = 2 (first element >= 3 is 4 at idx 2)
+    let r1 = lower_bound(arr, 6, 3) == 2;
+    // upper_bound(4) = 4 (first element > 4 is 6 at idx 4)
+    let r2 = upper_bound(arr, 6, 4) == 4;
+    // lower_bound(4) = 2
+    let r3 = lower_bound(arr, 6, 4) == 2;
+    // upper_bound(2) = 2
+    let r4 = upper_bound(arr, 6, 2) == 2;
+    // count_occurrences(4) = 2
+    let r5 = count_occurrences(arr, 6, 4) == 2;
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 { 1 } else { 0 }
+};
+
+fn test_large_sorted() -> i64 = {
+    // sorted arr = [0, 10, 20, 30, 40, 50, 60, 70]
+    let arr = make_arr(8);
+    let _f = fill8(arr, 0, 10, 20, 30, 40, 50, 60, 70);
+    let r1 = binary_search(arr, 8, 0) == 0;
+    let r2 = binary_search(arr, 8, 70) == 7;
+    let r3 = binary_search(arr, 8, 40) == 4;
+    let r4 = binary_search(arr, 8, 35) == (0 - 1);
+    let r5 = lower_bound(arr, 8, 25) == 3;   // first >= 25 is 30 at index 3
+    let r6 = upper_bound(arr, 8, 50) == 6;   // first > 50 is 60 at index 6
+    let _free = free_arr(arr);
+    if r1 and r2 and r3 and r4 and r5 and r6 { 1 } else { 0 }
+};
+
+// ============================================================================
+// Report helper and main test runner
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1  = report("linear_basic",          test_linear_basic());
+    let t2  = report("linear_first_occur",    test_linear_first_occurrence());
+    let t3  = report("linear_empty",          test_linear_empty());
+    let t4  = report("binary_basic",          test_binary_basic());
+    let t5  = report("binary_single",         test_binary_single());
+    let t6  = report("binary_search_first",   test_binary_search_first());
+    let t7  = report("binary_search_last",    test_binary_search_last());
+    let t8  = report("lower_bound",           test_lower_bound());
+    let t9  = report("upper_bound",           test_upper_bound());
+    let t10 = report("contains",              test_contains());
+    let t11 = report("count_occurrences",     test_count_occurrences());
+    let t12 = report("count_all_same",        test_count_all_same());
+    let t13 = report("bounds_duplicates",     test_bounds_duplicates());
+    let t14 = report("large_sorted",          test_large_sorted());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8
+               + t9 + t10 + t11 + t12 + t13 + t14;
+    let total = 14;
+    let _p1 = print_str("bmb-search: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

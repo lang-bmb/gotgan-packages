@@ -1,0 +1,8 @@
+[package]
+name = "bmb-geometry"
+version = "0.1.0"
+description = "2D integer geometry: distances, cross product, triangle area, point-in-triangle"
+authors = ["BMB Team"]
+license = "MIT"
+
+[dependencies]

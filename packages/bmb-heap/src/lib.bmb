@@ -1,0 +1,210 @@
+// bmb-heap: Binary min-heap (priority queue)
+// Uses Vec as backing storage. Smallest element at top.
+
+// Create new heap
+fn heap_new() -> i64
+  post ret != 0
+= vec_new();
+
+// Get heap size
+fn heap_size(heap: i64) -> i64
+  pre heap != 0
+  post ret >= 0
+= vec_len(heap);
+
+// Check if heap is empty
+fn heap_is_empty(heap: i64) -> bool
+  pre heap != 0
+= vec_len(heap) == 0;
+
+// Peek at minimum element
+fn heap_peek(heap: i64) -> i64
+  pre heap != 0
+= if vec_len(heap) == 0 { 0 } else { vec_get(heap, 0) };
+
+// Swap two elements in the vec
+fn heap_swap(heap: i64, i: i64, j: i64) -> i64 = {
+    let a = vec_get(heap, i);
+    let b = vec_get(heap, j);
+    let _s1 = vec_set(heap, i, b);
+    let _s2 = vec_set(heap, j, a);
+    0
+};
+
+// Sift up: restore heap property after insertion
+fn heap_sift_up(heap: i64, idx: i64) -> i64 = {
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        if i == 0 { done = true; 0 }
+        else {
+            let parent = (i - 1) / 2;
+            if vec_get(heap, i) < vec_get(heap, parent) {
+                let _sw = heap_swap(heap, i, parent);
+                i = parent;
+                0
+            } else { done = true; 0 }
+        }
+    };
+    0
+};
+
+// Sift down: restore heap property after removal
+fn heap_sift_down(heap: i64, idx: i64) -> i64 = {
+    let len = vec_len(heap);
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        let left = 2 * i + 1;
+        let right = 2 * i + 2;
+        let mut smallest = i;
+        if left < len {
+            if vec_get(heap, left) < vec_get(heap, smallest) {
+                smallest = left;
+                0
+            } else { 0 }
+        } else { 0 };
+        if right < len {
+            if vec_get(heap, right) < vec_get(heap, smallest) {
+                smallest = right;
+                0
+            } else { 0 }
+        } else { 0 };
+        if smallest != i {
+            let _sw = heap_swap(heap, i, smallest);
+            i = smallest;
+            0
+        } else { done = true; 0 }
+    };
+    0
+};
+
+// Insert element into heap
+fn heap_push(heap: i64, value: i64) -> i64
+  pre heap != 0
+= {
+    let _p = vec_push(heap, value);
+    let idx = vec_len(heap) - 1;
+    heap_sift_up(heap, idx)
+};
+
+// Remove and return minimum element
+fn heap_pop(heap: i64) -> i64
+  pre heap != 0
+= {
+    let len = vec_len(heap);
+    if len == 0 { 0 }
+    else if len == 1 { vec_pop(heap) }
+    else {
+        let min_val = vec_get(heap, 0);
+        let last = vec_pop(heap);
+        let _s = vec_set(heap, 0, last);
+        let _d = heap_sift_down(heap, 0);
+        min_val
+    }
+};
+
+// Free heap memory
+fn heap_free(heap: i64) -> i64
+  pre heap != 0
+= { let _f = vec_free(heap); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_basic() -> i64 = {
+    let h = heap_new();
+    let _p1 = heap_push(h, 30);
+    let _p2 = heap_push(h, 10);
+    let _p3 = heap_push(h, 20);
+    if heap_size(h) != 3 { 0 }
+    else if heap_peek(h) != 10 { 0 }
+    else { let _f = heap_free(h); 1 }
+};
+
+fn test_pop_order() -> i64 = {
+    let h = heap_new();
+    let _p1 = heap_push(h, 50);
+    let _p2 = heap_push(h, 10);
+    let _p3 = heap_push(h, 40);
+    let _p4 = heap_push(h, 20);
+    let _p5 = heap_push(h, 30);
+    let v1 = heap_pop(h);
+    let v2 = heap_pop(h);
+    let v3 = heap_pop(h);
+    let v4 = heap_pop(h);
+    let v5 = heap_pop(h);
+    if v1 != 10 { 0 }
+    else if v2 != 20 { 0 }
+    else if v3 != 30 { 0 }
+    else if v4 != 40 { 0 }
+    else if v5 != 50 { 0 }
+    else { let _f = heap_free(h); 1 }
+};
+
+fn test_duplicates() -> i64 = {
+    let h = heap_new();
+    let _p1 = heap_push(h, 5);
+    let _p2 = heap_push(h, 5);
+    let _p3 = heap_push(h, 3);
+    let _p4 = heap_push(h, 3);
+    let v1 = heap_pop(h);
+    let v2 = heap_pop(h);
+    if v1 != 3 { 0 }
+    else if v2 != 3 { 0 }
+    else { let _f = heap_free(h); 1 }
+};
+
+fn test_single() -> i64 = {
+    let h = heap_new();
+    let _p = heap_push(h, 42);
+    if heap_size(h) != 1 { 0 }
+    else {
+        let v = heap_pop(h);
+        if v != 42 { 0 }
+        else if b2i(heap_is_empty(h)) != 1 { 0 }
+        else { let _f = heap_free(h); 1 }
+    }
+};
+
+fn test_sorted_insert() -> i64 = {
+    let h = heap_new();
+    let _p1 = heap_push(h, 1);
+    let _p2 = heap_push(h, 2);
+    let _p3 = heap_push(h, 3);
+    let _p4 = heap_push(h, 4);
+    let _p5 = heap_push(h, 5);
+    let v1 = heap_pop(h);
+    let v2 = heap_pop(h);
+    if v1 != 1 { 0 }
+    else if v2 != 2 { 0 }
+    else { let _f = heap_free(h); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("pop_order", test_pop_order());
+    let t3 = report("duplicates", test_duplicates());
+    let t4 = report("single", test_single());
+    let t5 = report("sorted_insert", test_sorted_insert());
+    let passed = t1 + t2 + t3 + t4 + t5;
+    let total = 5;
+    let _p1 = print_str("bmb-heap: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

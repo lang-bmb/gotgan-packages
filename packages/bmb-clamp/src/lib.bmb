@@ -1,0 +1,224 @@
+// bmb-clamp: Clamping and saturating arithmetic utilities
+// v0.1.0
+//
+// Functions:
+//   clamp_range(x, lo, hi)   -> i64  clamp x to [lo, hi]
+//   saturating_add(a, b)     -> i64  a + b clamped to i64 range
+//   saturating_sub(a, b)     -> i64  a - b clamped to i64 range
+//   saturating_mul(a, b)     -> i64  a * b clamped to i64 range
+//   clamp_positive(x)        -> i64  max(x, 0)
+//   clamp_byte(x)            -> i64  clamp x to [0, 255]
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// i64 bounds
+fn i64_max_val() -> i64 = 9223372036854775807;
+fn i64_min_val() -> i64 = 0 - 9223372036854775807 - 1;
+
+// ============================================================================
+// clamp_range: restrict x to [lo, hi]
+// ============================================================================
+
+fn clamp_range(x: i64, lo: i64, hi: i64) -> i64
+  pre lo <= hi
+  post ret >= lo and ret <= hi
+= if x < lo { lo }
+  else if x > hi { hi }
+  else { x };
+
+// ============================================================================
+// clamp_positive: max(x, 0)
+// ============================================================================
+
+fn clamp_positive(x: i64) -> i64
+  post ret >= 0
+= if x < 0 { 0 } else { x };
+
+// ============================================================================
+// clamp_byte: clamp to [0, 255]
+// ============================================================================
+
+fn clamp_byte(x: i64) -> i64
+  post ret >= 0 and ret <= 255
+= clamp_range(x, 0, 255);
+
+// ============================================================================
+// saturating_add: a + b clamped to i64 range
+// Overflow detection: if b > 0 and a > MAX - b, overflow
+//                     if b < 0 and a < MIN - b, underflow
+// ============================================================================
+
+fn saturating_add(a: i64, b: i64) -> i64 =
+    if b > 0 and a > i64_max_val() - b { i64_max_val() }
+    else if b < 0 and a < i64_min_val() - b { i64_min_val() }
+    else { a + b };
+
+// ============================================================================
+// saturating_sub: a - b clamped to i64 range
+// Overflow detection: if b < 0 and a > MAX + b, overflow
+//                     if b > 0 and a < MIN + b, underflow
+// ============================================================================
+
+fn saturating_sub(a: i64, b: i64) -> i64 =
+    if b < 0 and a > i64_max_val() + b { i64_max_val() }
+    else if b > 0 and a < i64_min_val() + b { i64_min_val() }
+    else { a - b };
+
+// ============================================================================
+// saturating_mul: a * b clamped to i64 range
+// Uses division to detect overflow before it happens.
+// ============================================================================
+
+fn saturating_mul(a: i64, b: i64) -> i64 = {
+    if a == 0 or b == 0 { 0 }
+    else if a == 1 { b }
+    else if b == 1 { a }
+    else if a == (0 - 1) {
+        if b == i64_min_val() { i64_max_val() }
+        else { 0 - b }
+    }
+    else if b == (0 - 1) {
+        if a == i64_min_val() { i64_max_val() }
+        else { 0 - a }
+    }
+    else {
+        // Both |a| >= 2 and |b| >= 2
+        let pos_a = if a < 0 { 0 - a } else { a };
+        let pos_b = if b < 0 { 0 - b } else { b };
+        let same_sign = (a > 0 and b > 0) or (a < 0 and b < 0);
+        if pos_a > i64_max_val() / pos_b {
+            // Overflow
+            if same_sign { i64_max_val() } else { i64_min_val() }
+        } else {
+            a * b
+        }
+    }
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_clamp_in_range() -> i64 = {
+    let r = clamp_range(5, 0, 10);
+    b2i(r == 5)
+};
+
+fn test_clamp_below() -> i64 = {
+    let r = clamp_range(0 - 5, 0, 10);
+    b2i(r == 0)
+};
+
+fn test_clamp_above() -> i64 = {
+    let r = clamp_range(15, 0, 10);
+    b2i(r == 10)
+};
+
+fn test_clamp_at_boundary() -> i64 = {
+    let lo = clamp_range(0, 0, 10);
+    let hi = clamp_range(10, 0, 10);
+    b2i(lo == 0 and hi == 10)
+};
+
+fn test_clamp_positive_pos() -> i64 = {
+    b2i(clamp_positive(42) == 42)
+};
+
+fn test_clamp_positive_neg() -> i64 = {
+    b2i(clamp_positive(0 - 7) == 0)
+};
+
+fn test_clamp_byte() -> i64 = {
+    let r1 = clamp_byte(128);
+    let r2 = clamp_byte(0 - 1);
+    let r3 = clamp_byte(300);
+    b2i(r1 == 128 and r2 == 0 and r3 == 255)
+};
+
+fn test_sat_add_normal() -> i64 = {
+    b2i(saturating_add(10, 20) == 30)
+};
+
+fn test_sat_add_overflow() -> i64 = {
+    let r = saturating_add(i64_max_val(), 1);
+    b2i(r == i64_max_val())
+};
+
+fn test_sat_add_underflow() -> i64 = {
+    let r = saturating_add(i64_min_val(), 0 - 1);
+    b2i(r == i64_min_val())
+};
+
+fn test_sat_sub_normal() -> i64 = {
+    b2i(saturating_sub(30, 10) == 20)
+};
+
+fn test_sat_sub_overflow() -> i64 = {
+    let r = saturating_sub(i64_max_val(), 0 - 1);
+    b2i(r == i64_max_val())
+};
+
+fn test_sat_sub_underflow() -> i64 = {
+    let r = saturating_sub(i64_min_val(), 1);
+    b2i(r == i64_min_val())
+};
+
+fn test_sat_mul_normal() -> i64 = {
+    b2i(saturating_mul(6, 7) == 42)
+};
+
+fn test_sat_mul_overflow() -> i64 = {
+    let r = saturating_mul(i64_max_val(), 2);
+    b2i(r == i64_max_val())
+};
+
+fn test_sat_mul_underflow() -> i64 = {
+    let r = saturating_mul(i64_max_val(), 0 - 2);
+    b2i(r == i64_min_val())
+};
+
+fn test_sat_mul_zero() -> i64 = {
+    b2i(saturating_mul(i64_max_val(), 0) == 0)
+};
+
+// ============================================================================
+// Report and main
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("clamp_in_range", test_clamp_in_range());
+    let t2 = report("clamp_below", test_clamp_below());
+    let t3 = report("clamp_above", test_clamp_above());
+    let t4 = report("clamp_at_boundary", test_clamp_at_boundary());
+    let t5 = report("clamp_positive_pos", test_clamp_positive_pos());
+    let t6 = report("clamp_positive_neg", test_clamp_positive_neg());
+    let t7 = report("clamp_byte", test_clamp_byte());
+    let t8 = report("sat_add_normal", test_sat_add_normal());
+    let t9 = report("sat_add_overflow", test_sat_add_overflow());
+    let t10 = report("sat_add_underflow", test_sat_add_underflow());
+    let t11 = report("sat_sub_normal", test_sat_sub_normal());
+    let t12 = report("sat_sub_overflow", test_sat_sub_overflow());
+    let t13 = report("sat_sub_underflow", test_sat_sub_underflow());
+    let t14 = report("sat_mul_normal", test_sat_mul_normal());
+    let t15 = report("sat_mul_overflow", test_sat_mul_overflow());
+    let t16 = report("sat_mul_underflow", test_sat_mul_underflow());
+    let t17 = report("sat_mul_zero", test_sat_mul_zero());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10
+                 + t11 + t12 + t13 + t14 + t15 + t16 + t17;
+    let total = 17;
+    let _p1 = print_str("bmb-clamp: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

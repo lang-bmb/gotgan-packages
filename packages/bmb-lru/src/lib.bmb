@@ -1,0 +1,398 @@
+// bmb-lru: LRU (Least Recently Used) cache
+// v0.1.0
+//
+// Fixed-capacity cache that evicts the least recently used entry on overflow.
+// Implemented as a doubly-linked list + integer hash map (open addressing).
+//
+// Memory layout:
+//   Cache header (32 bytes): [cap, size, head, tail]
+//     head = most-recently-used node id
+//     tail = least-recently-used node id
+//     (ids are 1-based; 0 = null)
+//
+//   Node pool: allocated as (cap+1) * NODE_SIZE bytes
+//     Node (40 bytes): [key, val, prev, next, used]
+//       used: 1 = live node, 0 = free slot
+//
+//   Hash table: parallel array of (cap*2) buckets
+//     Bucket (16 bytes): [key, node_id]   (node_id=0 means empty)
+//
+// Total: header + node_pool + hash_table
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+fn LRU_NODE_SIZE() -> i64 = 40;
+fn LRU_BUCKET_SIZE() -> i64 = 16;
+fn LRU_NULL() -> i64 = 0;
+fn LRU_NOT_FOUND() -> i64 = 0 - 9223372036854775807 - 1;
+
+// ============================================================================
+// Internal layout accessors
+// ============================================================================
+
+// Header offsets (32 bytes at base)
+fn lru_cap(cache: i64) -> i64 = load_i64(cache);
+fn lru_set_cap(cache: i64, v: i64) -> i64 = store_i64(cache, v);
+fn lru_sz(cache: i64) -> i64 = load_i64(cache + 8);
+fn lru_set_size(cache: i64, v: i64) -> i64 = store_i64(cache + 8, v);
+fn lru_head(cache: i64) -> i64 = load_i64(cache + 16);
+fn lru_set_head(cache: i64, v: i64) -> i64 = store_i64(cache + 16, v);
+fn lru_tail(cache: i64) -> i64 = load_i64(cache + 24);
+fn lru_set_tail(cache: i64, v: i64) -> i64 = store_i64(cache + 24, v);
+
+// Node pool base (after 32-byte header)
+fn lru_pool_base(cache: i64) -> i64 = cache + 32;
+
+// Hash table base (after header + (cap+1)*NODE_SIZE pool)
+fn lru_ht_base(cache: i64) -> i64 =
+    cache + 32 + (lru_cap(cache) + 1) * LRU_NODE_SIZE();
+
+// Node address for node id (1-based)
+fn lru_node_addr(cache: i64, id: i64) -> i64 =
+    lru_pool_base(cache) + id * LRU_NODE_SIZE();
+
+// Node field accessors
+fn node_key(cache: i64, id: i64) -> i64 = load_i64(lru_node_addr(cache, id));
+fn node_val(cache: i64, id: i64) -> i64 = load_i64(lru_node_addr(cache, id) + 8);
+fn node_prev(cache: i64, id: i64) -> i64 = load_i64(lru_node_addr(cache, id) + 16);
+fn node_next(cache: i64, id: i64) -> i64 = load_i64(lru_node_addr(cache, id) + 24);
+fn node_used(cache: i64, id: i64) -> i64 = load_i64(lru_node_addr(cache, id) + 32);
+
+fn node_set_key(cache: i64, id: i64, v: i64) -> i64 = store_i64(lru_node_addr(cache, id), v);
+fn node_set_val(cache: i64, id: i64, v: i64) -> i64 = store_i64(lru_node_addr(cache, id) + 8, v);
+fn node_set_prev(cache: i64, id: i64, v: i64) -> i64 = store_i64(lru_node_addr(cache, id) + 16, v);
+fn node_set_next(cache: i64, id: i64, v: i64) -> i64 = store_i64(lru_node_addr(cache, id) + 24, v);
+fn node_set_used(cache: i64, id: i64, v: i64) -> i64 = store_i64(lru_node_addr(cache, id) + 32, v);
+
+// ============================================================================
+// Hash table helpers (open addressing, linear probing)
+// ============================================================================
+
+fn lru_ht_cap(cache: i64) -> i64 = lru_cap(cache) * 2;
+
+fn lru_ht_bucket(cache: i64, slot: i64) -> i64 =
+    lru_ht_base(cache) + slot * LRU_BUCKET_SIZE();
+
+fn lru_ht_key(cache: i64, slot: i64) -> i64 =
+    load_i64(lru_ht_bucket(cache, slot));
+
+fn lru_ht_id(cache: i64, slot: i64) -> i64 =
+    load_i64(lru_ht_bucket(cache, slot) + 8);
+
+fn lru_ht_set(cache: i64, slot: i64, key: i64, id: i64) -> i64 = {
+    let b = lru_ht_bucket(cache, slot);
+    let _s1 = store_i64(b, key);
+    let _s2 = store_i64(b + 8, id);
+    0
+};
+
+fn lru_hash(key: i64, htcap: i64) -> i64 = {
+    let h = key * 6364136223846793005;
+    let h2 = h bxor (h >> 32);
+    let pos = h2 band 9223372036854775807;
+    pos - (pos / htcap) * htcap
+};
+
+// Find slot for key; returns slot index. If not found, returns first empty slot.
+fn lru_ht_find_slot(cache: i64, key: i64) -> i64 = {
+    let htcap = lru_ht_cap(cache);
+    let mut slot = lru_hash(key, htcap);
+    let mut found = 0 - 1;
+    let mut i = 0;
+    while i < htcap {
+        let sid = lru_ht_id(cache, slot);
+        let _r = if sid == 0 {
+            if found == 0 - 1 { found = slot; 0 } else { 0 };
+            i = htcap; 0
+        } else if lru_ht_key(cache, slot) == key {
+            found = slot;
+            i = htcap; 0
+        } else {
+            slot = if slot + 1 >= htcap { 0 } else { slot + 1 };
+            i = i + 1; 0
+        };
+        0
+    };
+    found
+};
+
+// Find slot that contains key (returns -1 if not found)
+fn lru_ht_lookup(cache: i64, key: i64) -> i64 = {
+    let htcap = lru_ht_cap(cache);
+    let mut slot = lru_hash(key, htcap);
+    let mut found = 0 - 1;
+    let mut i = 0;
+    while i < htcap {
+        let sid = lru_ht_id(cache, slot);
+        let _r = if sid == 0 {
+            i = htcap; 0
+        } else if lru_ht_key(cache, slot) == key {
+            found = slot; i = htcap; 0
+        } else {
+            slot = if slot + 1 >= htcap { 0 } else { slot + 1 };
+            i = i + 1; 0
+        };
+        0
+    };
+    found
+};
+
+// Remove key from hash table (tombstone: set id=0)
+fn lru_ht_remove(cache: i64, key: i64) -> i64 = {
+    let slot = lru_ht_lookup(cache, key);
+    if slot == 0 - 1 { 0 }
+    else { lru_ht_set(cache, slot, 0, 0) }
+};
+
+// ============================================================================
+// Doubly-linked list helpers (MRU at head, LRU at tail)
+// ============================================================================
+
+// Detach node from its current position in the list
+fn lru_detach(cache: i64, id: i64) -> i64 = {
+    let p = node_prev(cache, id);
+    let n = node_next(cache, id);
+    let _rp = if p != LRU_NULL() { node_set_next(cache, p, n) } else { 0 };
+    let _rn = if n != LRU_NULL() { node_set_prev(cache, n, p) } else { 0 };
+    let _rh = if lru_head(cache) == id { lru_set_head(cache, n) } else { 0 };
+    let _rt = if lru_tail(cache) == id { lru_set_tail(cache, p) } else { 0 };
+    let _sp = node_set_prev(cache, id, LRU_NULL());
+    let _sn = node_set_next(cache, id, LRU_NULL());
+    0
+};
+
+// Insert node at head (MRU position)
+fn lru_push_head(cache: i64, id: i64) -> i64 = {
+    let old_head = lru_head(cache);
+    let _sn = node_set_next(cache, id, old_head);
+    let _sp = node_set_prev(cache, id, LRU_NULL());
+    let _rp = if old_head != LRU_NULL() { node_set_prev(cache, old_head, id) } else { 0 };
+    let _sh = lru_set_head(cache, id);
+    let _st = if lru_tail(cache) == LRU_NULL() { lru_set_tail(cache, id) } else { 0 };
+    0
+};
+
+// Move node to head (mark as most recently used)
+fn lru_move_to_head(cache: i64, id: i64) -> i64 = {
+    let _d = lru_detach(cache, id);
+    lru_push_head(cache, id)
+};
+
+// Evict the tail node (LRU), returns its node id
+fn lru_evict_tail(cache: i64) -> i64 = {
+    let id = lru_tail(cache);
+    if id == LRU_NULL() { LRU_NULL() }
+    else {
+        let k = node_key(cache, id);
+        let _rh = lru_ht_remove(cache, k);
+        let _rd = lru_detach(cache, id);
+        let _ru = node_set_used(cache, id, 0);
+        let _rs = lru_set_size(cache, lru_sz(cache) - 1);
+        id
+    }
+};
+
+// Allocate a free node slot (1-based). Scans pool linearly.
+fn lru_alloc_node(cache: i64) -> i64 = {
+    let cap = lru_cap(cache);
+    let mut i = 1;
+    let mut found = 0;
+    while i <= cap {
+        if node_used(cache, i) == 0 {
+            found = i;
+            i = cap + 1; 0
+        } else {
+            i = i + 1; 0
+        };
+        0
+    };
+    found
+};
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+fn lru_new(cap: i64) -> i64
+  pre cap > 0
+  post ret != 0
+= {
+    let htcap = cap * 2;
+    let total = 32 + (cap + 1) * LRU_NODE_SIZE() + htcap * LRU_BUCKET_SIZE();
+    let cache = malloc(total);
+    // Zero entire allocation
+    let mut i = 0;
+    while i < total {
+        let _s = store_i64(cache + i, 0);
+        i = i + 8;
+        0
+    };
+    let _sc = lru_set_cap(cache, cap);
+    cache
+};
+
+fn lru_get(cache: i64, key: i64) -> i64
+  pre cache != 0
+= {
+    let slot = lru_ht_lookup(cache, key);
+    if slot == 0 - 1 { LRU_NOT_FOUND() }
+    else {
+        let id = lru_ht_id(cache, slot);
+        let v = node_val(cache, id);
+        let _m = lru_move_to_head(cache, id);
+        v
+    }
+};
+
+fn lru_put(cache: i64, key: i64, val: i64) -> i64
+  pre cache != 0
+= {
+    let slot = lru_ht_lookup(cache, key);
+    if slot != 0 - 1 {
+        // Key exists: update value, move to head
+        let id = lru_ht_id(cache, slot);
+        let _sv = node_set_val(cache, id, val);
+        let _m = lru_move_to_head(cache, id);
+        0
+    } else {
+        // New key: may need eviction
+        let cap = lru_cap(cache);
+        let sz = lru_sz(cache);
+        let id = if sz >= cap {
+            lru_evict_tail(cache)
+        } else {
+            lru_alloc_node(cache)
+        };
+        let _sk = node_set_key(cache, id, key);
+        let _sv = node_set_val(cache, id, val);
+        let _su = node_set_used(cache, id, 1);
+        let ins_slot = lru_ht_find_slot(cache, key);
+        let _hi = lru_ht_set(cache, ins_slot, key, id);
+        let _ph = lru_push_head(cache, id);
+        let _ss = lru_set_size(cache, lru_sz(cache) + 1);
+        0
+    }
+};
+
+fn lru_size(cache: i64) -> i64
+  pre cache != 0
+  post ret >= 0
+= load_i64(cache + 8);
+
+fn lru_free(cache: i64) -> i64
+  pre cache != 0
+= { let _f = free(cache); 0 };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic() -> i64 = {
+    let c = lru_new(3);
+    let _p1 = lru_put(c, 1, 100);
+    let _p2 = lru_put(c, 2, 200);
+    let _p3 = lru_put(c, 3, 300);
+    let v1 = lru_get(c, 1);
+    let v2 = lru_get(c, 2);
+    let v3 = lru_get(c, 3);
+    let sz = lru_size(c);
+    let _f = lru_free(c);
+    if v1 == 100 and v2 == 200 and v3 == 300 and sz == 3 { 1 } else { 0 }
+};
+
+fn test_eviction() -> i64 = {
+    // cap=2: insert 1,2 then insert 3 -> evicts LRU (1)
+    let c = lru_new(2);
+    let _p1 = lru_put(c, 1, 10);
+    let _p2 = lru_put(c, 2, 20);
+    let _p3 = lru_put(c, 3, 30);  // evicts key=1
+    let v1 = lru_get(c, 1);
+    let v2 = lru_get(c, 2);
+    let v3 = lru_get(c, 3);
+    let sz = lru_size(c);
+    let _f = lru_free(c);
+    if v1 == LRU_NOT_FOUND() and v2 == 20 and v3 == 30 and sz == 2 { 1 } else { 0 }
+};
+
+fn test_eviction_after_get() -> i64 = {
+    // cap=2: insert 1,2; get 1 (1 becomes MRU); insert 3 -> evicts 2
+    let c = lru_new(2);
+    let _p1 = lru_put(c, 1, 10);
+    let _p2 = lru_put(c, 2, 20);
+    let _g1 = lru_get(c, 1);  // 1 is now MRU, 2 is LRU
+    let _p3 = lru_put(c, 3, 30);  // evicts key=2
+    let v1 = lru_get(c, 1);
+    let v2 = lru_get(c, 2);
+    let v3 = lru_get(c, 3);
+    let _f = lru_free(c);
+    if v1 == 10 and v2 == LRU_NOT_FOUND() and v3 == 30 { 1 } else { 0 }
+};
+
+fn test_update_existing() -> i64 = {
+    let c = lru_new(3);
+    let _p1 = lru_put(c, 42, 100);
+    let _p2 = lru_put(c, 42, 999);
+    let v = lru_get(c, 42);
+    let sz = lru_size(c);
+    let _f = lru_free(c);
+    if v == 999 and sz == 1 { 1 } else { 0 }
+};
+
+fn test_not_found() -> i64 = {
+    let c = lru_new(4);
+    let _p = lru_put(c, 5, 50);
+    let v = lru_get(c, 99);
+    let _f = lru_free(c);
+    if v == LRU_NOT_FOUND() { 1 } else { 0 }
+};
+
+fn test_many_evictions() -> i64 = {
+    // cap=3, insert 1..6, only 4,5,6 should remain
+    let c = lru_new(3);
+    let _p1 = lru_put(c, 1, 1);
+    let _p2 = lru_put(c, 2, 2);
+    let _p3 = lru_put(c, 3, 3);
+    let _p4 = lru_put(c, 4, 4);
+    let _p5 = lru_put(c, 5, 5);
+    let _p6 = lru_put(c, 6, 6);
+    let v1 = lru_get(c, 1);
+    let v2 = lru_get(c, 2);
+    let v3 = lru_get(c, 3);
+    let v4 = lru_get(c, 4);
+    let v5 = lru_get(c, 5);
+    let v6 = lru_get(c, 6);
+    let sz = lru_size(c);
+    let _f = lru_free(c);
+    if v1 == LRU_NOT_FOUND() and v2 == LRU_NOT_FOUND() and v3 == LRU_NOT_FOUND()
+       and v4 == 4 and v5 == 5 and v6 == 6 and sz == 3 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("eviction", test_eviction());
+    let t3 = report("eviction_after_get", test_eviction_after_get());
+    let t4 = report("update_existing", test_update_existing());
+    let t5 = report("not_found", test_not_found());
+    let t6 = report("many_evictions", test_many_evictions());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-lru: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

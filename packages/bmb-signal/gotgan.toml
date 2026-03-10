@@ -1,0 +1,9 @@
+[package]
+name = "bmb-signal"
+version = "0.1.0"
+description = "Signal/event bus simulation for BMB"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

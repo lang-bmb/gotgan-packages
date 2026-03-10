@@ -1,0 +1,289 @@
+// bmb-schedule: Simple job scheduler simulation
+//
+// Uses a max-priority heap backed by a vec of job records.
+// Each job is stored as 3 consecutive i64 values in a flat vec:
+//   [id0, priority0, duration0,  id1, priority1, duration1,  ...]
+// The heap is kept as a max-heap on priority (higher = runs first).
+// Ties are broken by insertion order (lower index wins, naturally).
+//
+// Scheduler state: a single vec (the job array).
+// External callers receive the vec handle as the "scheduler".
+
+fn SCHED_STRIDE() -> i64 = 3;  // fields per job: id, priority, duration
+
+// Create a new scheduler (empty job vec)
+fn sched_new() -> i64
+  post ret != 0
+= vec_new();
+
+// Number of pending jobs
+fn sched_pending(s: i64) -> i64
+  pre s != 0
+  post ret >= 0
+= vec_len(s) / SCHED_STRIDE();
+
+// Get field of job at heap index i (0-based)
+fn sched_id(s: i64, i: i64) -> i64
+  pre s != 0 and i >= 0
+= vec_get(s, i * SCHED_STRIDE());
+
+fn sched_prio(s: i64, i: i64) -> i64
+  pre s != 0 and i >= 0
+= vec_get(s, i * SCHED_STRIDE() + 1);
+
+fn sched_dur(s: i64, i: i64) -> i64
+  pre s != 0 and i >= 0
+= vec_get(s, i * SCHED_STRIDE() + 2);
+
+// Swap two jobs at heap indices i and j
+fn sched_swap(s: i64, i: i64, j: i64) -> i64 = {
+    let bi = i * SCHED_STRIDE();
+    let bj = j * SCHED_STRIDE();
+    let id_i  = vec_get(s, bi);
+    let pr_i  = vec_get(s, bi + 1);
+    let du_i  = vec_get(s, bi + 2);
+    let id_j  = vec_get(s, bj);
+    let pr_j  = vec_get(s, bj + 1);
+    let du_j  = vec_get(s, bj + 2);
+    let _s1 = vec_set(s, bi,     id_j);
+    let _s2 = vec_set(s, bi + 1, pr_j);
+    let _s3 = vec_set(s, bi + 2, du_j);
+    let _s4 = vec_set(s, bj,     id_i);
+    let _s5 = vec_set(s, bj + 1, pr_i);
+    let _s6 = vec_set(s, bj + 2, du_i);
+    0
+};
+
+// Sift-up from index idx (max-heap: parent must have higher priority)
+fn sched_sift_up(s: i64, idx: i64) -> i64 = {
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        if i == 0 {
+            done = true;
+            0
+        } else {
+            let parent = (i - 1) / 2;
+            if sched_prio(s, i) > sched_prio(s, parent) {
+                let _sw = sched_swap(s, i, parent);
+                i = parent;
+                0
+            } else {
+                done = true;
+                0
+            }
+        }
+    };
+    0
+};
+
+// Sift-down from index idx (max-heap)
+fn sched_sift_down(s: i64, idx: i64) -> i64 = {
+    let n = sched_pending(s);
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        let left = 2 * i + 1;
+        let right = 2 * i + 2;
+        let mut largest = i;
+        if left < n {
+            if sched_prio(s, left) > sched_prio(s, largest) {
+                largest = left;
+                0
+            } else { 0 }
+        } else { 0 };
+        if right < n {
+            if sched_prio(s, right) > sched_prio(s, largest) {
+                largest = right;
+                0
+            } else { 0 }
+        } else { 0 };
+        if largest != i {
+            let _sw = sched_swap(s, i, largest);
+            i = largest;
+            0
+        } else {
+            done = true;
+            0
+        }
+    };
+    0
+};
+
+// Add a job to the scheduler
+fn sched_add_job(s: i64, id: i64, priority: i64, duration: i64) -> i64
+  pre s != 0
+= {
+    let _p1 = vec_push(s, id);
+    let _p2 = vec_push(s, priority);
+    let _p3 = vec_push(s, duration);
+    let idx = sched_pending(s) - 1;
+    sched_sift_up(s, idx)
+};
+
+// Run the highest-priority job: removes it and returns its id.
+// Returns -1 if scheduler is empty.
+fn sched_run_next(s: i64) -> i64
+  pre s != 0
+= {
+    let n = sched_pending(s);
+    if n == 0 {
+        -1
+    } else if n == 1 {
+        let id = sched_id(s, 0);
+        // Remove last 3 elements (the only job)
+        let _d1 = vec_pop(s);
+        let _d2 = vec_pop(s);
+        let _d3 = vec_pop(s);
+        id
+    } else {
+        let id = sched_id(s, 0);
+        // Move last job to root
+        let last_base = (n - 1) * SCHED_STRIDE();
+        let last_id  = vec_get(s, last_base);
+        let last_pr  = vec_get(s, last_base + 1);
+        let last_dur = vec_get(s, last_base + 2);
+        // Pop last 3 elements
+        let _d1 = vec_pop(s);
+        let _d2 = vec_pop(s);
+        let _d3 = vec_pop(s);
+        // Overwrite root with last job
+        let _s1 = vec_set(s, 0, last_id);
+        let _s2 = vec_set(s, 1, last_pr);
+        let _s3 = vec_set(s, 2, last_dur);
+        let _sd = sched_sift_down(s, 0);
+        id
+    }
+};
+
+// Total duration of all pending jobs
+fn sched_total_time(s: i64) -> i64
+  pre s != 0
+  post ret >= 0
+= {
+    let n = sched_pending(s);
+    let mut total = 0;
+    let mut i = 0;
+    while i < n {
+        total = total + sched_dur(s, i);
+        i = i + 1;
+        0
+    };
+    total
+};
+
+// Free the scheduler
+fn sched_free(s: i64) -> i64
+  pre s != 0
+= { let _f = vec_free(s); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Empty scheduler
+fn test_empty() -> i64 = {
+    let s = sched_new();
+    let p = sched_pending(s);
+    let t = sched_total_time(s);
+    let r = sched_run_next(s);
+    let _f = sched_free(s);
+    if p == 0 and t == 0 and r == -1 { 1 } else { 0 }
+};
+
+// Single job
+fn test_single() -> i64 = {
+    let s = sched_new();
+    let _a = sched_add_job(s, 42, 10, 5);
+    let p = sched_pending(s);
+    let t = sched_total_time(s);
+    let id = sched_run_next(s);
+    let p2 = sched_pending(s);
+    let _f = sched_free(s);
+    if p == 1 and t == 5 and id == 42 and p2 == 0 { 1 } else { 0 }
+};
+
+// Highest priority runs first
+fn test_priority_order() -> i64 = {
+    let s = sched_new();
+    // Add jobs: (id=1,prio=10), (id=2,prio=30), (id=3,prio=20)
+    let _a1 = sched_add_job(s, 1, 10, 1);
+    let _a2 = sched_add_job(s, 2, 30, 1);
+    let _a3 = sched_add_job(s, 3, 20, 1);
+    let r1 = sched_run_next(s);  // prio 30 -> id=2
+    let r2 = sched_run_next(s);  // prio 20 -> id=3
+    let r3 = sched_run_next(s);  // prio 10 -> id=1
+    let _f = sched_free(s);
+    if r1 == 2 and r2 == 3 and r3 == 1 { 1 } else { 0 }
+};
+
+// Total time accumulation
+fn test_total_time() -> i64 = {
+    let s = sched_new();
+    let _a1 = sched_add_job(s, 1, 5, 10);
+    let _a2 = sched_add_job(s, 2, 3, 20);
+    let _a3 = sched_add_job(s, 3, 8, 30);
+    let t = sched_total_time(s);
+    let _f = sched_free(s);
+    if t == 60 { 1 } else { 0 }
+};
+
+// Pending decreases after run
+fn test_pending_decreases() -> i64 = {
+    let s = sched_new();
+    let _a1 = sched_add_job(s, 10, 5, 1);
+    let _a2 = sched_add_job(s, 20, 9, 1);
+    let _a3 = sched_add_job(s, 30, 3, 1);
+    let p1 = sched_pending(s);
+    let _r1 = sched_run_next(s);
+    let p2 = sched_pending(s);
+    let _r2 = sched_run_next(s);
+    let p3 = sched_pending(s);
+    let _f = sched_free(s);
+    if p1 == 3 and p2 == 2 and p3 == 1 { 1 } else { 0 }
+};
+
+// Many jobs in reverse priority order
+fn test_many_jobs() -> i64 = {
+    let s = sched_new();
+    let mut i = 0;
+    while i < 10 {
+        let _a = sched_add_job(s, i, i, 1);
+        i = i + 1;
+        0
+    };
+    // run_next should return id=9 (prio=9), then 8, ..., then 0
+    let r1 = sched_run_next(s);
+    let r2 = sched_run_next(s);
+    let r3 = sched_run_next(s);
+    let _f = sched_free(s);
+    if r1 == 9 and r2 == 8 and r3 == 7 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("empty", test_empty());
+    let t2 = report("single", test_single());
+    let t3 = report("priority_order", test_priority_order());
+    let t4 = report("total_time", test_total_time());
+    let t5 = report("pending_decreases", test_pending_decreases());
+    let t6 = report("many_jobs", test_many_jobs());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-schedule: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

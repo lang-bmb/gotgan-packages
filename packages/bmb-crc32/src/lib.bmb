@@ -1,0 +1,145 @@
+// bmb-crc32: CRC-32 checksum implementation
+// Uses polynomial 0xEDB88320 (reflected form of CRC-32/ISO-HDLC)
+// All arithmetic uses i64, masked to 32 bits where needed.
+
+fn MASK32() -> i64 = 4294967295;
+
+// CRC-32 polynomial (reflected): 0xEDB88320 = 3988292384
+fn crc32_poly() -> i64 = 3988292384;
+
+// Compute CRC for a single byte, updating running crc
+fn crc32_byte(crc: i64, byte: i64) -> i64 = {
+    let mut c = (crc bxor (byte band 255)) band MASK32();
+    let mut i = 0;
+    while i < 8 {
+        let low_bit = c band 1;
+        c = (c >> 1) band MASK32();
+        if low_bit == 1 {
+            c = (c bxor crc32_poly()) band MASK32();
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    c
+};
+
+// Compute CRC-32 of a vec of byte values (i64 values 0-255)
+fn crc32_vec(data: i64, len: i64) -> i64
+  pre data != 0 and len >= 0
+= {
+    let mut crc = MASK32();
+    let mut i = 0;
+    while i < len {
+        let byte = vec_get(data, i);
+        crc = crc32_byte(crc, byte);
+        i = i + 1;
+        0
+    };
+    (crc bxor MASK32()) band MASK32()
+};
+
+// Compute CRC-32 of consecutive byte values from start to end (exclusive)
+fn crc32_range(start: i64, end_val: i64) -> i64
+  pre start >= 0 and end_val >= start
+= {
+    let mut crc = MASK32();
+    let mut i = start;
+    while i < end_val {
+        crc = crc32_byte(crc, i band 255);
+        i = i + 1;
+        0
+    };
+    (crc bxor MASK32()) band MASK32()
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_empty() -> i64 = {
+    let data = vec_new();
+    let crc = crc32_vec(data, 0);
+    let _f = vec_free(data);
+    // CRC-32 of empty input = 0x00000000
+    if crc == 0 { 1 } else { 0 }
+};
+
+fn test_single_byte() -> i64 = {
+    let data = vec_new();
+    let _p = vec_push(data, 0);
+    let crc = crc32_vec(data, 1);
+    let _f = vec_free(data);
+    // CRC-32 of [0x00] = 0xD202EF8D = 3523407757
+    if crc == 3523407757 { 1 } else { 0 }
+};
+
+fn test_incremental() -> i64 = {
+    // Verify incremental matches full computation
+    let data = vec_new();
+    let _p1 = vec_push(data, 65);  // 'A'
+    let _p2 = vec_push(data, 66);  // 'B'
+    let _p3 = vec_push(data, 67);  // 'C'
+    let full_crc = crc32_vec(data, 3);
+
+    // Compute incrementally
+    let mut crc = MASK32();
+    crc = crc32_byte(crc, 65);
+    crc = crc32_byte(crc, 66);
+    crc = crc32_byte(crc, 67);
+    let inc_crc = (crc bxor MASK32()) band MASK32();
+
+    let _f = vec_free(data);
+    if full_crc == inc_crc { 1 } else { 0 }
+};
+
+fn test_different_data() -> i64 = {
+    // Different data should produce different CRCs
+    let d1 = vec_new();
+    let _p1 = vec_push(d1, 1);
+    let crc1 = crc32_vec(d1, 1);
+    let _f1 = vec_free(d1);
+
+    let d2 = vec_new();
+    let _p2 = vec_push(d2, 2);
+    let crc2 = crc32_vec(d2, 1);
+    let _f2 = vec_free(d2);
+
+    if crc1 != crc2 { 1 } else { 0 }
+};
+
+fn test_known_abc() -> i64 = {
+    // CRC-32("ABC") = 0xA3830348 = 2743272264
+    let data = vec_new();
+    let _p1 = vec_push(data, 65);
+    let _p2 = vec_push(data, 66);
+    let _p3 = vec_push(data, 67);
+    let crc = crc32_vec(data, 3);
+    let _f = vec_free(data);
+    if crc == 2743272264 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("empty", test_empty());
+    let t2 = report("single_byte", test_single_byte());
+    let t3 = report("incremental", test_incremental());
+    let t4 = report("different_data", test_different_data());
+    let t5 = report("known_abc", test_known_abc());
+    let passed = t1 + t2 + t3 + t4 + t5;
+    let total = 5;
+    let _p1 = print_str("bmb-crc32: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

@@ -12,7 +12,7 @@ fn xorshift64star(state: i64) -> i64 =
     let x1 = state bxor (state >> 12);
     let x2 = x1 bxor (x1 << 25);
     let x3 = x2 bxor (x2 >> 27);
-    x3 * 2685821657736338717;
+    x3 *% 2685821657736338717;
 
 // Advance RNG state (returns new state)
 fn next_state(state: i64) -> i64 = xorshift64star(state);
@@ -65,7 +65,7 @@ fn rand_n(state: i64, n: i64) -> i64 = {
 
 // Simple hash function for seed generation from arbitrary i64
 fn hash_seed(x: i64) -> i64 =
-    let h = x * 6364136223846793005 + 1442695040888963407;
+    let h = x *% 6364136223846793005 +% 1442695040888963407;
     init_seed(h bxor (h >> 16));
 
 // Shuffle helper: determine if position i should swap
@@ -86,7 +86,7 @@ fn lcg_m() -> i64 = 2147483648;
 // Legacy LCG next_state
 fn lcg_next(state: i64) -> i64
   post ret >= 0
-= let raw = state * lcg_a() + lcg_c();
+= let raw = state *% lcg_a() +% lcg_c();
   let result = if raw < 0 { 0 - raw } else { raw };
   result - (result / lcg_m()) * lcg_m();
 

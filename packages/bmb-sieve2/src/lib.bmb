@@ -1,0 +1,259 @@
+// bmb-sieve2: Sieve of Eratosthenes for BMB
+// Prime generation, primality checking, and prime counting
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Integer square root (Newton's method)
+fn isqrt(n: i64) -> i64
+  pre n >= 0
+= if n == 0 { 0 } else if n == 1 { 1 } else {
+    {
+        let mut x = n / 2;
+        let mut done = false;
+        while not done {
+            let nx = (x + n / x) / 2;
+            let _r = if nx >= x {
+                { done = true; 0 }
+            } else {
+                { x = nx; 0 }
+            };
+            0
+        };
+        x
+    }
+};
+
+// Sieve of Eratosthenes: returns a vec where vec[i] = 1 if i is prime, 0 otherwise
+// Caller must vec_free the result
+fn sieve(n: i64) -> i64
+  pre n >= 0
+= {
+    let v = vec_new();
+    // Initialize: 0 and 1 are not prime
+    let mut i = 0;
+    while i <= n {
+        let _p = if i < 2 {
+            vec_push(v, 0)
+        } else {
+            vec_push(v, 1)
+        };
+        i = i + 1;
+        0
+    };
+    // Sieve
+    let sq = isqrt(n);
+    let mut p = 2;
+    while p <= sq {
+        let is_p = vec_get(v, p);
+        let _r = if is_p == 1 {
+            {
+                let mut j = p * p;
+                while j <= n {
+                    let _s = vec_set(v, j, 0);
+                    j = j + p;
+                    0
+                };
+                0
+            }
+        } else { 0 };
+        p = p + 1;
+        0
+    };
+    v
+};
+
+// Check if n is prime using the sieve
+fn is_prime_sieve(n: i64) -> bool
+  pre n >= 0
+= {
+    let v = sieve(n);
+    let result = if n < 2 { false } else {
+        vec_get(v, n) == 1
+    };
+    let _f = vec_free(v);
+    result
+};
+
+// Trial division primality test (no sieve needed)
+fn is_prime(n: i64) -> bool
+  pre n >= 0
+= if n < 2 { false } else if n == 2 { true } else if n % 2 == 0 { false } else {
+    {
+        let mut d = 3;
+        let mut prime = true;
+        let mut done = false;
+        while not done {
+            let _r = if d * d > n {
+                { done = true; 0 }
+            } else if n % d == 0 {
+                { prime = false; done = true; 0 }
+            } else {
+                { d = d + 2; 0 }
+            };
+            0
+        };
+        prime
+    }
+};
+
+// Count primes up to n using sieve
+fn count_primes(n: i64) -> i64
+  pre n >= 0
+  post ret >= 0
+= {
+    let v = sieve(n);
+    let mut count = 0;
+    let mut i = 2;
+    while i <= n {
+        let _r = if vec_get(v, i) == 1 {
+            { count = count + 1; 0 }
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    let _f = vec_free(v);
+    count
+};
+
+// Get the nth prime (1-indexed: nth_prime(1) = 2, nth_prime(2) = 3, ...)
+fn nth_prime(n: i64) -> i64
+  pre n >= 1
+= {
+    let mut count = 0;
+    let mut candidate = 1;
+    let mut done = false;
+    while not done {
+        candidate = candidate + 1;
+        let _r = if is_prime(candidate) {
+            {
+                count = count + 1;
+                let _d = if count == n {
+                    { done = true; 0 }
+                } else { 0 };
+                0
+            }
+        } else { 0 };
+        0
+    };
+    candidate
+};
+
+// Collect all primes up to n into a vec. Caller must vec_free.
+fn primes_up_to(n: i64) -> i64
+  pre n >= 0
+= {
+    let sv = sieve(n);
+    let result = vec_new();
+    let mut i = 2;
+    while i <= n {
+        let _r = if vec_get(sv, i) == 1 {
+            { let _p = vec_push(result, i); 0 }
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    let _f = vec_free(sv);
+    result
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn test_is_prime() -> i64 = {
+    let r1 = b2i(is_prime(2));
+    let r2 = b2i(is_prime(3));
+    let r3 = b2i(is_prime(4));
+    let r4 = b2i(is_prime(17));
+    let r5 = b2i(is_prime(1));
+    let r6 = b2i(is_prime(97));
+    let r7 = b2i(is_prime(100));
+    if r1 == 1 and r2 == 1 and r3 == 0 and r4 == 1
+       and r5 == 0 and r6 == 1 and r7 == 0 { 1 } else { 0 }
+};
+
+fn test_is_prime_sieve() -> i64 = {
+    let r1 = b2i(is_prime_sieve(2));
+    let r2 = b2i(is_prime_sieve(13));
+    let r3 = b2i(is_prime_sieve(15));
+    let r4 = b2i(is_prime_sieve(0));
+    if r1 == 1 and r2 == 1 and r3 == 0 and r4 == 0 { 1 } else { 0 }
+};
+
+fn test_count_primes() -> i64 = {
+    // Primes <= 10: 2,3,5,7 = 4
+    let c1 = count_primes(10);
+    // Primes <= 30: 2,3,5,7,11,13,17,19,23,29 = 10
+    let c2 = count_primes(30);
+    // Primes <= 1: 0
+    let c3 = count_primes(1);
+    // Primes <= 2: 1
+    let c4 = count_primes(2);
+    if c1 == 4 and c2 == 10 and c3 == 0 and c4 == 1 { 1 } else { 0 }
+};
+
+fn test_nth_prime() -> i64 = {
+    let p1 = nth_prime(1);  // 2
+    let p2 = nth_prime(2);  // 3
+    let p3 = nth_prime(5);  // 11
+    let p4 = nth_prime(10); // 29
+    if p1 == 2 and p2 == 3 and p3 == 11 and p4 == 29 { 1 } else { 0 }
+};
+
+fn test_sieve_values() -> i64 = {
+    let v = sieve(20);
+    // Check specific values
+    let ok = vec_get(v, 0) == 0 and vec_get(v, 1) == 0
+        and vec_get(v, 2) == 1 and vec_get(v, 3) == 1
+        and vec_get(v, 4) == 0 and vec_get(v, 5) == 1
+        and vec_get(v, 9) == 0 and vec_get(v, 11) == 1
+        and vec_get(v, 19) == 1 and vec_get(v, 20) == 0;
+    let _f = vec_free(v);
+    b2i(ok)
+};
+
+fn test_primes_up_to() -> i64 = {
+    let v = primes_up_to(20);
+    let len = vec_len(v);
+    // Primes up to 20: 2,3,5,7,11,13,17,19 = 8 primes
+    let ok = len == 8
+        and vec_get(v, 0) == 2 and vec_get(v, 1) == 3
+        and vec_get(v, 2) == 5 and vec_get(v, 3) == 7
+        and vec_get(v, 4) == 11 and vec_get(v, 5) == 13
+        and vec_get(v, 6) == 17 and vec_get(v, 7) == 19;
+    let _f = vec_free(v);
+    b2i(ok)
+};
+
+fn test_count_primes_100() -> i64 = {
+    // There are 25 primes <= 100
+    let c = count_primes(100);
+    if c == 25 { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("is_prime", test_is_prime());
+    let t2 = report("is_prime_sieve", test_is_prime_sieve());
+    let t3 = report("count_primes", test_count_primes());
+    let t4 = report("nth_prime", test_nth_prime());
+    let t5 = report("sieve_values", test_sieve_values());
+    let t6 = report("primes_up_to", test_primes_up_to());
+    let t7 = report("count_primes_100", test_count_primes_100());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = 7;
+    let _p1 = print_str("bmb-sieve2: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

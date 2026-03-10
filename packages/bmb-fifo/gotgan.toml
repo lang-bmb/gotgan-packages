@@ -1,0 +1,9 @@
+[package]
+name = "bmb-fifo"
+version = "0.1.0"
+description = "FIFO queue using two vecs with amortized O(1) operations"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

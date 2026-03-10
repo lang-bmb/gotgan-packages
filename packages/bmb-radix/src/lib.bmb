@@ -1,0 +1,279 @@
+// bmb-radix: Radix sort (LSD) for arrays of non-negative i64
+// v0.1.0
+//
+// Implements Least-Significant-Digit radix sort using base-256 digits.
+// Time: O(d * n) where d = 8 (digits in i64), Space: O(n)
+// Precondition: all values must be non-negative.
+//
+// Usage:
+//   let arr = malloc(100 * 8) as *i64;
+//   // ... fill with non-negative values ...
+//   let _s = radix_sort(arr, 100);
+
+// ============================================================================
+// Utility
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+@inline
+fn swap(arr: *i64, i: i64, j: i64) -> i64 = {
+    let tmp = arr[i];
+    set arr[i] = arr[j];
+    set arr[j] = tmp;
+    0
+};
+
+// ============================================================================
+// Radix Sort (LSD, base-256)
+// ============================================================================
+
+// Extract the byte at position `pos` (0 = least significant) from value v.
+// Each byte is 8 bits, so we shift right by pos*8 and mask with 0xFF (255).
+@inline
+fn get_byte(v: i64, pos: i64) -> i64 =
+    (v >> (pos * 8)) band 255;
+
+// Counting sort on byte at position `pos`.
+// Sorts arr[0..n) by the byte at position pos, using output as temp buffer.
+fn counting_sort_by_byte(arr: *i64, n: i64, pos: i64, output: *i64) -> i64
+  pre n > 0
+= {
+    // count array: 256 buckets
+    let count = malloc(256 * 8) as *i64;
+
+    // Initialize counts to 0
+    let mut i = 0;
+    while i < 256 {
+        set count[i] = 0;
+        { i = i + 1; 0 }
+    };
+
+    // Count occurrences of each byte value
+    { i = 0; 0 };
+    while i < n {
+        let byte_val = get_byte(arr[i], pos);
+        set count[byte_val] = count[byte_val] + 1;
+        { i = i + 1; 0 }
+    };
+
+    // Compute prefix sums (cumulative counts)
+    { i = 1; 0 };
+    while i < 256 {
+        set count[i] = count[i] + count[i - 1];
+        { i = i + 1; 0 }
+    };
+
+    // Build output array in stable order (iterate backwards)
+    { i = n - 1; 0 };
+    let mut done = false;
+    while not done {
+        let byte_val = get_byte(arr[i], pos);
+        let dest = count[byte_val] - 1;
+        set output[dest] = arr[i];
+        set count[byte_val] = dest;
+        let _r = if i == 0 {
+            { done = true; 0 }
+        } else {
+            { i = i - 1; 0 }
+        };
+        0
+    };
+
+    // Copy output back to arr
+    { i = 0; 0 };
+    while i < n {
+        set arr[i] = output[i];
+        { i = i + 1; 0 }
+    };
+
+    let _f = free(count as i64);
+    0
+};
+
+// Radix sort: sort arr[0..n) of non-negative i64 values.
+// Uses LSD radix sort with base-256, processing 8 bytes (one per pass).
+// For non-negative i64, we only need passes where data actually varies.
+fn radix_sort(arr: *i64, n: i64) -> i64
+  pre n >= 0
+= {
+    let _r = if n <= 1 { 0 } else {
+        {
+            let output = malloc(n * 8) as *i64;
+
+            // Find maximum value to determine number of passes needed
+            let mut mx = arr[0];
+            let mut i = 1;
+            while i < n {
+                let _u = if arr[i] > mx { { mx = arr[i]; 0 } } else { 0 };
+                { i = i + 1; 0 }
+            };
+
+            // Process each byte position while max still has bits
+            let mut pos = 0;
+            let mut shift_val = mx;
+            let mut cont = true;
+            while cont {
+                let _s = counting_sort_by_byte(arr, n, pos, output);
+                { pos = pos + 1; 0 };
+                { shift_val = shift_val >> 8; 0 };
+                let _c = if shift_val == 0 { { cont = false; 0 } } else { 0 };
+                0
+            };
+
+            let _f = free(output as i64);
+            0
+        }
+    };
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn is_sorted(arr: *i64, n: i64) -> bool = {
+    let mut i = 0;
+    let mut sorted = true;
+    let mut done = false;
+    while not done {
+        let _r = if i >= n - 1 {
+            { done = true; 0 }
+        } else if arr[i] > arr[i + 1] {
+            { sorted = false; done = true; 0 }
+        } else {
+            { i = i + 1; 0 }
+        };
+        0
+    };
+    sorted
+};
+
+fn fill_reverse(arr: *i64, n: i64) -> i64 = {
+    let mut i = 0;
+    while i < n {
+        set arr[i] = n - i;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+fn test_basic() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 50;
+    set arr[1] = 20;
+    set arr[2] = 40;
+    set arr[3] = 10;
+    set arr[4] = 30;
+    let _s = radix_sort(arr, 5);
+    let ok = arr[0] == 10 and arr[1] == 20 and arr[2] == 30
+             and arr[3] == 40 and arr[4] == 50;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_reverse() -> i64 = {
+    let arr = malloc(10 * 8) as *i64;
+    let _fill = fill_reverse(arr, 10);
+    let _s = radix_sort(arr, 10);
+    let sorted = is_sorted(arr, 10);
+    let _f = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
+
+fn test_already_sorted() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 1;
+    set arr[1] = 2;
+    set arr[2] = 3;
+    set arr[3] = 4;
+    set arr[4] = 5;
+    let _s = radix_sort(arr, 5);
+    let ok = arr[0] == 1 and arr[1] == 2 and arr[2] == 3
+             and arr[3] == 4 and arr[4] == 5;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_single() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    set arr[0] = 42;
+    let _s = radix_sort(arr, 1);
+    let ok = arr[0] == 42;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_empty() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    let _s = radix_sort(arr, 0);
+    let _f = free(arr as i64);
+    1
+};
+
+fn test_duplicates() -> i64 = {
+    let arr = malloc(6 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 1;
+    set arr[2] = 3;
+    set arr[3] = 1;
+    set arr[4] = 2;
+    set arr[5] = 2;
+    let _s = radix_sort(arr, 6);
+    let ok = arr[0] == 1 and arr[1] == 1 and arr[2] == 2
+             and arr[3] == 2 and arr[4] == 3 and arr[5] == 3;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_all_zeros() -> i64 = {
+    let arr = malloc(4 * 8) as *i64;
+    set arr[0] = 0;
+    set arr[1] = 0;
+    set arr[2] = 0;
+    set arr[3] = 0;
+    let _s = radix_sort(arr, 4);
+    let ok = arr[0] == 0 and arr[1] == 0 and arr[2] == 0 and arr[3] == 0;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_large_values() -> i64 = {
+    let arr = malloc(4 * 8) as *i64;
+    set arr[0] = 100000;
+    set arr[1] = 500;
+    set arr[2] = 99999;
+    set arr[3] = 1;
+    let _s = radix_sort(arr, 4);
+    let ok = arr[0] == 1 and arr[1] == 500 and arr[2] == 99999 and arr[3] == 100000;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("reverse", test_reverse());
+    let t3 = report("already_sorted", test_already_sorted());
+    let t4 = report("single", test_single());
+    let t5 = report("empty", test_empty());
+    let t6 = report("duplicates", test_duplicates());
+    let t7 = report("all_zeros", test_all_zeros());
+    let t8 = report("large_values", test_large_values());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-radix: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

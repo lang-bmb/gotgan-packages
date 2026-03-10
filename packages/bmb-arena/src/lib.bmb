@@ -1,0 +1,166 @@
+// bmb-arena: Simple bump allocator (arena)
+// Layout: [capacity(i64), used(i64), data bytes...]
+// Indices 0..1 are header words (16 bytes).
+// arena_alloc returns a raw byte pointer into the data region.
+
+// Create a new arena with given byte capacity
+fn arena_new(size: i64) -> i64
+  pre size > 0
+  post ret != 0
+= {
+    // Allocate header (2 i64s = 16 bytes) + data region
+    let ptr = malloc(16 + size);
+    let _s1 = store_i64(ptr, size);
+    let _s2 = store_i64(ptr + 8, 0);
+    ptr
+};
+
+// Allocate n_bytes from the arena (bump pointer).
+// Returns a pointer into the data region, or 0 if full.
+fn arena_alloc(a: i64, n_bytes: i64) -> i64
+  pre a != 0 and n_bytes > 0
+= {
+    let capacity = load_i64(a);
+    let used = load_i64(a + 8);
+    if used + n_bytes > capacity { 0 }
+    else {
+        let ptr = a + 16 + used;
+        let _s = store_i64(a + 8, used + n_bytes);
+        ptr
+    }
+};
+
+// Return how many bytes have been used
+fn arena_used(a: i64) -> i64
+  pre a != 0
+  post ret >= 0
+= load_i64(a + 8);
+
+// Return how many bytes remain
+fn arena_remaining(a: i64) -> i64
+  pre a != 0
+  post ret >= 0
+= load_i64(a) - load_i64(a + 8);
+
+// Reset arena: mark all bytes as free (does not zero memory)
+fn arena_reset(a: i64) -> i64
+  pre a != 0
+= { let _s = store_i64(a + 8, 0); 0 };
+
+// Free the arena
+fn arena_free(a: i64) -> i64
+  pre a != 0
+= { let _f = free(a); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_basic_alloc() -> i64 = {
+    let a = arena_new(128);
+    if arena_used(a) != 0 { let _f = arena_free(a); 0 }
+    else if arena_remaining(a) != 128 { let _f = arena_free(a); 0 }
+    else {
+        let p1 = arena_alloc(a, 16);
+        let p2 = arena_alloc(a, 32);
+        if p1 == 0 { let _f = arena_free(a); 0 }
+        else if p2 == 0 { let _f = arena_free(a); 0 }
+        else if p1 == p2 { let _f = arena_free(a); 0 }
+        else if arena_used(a) != 48 { let _f = arena_free(a); 0 }
+        else if arena_remaining(a) != 80 { let _f = arena_free(a); 0 }
+        else { let _f = arena_free(a); 1 }
+    }
+};
+
+fn test_out_of_memory() -> i64 = {
+    let a = arena_new(32);
+    let p1 = arena_alloc(a, 20);
+    let p2 = arena_alloc(a, 20);  // should fail: 40 > 32
+    if p1 == 0 { let _f = arena_free(a); 0 }
+    else if p2 != 0 { let _f = arena_free(a); 0 }
+    else { let _f = arena_free(a); 1 }
+};
+
+fn test_reset() -> i64 = {
+    let a = arena_new(64);
+    let p1 = arena_alloc(a, 40);
+    if p1 == 0 { let _f = arena_free(a); 0 }
+    else if arena_used(a) != 40 { let _f = arena_free(a); 0 }
+    else {
+        let _r = arena_reset(a);
+        if arena_used(a) != 0 { let _f = arena_free(a); 0 }
+        else if arena_remaining(a) != 64 { let _f = arena_free(a); 0 }
+        else {
+            // Can allocate again after reset
+            let p2 = arena_alloc(a, 40);
+            if p2 == 0 { let _f = arena_free(a); 0 }
+            else { let _f = arena_free(a); 1 }
+        }
+    }
+};
+
+fn test_sequential_ptrs() -> i64 = {
+    // Allocated pointers should be contiguous (bump allocator)
+    let a = arena_new(64);
+    let p1 = arena_alloc(a, 8);
+    let p2 = arena_alloc(a, 8);
+    let p3 = arena_alloc(a, 8);
+    if p1 == 0 { let _f = arena_free(a); 0 }
+    else if p2 != p1 + 8 { let _f = arena_free(a); 0 }
+    else if p3 != p2 + 8 { let _f = arena_free(a); 0 }
+    else { let _f = arena_free(a); 1 }
+};
+
+fn test_exact_fit() -> i64 = {
+    let a = arena_new(16);
+    let p = arena_alloc(a, 16);
+    if p == 0 { let _f = arena_free(a); 0 }
+    else if arena_remaining(a) != 0 { let _f = arena_free(a); 0 }
+    else {
+        // One more byte should fail
+        let p2 = arena_alloc(a, 1);
+        if p2 != 0 { let _f = arena_free(a); 0 }
+        else { let _f = arena_free(a); 1 }
+    }
+};
+
+fn test_store_load() -> i64 = {
+    // Write and read back through arena pointer
+    let a = arena_new(64);
+    let p = arena_alloc(a, 8);
+    if p == 0 { let _f = arena_free(a); 0 }
+    else {
+        let _s = store_i64(p, 12345);
+        let v = load_i64(p);
+        if v != 12345 { let _f = arena_free(a); 0 }
+        else { let _f = arena_free(a); 1 }
+    }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_alloc", test_basic_alloc());
+    let t2 = report("out_of_memory", test_out_of_memory());
+    let t3 = report("reset", test_reset());
+    let t4 = report("sequential_ptrs", test_sequential_ptrs());
+    let t5 = report("exact_fit", test_exact_fit());
+    let t6 = report("store_load", test_store_load());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-arena: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

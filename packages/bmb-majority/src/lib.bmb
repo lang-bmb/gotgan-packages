@@ -1,0 +1,286 @@
+// bmb-majority: Boyer-Moore majority vote algorithm
+// v0.1.0
+//
+// The Boyer-Moore majority vote algorithm finds the majority element
+// (appearing more than n/2 times) in O(n) time and O(1) space.
+//
+// Functions:
+//   majority_candidate(v, len)     -> i64  candidate majority element
+//   majority_count(v, len, cand)   -> i64  count occurrences of cand
+//   has_majority(v, len)           -> bool true if a majority element exists
+//   majority_element(v, len)       -> i64  majority element or -1 if none
+//   is_majority(v, len, val)       -> bool true if val appears > n/2 times
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// majority_candidate: Boyer-Moore voting phase
+// Returns the candidate that could be the majority element.
+// NOTE: This does NOT verify the candidate. Use majority_count to verify.
+// ============================================================================
+
+fn majority_candidate(v: i64, len: i64) -> i64
+  pre len > 0
+= {
+    let mut candidate = vec_get(v, 0);
+    let mut count = 1;
+    let mut i = 1;
+    while i < len {
+        let cur = vec_get(v, i);
+        let _r = if count == 0 {
+            { candidate = cur; count = 1; 0 }
+        } else if cur == candidate {
+            { count = count + 1; 0 }
+        } else {
+            { count = count - 1; 0 }
+        };
+        { i = i + 1; 0 }
+    };
+    candidate
+};
+
+// ============================================================================
+// majority_count: count how many times val appears in v[0..len)
+// ============================================================================
+
+fn majority_count(v: i64, len: i64, val: i64) -> i64
+  pre len >= 0
+  post ret >= 0
+= {
+    let mut count = 0;
+    let mut i = 0;
+    while i < len {
+        let _r = if vec_get(v, i) == val {
+            { count = count + 1; 0 }
+        } else { 0 };
+        { i = i + 1; 0 }
+    };
+    count
+};
+
+// ============================================================================
+// has_majority: returns true if there exists an element appearing > n/2 times
+// Two-pass algorithm: find candidate, then verify
+// ============================================================================
+
+fn has_majority(v: i64, len: i64) -> bool
+  pre len >= 0
+= {
+    if len == 0 { false }
+    else {
+        let cand = majority_candidate(v, len);
+        let cnt = majority_count(v, len, cand);
+        cnt > len / 2
+    }
+};
+
+// ============================================================================
+// majority_element: returns the majority element, or -1 if none exists
+// ============================================================================
+
+fn majority_element(v: i64, len: i64) -> i64
+  pre len >= 0
+= {
+    if len == 0 { 0 - 1 }
+    else {
+        let cand = majority_candidate(v, len);
+        let cnt = majority_count(v, len, cand);
+        if cnt > len / 2 { cand }
+        else { 0 - 1 }
+    }
+};
+
+// ============================================================================
+// is_majority: check if val appears more than n/2 times
+// ============================================================================
+
+fn is_majority(v: i64, len: i64, val: i64) -> bool
+  pre len >= 0
+= {
+    if len == 0 { false }
+    else {
+        let cnt = majority_count(v, len, val);
+        cnt > len / 2
+    }
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_clear_majority() -> i64 = {
+    // [3, 3, 3, 2, 1] -> majority is 3 (3/5 > 5/2)
+    let v = vec_new();
+    let _p1 = vec_push(v, 3);
+    let _p2 = vec_push(v, 3);
+    let _p3 = vec_push(v, 3);
+    let _p4 = vec_push(v, 2);
+    let _p5 = vec_push(v, 1);
+    let elem = majority_element(v, 5);
+    let hm = has_majority(v, 5);
+    let _f = vec_free(v);
+    b2i(elem == 3 and hm)
+};
+
+fn test_no_majority() -> i64 = {
+    // [1, 2, 3, 4, 5] -> no majority
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 2);
+    let _p3 = vec_push(v, 3);
+    let _p4 = vec_push(v, 4);
+    let _p5 = vec_push(v, 5);
+    let elem = majority_element(v, 5);
+    let hm = has_majority(v, 5);
+    let _f = vec_free(v);
+    b2i(elem == (0 - 1) and not hm)
+};
+
+fn test_all_same() -> i64 = {
+    // [7, 7, 7, 7] -> majority is 7
+    let v = vec_new();
+    let _p1 = vec_push(v, 7);
+    let _p2 = vec_push(v, 7);
+    let _p3 = vec_push(v, 7);
+    let _p4 = vec_push(v, 7);
+    let elem = majority_element(v, 4);
+    let _f = vec_free(v);
+    b2i(elem == 7)
+};
+
+fn test_single_element() -> i64 = {
+    // [42] -> majority is 42
+    let v = vec_new();
+    let _p = vec_push(v, 42);
+    let elem = majority_element(v, 1);
+    let _f = vec_free(v);
+    b2i(elem == 42)
+};
+
+fn test_two_elements_same() -> i64 = {
+    // [5, 5] -> majority is 5
+    let v = vec_new();
+    let _p1 = vec_push(v, 5);
+    let _p2 = vec_push(v, 5);
+    let elem = majority_element(v, 2);
+    let _f = vec_free(v);
+    b2i(elem == 5)
+};
+
+fn test_two_elements_diff() -> i64 = {
+    // [1, 2] -> no majority (need >1 occurrence, 1 is not > 2/2=1)
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 2);
+    let elem = majority_element(v, 2);
+    let _f = vec_free(v);
+    b2i(elem == (0 - 1))
+};
+
+fn test_majority_count_fn() -> i64 = {
+    // [3, 1, 3, 3, 2] -> count(3) = 3
+    let v = vec_new();
+    let _p1 = vec_push(v, 3);
+    let _p2 = vec_push(v, 1);
+    let _p3 = vec_push(v, 3);
+    let _p4 = vec_push(v, 3);
+    let _p5 = vec_push(v, 2);
+    let cnt = majority_count(v, 5, 3);
+    let _f = vec_free(v);
+    b2i(cnt == 3)
+};
+
+fn test_is_majority_true() -> i64 = {
+    // [2, 2, 2, 1, 3] -> is_majority(2) = true
+    let v = vec_new();
+    let _p1 = vec_push(v, 2);
+    let _p2 = vec_push(v, 2);
+    let _p3 = vec_push(v, 2);
+    let _p4 = vec_push(v, 1);
+    let _p5 = vec_push(v, 3);
+    let im = is_majority(v, 5, 2);
+    let _f = vec_free(v);
+    b2i(im)
+};
+
+fn test_is_majority_false() -> i64 = {
+    // [2, 2, 1, 1, 3] -> is_majority(2) = false (2/5 not > 5/2)
+    let v = vec_new();
+    let _p1 = vec_push(v, 2);
+    let _p2 = vec_push(v, 2);
+    let _p3 = vec_push(v, 1);
+    let _p4 = vec_push(v, 1);
+    let _p5 = vec_push(v, 3);
+    let im = is_majority(v, 5, 2);
+    let _f = vec_free(v);
+    b2i(not im)
+};
+
+fn test_empty_vec() -> i64 = {
+    let v = vec_new();
+    let elem = majority_element(v, 0);
+    let hm = has_majority(v, 0);
+    let _f = vec_free(v);
+    b2i(elem == (0 - 1) and not hm)
+};
+
+fn test_interleaved_majority() -> i64 = {
+    // [1, 2, 1, 2, 1] -> majority is 1 (3/5 > 5/2)
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 2);
+    let _p3 = vec_push(v, 1);
+    let _p4 = vec_push(v, 2);
+    let _p5 = vec_push(v, 1);
+    let elem = majority_element(v, 5);
+    let _f = vec_free(v);
+    b2i(elem == 1)
+};
+
+fn test_exact_half() -> i64 = {
+    // [1, 1, 2, 2] -> no majority (2/4 is not > 4/2=2)
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 1);
+    let _p3 = vec_push(v, 2);
+    let _p4 = vec_push(v, 2);
+    let elem = majority_element(v, 4);
+    let _f = vec_free(v);
+    b2i(elem == (0 - 1))
+};
+
+// ============================================================================
+// Report and main
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("clear_majority", test_clear_majority());
+    let t2 = report("no_majority", test_no_majority());
+    let t3 = report("all_same", test_all_same());
+    let t4 = report("single_element", test_single_element());
+    let t5 = report("two_elements_same", test_two_elements_same());
+    let t6 = report("two_elements_diff", test_two_elements_diff());
+    let t7 = report("majority_count_fn", test_majority_count_fn());
+    let t8 = report("is_majority_true", test_is_majority_true());
+    let t9 = report("is_majority_false", test_is_majority_false());
+    let t10 = report("empty_vec", test_empty_vec());
+    let t11 = report("interleaved_majority", test_interleaved_majority());
+    let t12 = report("exact_half", test_exact_half());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+    let total = 12;
+    let _p1 = print_str("bmb-majority: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

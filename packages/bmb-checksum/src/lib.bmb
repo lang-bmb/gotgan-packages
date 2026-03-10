@@ -1,0 +1,352 @@
+// bmb-checksum: Simple checksum algorithms
+// v0.1.0
+//
+// Implements four checksum algorithms over vecs of byte values (i64, 0-255):
+//
+//   adler32(data_vec, len)                  -> i64 (32-bit Adler-32)
+//   fletcher16(data_vec, len)               -> i64 (16-bit Fletcher checksum)
+//   xor_checksum(data_vec, len)             -> i64 (XOR of all bytes)
+//   sum_checksum(data_vec, len)             -> i64 (sum of all bytes mod 256)
+//   verify_adler32(data_vec, len, expected) -> bool
+
+// ============================================================
+// Adler-32
+// ============================================================
+// RFC 1950.  Two running sums A and B, both mod 65521 (largest prime < 2^16).
+// A = 1 + sum of bytes
+// B = (number of bytes + sum of A values after each byte)
+// Result = (B << 16) | A
+
+fn ADLER_MOD() -> i64 = 65521;
+
+fn adler32(data_vec: i64, len: i64) -> i64
+  pre data_vec != 0 and len >= 0
+  post ret >= 0
+= {
+    let mut a = 1;
+    let mut b = 0;
+    let mut i = 0;
+    while i < len {
+        let byte = vec_get(data_vec, i) band 255;
+        a = (a + byte) - ((a + byte) / ADLER_MOD()) * ADLER_MOD();
+        b = (b + a) - ((b + a) / ADLER_MOD()) * ADLER_MOD();
+        i = i + 1;
+        0
+    };
+    (b * 65536) bor a
+};
+
+// ============================================================
+// Fletcher-16
+// ============================================================
+// Two 8-bit running sums, each reduced mod 255 (not 256).
+// sum1 = sum of bytes mod 255
+// sum2 = sum of sum1 values mod 255
+// Result = (sum2 << 8) | sum1
+
+fn FLETCHER_MOD() -> i64 = 255;
+
+fn fletcher16(data_vec: i64, len: i64) -> i64
+  pre data_vec != 0 and len >= 0
+  post ret >= 0 and ret <= 65535
+= {
+    let mut s1 = 0;
+    let mut s2 = 0;
+    let mut i = 0;
+    while i < len {
+        let byte = vec_get(data_vec, i) band 255;
+        s1 = (s1 + byte) - ((s1 + byte) / FLETCHER_MOD()) * FLETCHER_MOD();
+        s2 = (s2 + s1) - ((s2 + s1) / FLETCHER_MOD()) * FLETCHER_MOD();
+        i = i + 1;
+        0
+    };
+    ((s2 band 255) * 256) bor (s1 band 255)
+};
+
+// ============================================================
+// XOR checksum
+// ============================================================
+// XOR of all byte values. Returns 0 for empty input.
+
+fn xor_checksum(data_vec: i64, len: i64) -> i64
+  pre data_vec != 0 and len >= 0
+  post ret >= 0 and ret <= 255
+= {
+    let mut acc = 0;
+    let mut i = 0;
+    while i < len {
+        acc = acc bxor (vec_get(data_vec, i) band 255);
+        i = i + 1;
+        0
+    };
+    acc
+};
+
+// ============================================================
+// Sum checksum
+// ============================================================
+// Sum of all byte values mod 256. Returns 0 for empty input.
+
+fn sum_checksum(data_vec: i64, len: i64) -> i64
+  pre data_vec != 0 and len >= 0
+  post ret >= 0 and ret <= 255
+= {
+    let mut acc = 0;
+    let mut i = 0;
+    while i < len {
+        acc = (acc + (vec_get(data_vec, i) band 255)) band 255;
+        i = i + 1;
+        0
+    };
+    acc
+};
+
+// ============================================================
+// Adler-32 verification
+// ============================================================
+
+fn verify_adler32(data_vec: i64, len: i64, expected: i64) -> bool
+  pre data_vec != 0 and len >= 0
+= adler32(data_vec, len) == expected;
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+// Adler-32 known values
+// adler32("") = 1 (A=1, B=0 -> 0*65536+1 = 1)
+fn test_adler32_empty() -> i64 = {
+    let v = vec_new();
+    let r = adler32(v, 0);
+    let _f = vec_free(v);
+    if r == 1 { 1 } else { 0 }
+};
+
+// adler32("a") = 0x00620062
+// byte=97: A=1+97=98, B=0+98=98
+// result = 98 * 65536 + 98 = 6422626
+fn test_adler32_single_a() -> i64 = {
+    let v = vec_new();
+    let _p = vec_push(v, 97);
+    let r = adler32(v, 1);
+    let _f = vec_free(v);
+    if r == 6422626 { 1 } else { 0 }
+};
+
+// adler32("abc") known value: 0x024D0127 = 38600999
+// a=97,b=98,c=99
+// A1=98, B1=98; A2=196, B2=294; A3=295, B3=589
+// But 295 mod 65521 = 295, 589 mod 65521 = 589
+// Result = 589 * 65536 + 295 = 38600999
+fn test_adler32_abc() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 97);
+    let _p2 = vec_push(v, 98);
+    let _p3 = vec_push(v, 99);
+    let r = adler32(v, 3);
+    let _f = vec_free(v);
+    if r == 38600999 { 1 } else { 0 }
+};
+
+fn test_adler32_consistency() -> i64 = {
+    // Same data twice should give same result
+    let v1 = vec_new();
+    let v2 = vec_new();
+    let _p11 = vec_push(v1, 10);
+    let _p12 = vec_push(v1, 20);
+    let _p13 = vec_push(v1, 30);
+    let _p21 = vec_push(v2, 10);
+    let _p22 = vec_push(v2, 20);
+    let _p23 = vec_push(v2, 30);
+    let r1 = adler32(v1, 3);
+    let r2 = adler32(v2, 3);
+    let _f1 = vec_free(v1);
+    let _f2 = vec_free(v2);
+    if r1 == r2 { 1 } else { 0 }
+};
+
+fn test_adler32_different_data() -> i64 = {
+    let v1 = vec_new();
+    let v2 = vec_new();
+    let _p1 = vec_push(v1, 1);
+    let _p2 = vec_push(v2, 2);
+    let r1 = adler32(v1, 1);
+    let r2 = adler32(v2, 1);
+    let _f1 = vec_free(v1);
+    let _f2 = vec_free(v2);
+    if r1 != r2 { 1 } else { 0 }
+};
+
+// Fletcher-16 known values
+// fletcher16("") = 0
+fn test_fletcher16_empty() -> i64 = {
+    let v = vec_new();
+    let r = fletcher16(v, 0);
+    let _f = vec_free(v);
+    if r == 0 { 1 } else { 0 }
+};
+
+// fletcher16([1, 2]): s1=(1%255)=1, s2=(0+1)=1; s1=(1+2)=3, s2=(1+3)=4
+// result = (4 << 8) | 3 = 1027
+fn test_fletcher16_basic() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 2);
+    let r = fletcher16(v, 2);
+    let _f = vec_free(v);
+    if r == 1027 { 1 } else { 0 }
+};
+
+fn test_fletcher16_in_range() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 255);
+    let _p2 = vec_push(v, 128);
+    let _p3 = vec_push(v, 64);
+    let r = fletcher16(v, 3);
+    let _f = vec_free(v);
+    if r >= 0 and r <= 65535 { 1 } else { 0 }
+};
+
+fn test_fletcher16_consistency() -> i64 = {
+    let v1 = vec_new();
+    let v2 = vec_new();
+    let _p11 = vec_push(v1, 50);
+    let _p12 = vec_push(v1, 100);
+    let _p21 = vec_push(v2, 50);
+    let _p22 = vec_push(v2, 100);
+    let r1 = fletcher16(v1, 2);
+    let r2 = fletcher16(v2, 2);
+    let _f1 = vec_free(v1);
+    let _f2 = vec_free(v2);
+    if r1 == r2 { 1 } else { 0 }
+};
+
+// XOR checksum tests
+fn test_xor_empty() -> i64 = {
+    let v = vec_new();
+    let r = xor_checksum(v, 0);
+    let _f = vec_free(v);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_xor_single() -> i64 = {
+    let v = vec_new();
+    let _p = vec_push(v, 170);  // 0xAA
+    let r = xor_checksum(v, 1);
+    let _f = vec_free(v);
+    if r == 170 { 1 } else { 0 }
+};
+
+fn test_xor_cancel() -> i64 = {
+    // XOR of two identical values = 0
+    let v = vec_new();
+    let _p1 = vec_push(v, 42);
+    let _p2 = vec_push(v, 42);
+    let r = xor_checksum(v, 2);
+    let _f = vec_free(v);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_xor_known() -> i64 = {
+    // 1 xor 2 xor 3 = 0b001 xor 0b010 xor 0b011 = 0
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 2);
+    let _p3 = vec_push(v, 3);
+    let r = xor_checksum(v, 3);
+    let _f = vec_free(v);
+    if r == 0 { 1 } else { 0 }
+};
+
+// Sum checksum tests
+fn test_sum_empty() -> i64 = {
+    let v = vec_new();
+    let r = sum_checksum(v, 0);
+    let _f = vec_free(v);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_sum_basic() -> i64 = {
+    // 10 + 20 + 30 = 60 mod 256 = 60
+    let v = vec_new();
+    let _p1 = vec_push(v, 10);
+    let _p2 = vec_push(v, 20);
+    let _p3 = vec_push(v, 30);
+    let r = sum_checksum(v, 3);
+    let _f = vec_free(v);
+    if r == 60 { 1 } else { 0 }
+};
+
+fn test_sum_overflow() -> i64 = {
+    // 200 + 200 = 400; 400 mod 256 = 144
+    let v = vec_new();
+    let _p1 = vec_push(v, 200);
+    let _p2 = vec_push(v, 200);
+    let r = sum_checksum(v, 2);
+    let _f = vec_free(v);
+    if r == 144 { 1 } else { 0 }
+};
+
+// verify_adler32 tests
+fn test_verify_adler32_correct() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 97);
+    let _p2 = vec_push(v, 98);
+    let _p3 = vec_push(v, 99);
+    let checksum = adler32(v, 3);
+    let ok = b2i(verify_adler32(v, 3, checksum));
+    let _f = vec_free(v);
+    ok
+};
+
+fn test_verify_adler32_wrong() -> i64 = {
+    let v = vec_new();
+    let _p = vec_push(v, 1);
+    let ok = b2i(not verify_adler32(v, 1, 9999999));
+    let _f = vec_free(v);
+    ok
+};
+
+fn main() -> i64 = {
+    let t1  = report("adler32_empty",         test_adler32_empty());
+    let t2  = report("adler32_single_a",      test_adler32_single_a());
+    let t3  = report("adler32_abc",           test_adler32_abc());
+    let t4  = report("adler32_consistency",   test_adler32_consistency());
+    let t5  = report("adler32_different",     test_adler32_different_data());
+    let t6  = report("fletcher16_empty",      test_fletcher16_empty());
+    let t7  = report("fletcher16_basic",      test_fletcher16_basic());
+    let t8  = report("fletcher16_in_range",   test_fletcher16_in_range());
+    let t9  = report("fletcher16_consistency",test_fletcher16_consistency());
+    let t10 = report("xor_empty",             test_xor_empty());
+    let t11 = report("xor_single",            test_xor_single());
+    let t12 = report("xor_cancel",            test_xor_cancel());
+    let t13 = report("xor_known",             test_xor_known());
+    let t14 = report("sum_empty",             test_sum_empty());
+    let t15 = report("sum_basic",             test_sum_basic());
+    let t16 = report("sum_overflow",          test_sum_overflow());
+    let t17 = report("verify_adler32_correct",test_verify_adler32_correct());
+    let t18 = report("verify_adler32_wrong",  test_verify_adler32_wrong());
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10
+               + t11 + t12 + t13 + t14 + t15 + t16 + t17 + t18;
+    let total = 18;
+
+    let _p1 = print_str("bmb-checksum: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+
+    if passed == total { 0 } else { 1 }
+};

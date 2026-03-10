@@ -1,0 +1,247 @@
+// bmb-diff: Sequence diff utilities for i64 vectors
+// Compares two sequences by element values.
+
+// Count positions where a[i] != b[i] (up to shorter length)
+fn diff_count(a_vec: i64, a_len: i64, b_vec: i64, b_len: i64) -> i64
+  pre a_vec != 0 and b_vec != 0 and a_len >= 0 and b_len >= 0
+  post ret >= 0
+= {
+    let limit = if a_len < b_len { a_len } else { b_len };
+    let mut count = 0;
+    let mut i = 0;
+    while i < limit {
+        if vec_get(a_vec, i) != vec_get(b_vec, i) {
+            count = count + 1;
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    count
+};
+
+// Count elements present in new_vec but not in old_vec (set difference new - old)
+// Uses O(n*m) linear scan: counts each new element that has no match in old.
+fn diff_added(old_vec: i64, old_len: i64, new_vec: i64, new_len: i64) -> i64
+  pre old_vec != 0 and new_vec != 0 and old_len >= 0 and new_len >= 0
+  post ret >= 0
+= {
+    let mut count = 0;
+    let mut i = 0;
+    while i < new_len {
+        let val = vec_get(new_vec, i);
+        let mut found = false;
+        let mut j = 0;
+        while j < old_len {
+            if vec_get(old_vec, j) == val {
+                found = true;
+                0
+            } else { 0 };
+            j = j + 1;
+            0
+        };
+        if not found {
+            count = count + 1;
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    count
+};
+
+// Count elements present in old_vec but not in new_vec (set difference old - new)
+fn diff_removed(old_vec: i64, old_len: i64, new_vec: i64, new_len: i64) -> i64
+  pre old_vec != 0 and new_vec != 0 and old_len >= 0 and new_len >= 0
+  post ret >= 0
+= {
+    let mut count = 0;
+    let mut i = 0;
+    while i < old_len {
+        let val = vec_get(old_vec, i);
+        let mut found = false;
+        let mut j = 0;
+        while j < new_len {
+            if vec_get(new_vec, j) == val {
+                found = true;
+                0
+            } else { 0 };
+            j = j + 1;
+            0
+        };
+        if not found {
+            count = count + 1;
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    count
+};
+
+// Count elements present in both a and b (set intersection size)
+// Counts each a element that has a match in b.
+fn diff_common(a_vec: i64, a_len: i64, b_vec: i64, b_len: i64) -> i64
+  pre a_vec != 0 and b_vec != 0 and a_len >= 0 and b_len >= 0
+  post ret >= 0
+= {
+    let mut count = 0;
+    let mut i = 0;
+    while i < a_len {
+        let val = vec_get(a_vec, i);
+        let mut found = false;
+        let mut j = 0;
+        while j < b_len {
+            if vec_get(b_vec, j) == val {
+                found = true;
+                0
+            } else { 0 };
+            j = j + 1;
+            0
+        };
+        if found {
+            count = count + 1;
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    count
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn make_vec(a: i64, b: i64, c: i64, d: i64, n: i64) -> i64 = {
+    let v = vec_new();
+    if n >= 1 { let _p = vec_push(v, a); 0 } else { 0 };
+    if n >= 2 { let _p = vec_push(v, b); 0 } else { 0 };
+    if n >= 3 { let _p = vec_push(v, c); 0 } else { 0 };
+    if n >= 4 { let _p = vec_push(v, d); 0 } else { 0 };
+    v
+};
+
+fn test_count_identical() -> i64 = {
+    let a = make_vec(1, 2, 3, 4, 4);
+    let b = make_vec(1, 2, 3, 4, 4);
+    let c = diff_count(a, 4, b, 4);
+    let _f1 = vec_free(a);
+    let _f2 = vec_free(b);
+    if c == 0 { 1 } else { 0 }
+};
+
+fn test_count_all_differ() -> i64 = {
+    let a = make_vec(1, 2, 3, 4, 4);
+    let b = make_vec(5, 6, 7, 8, 4);
+    let c = diff_count(a, 4, b, 4);
+    let _f1 = vec_free(a);
+    let _f2 = vec_free(b);
+    if c == 4 { 1 } else { 0 }
+};
+
+fn test_count_some_differ() -> i64 = {
+    let a = make_vec(1, 2, 3, 4, 4);
+    let b = make_vec(1, 9, 3, 9, 4);
+    let c = diff_count(a, 4, b, 4);
+    let _f1 = vec_free(a);
+    let _f2 = vec_free(b);
+    if c == 2 { 1 } else { 0 }
+};
+
+fn test_added() -> i64 = {
+    // old = [1, 2, 3], new = [1, 2, 3, 4, 5]
+    // added = elements in new not in old = [4, 5] -> 2
+    let old = make_vec(1, 2, 3, 0, 3);
+    let nw = make_vec(1, 2, 3, 4, 4);
+    let nw2 = vec_new();
+    let _p1 = vec_push(nw2, 1);
+    let _p2 = vec_push(nw2, 2);
+    let _p3 = vec_push(nw2, 3);
+    let _p4 = vec_push(nw2, 4);
+    let _p5 = vec_push(nw2, 5);
+    let added = diff_added(old, 3, nw2, 5);
+    let _f1 = vec_free(old);
+    let _f2 = vec_free(nw);
+    let _f3 = vec_free(nw2);
+    if added == 2 { 1 } else { 0 }
+};
+
+fn test_removed() -> i64 = {
+    // old = [1, 2, 3, 4, 5], new = [1, 2, 3]
+    // removed = elements in old not in new = [4, 5] -> 2
+    let old = vec_new();
+    let _p1 = vec_push(old, 1);
+    let _p2 = vec_push(old, 2);
+    let _p3 = vec_push(old, 3);
+    let _p4 = vec_push(old, 4);
+    let _p5 = vec_push(old, 5);
+    let nw = make_vec(1, 2, 3, 0, 3);
+    let removed = diff_removed(old, 5, nw, 3);
+    let _f1 = vec_free(old);
+    let _f2 = vec_free(nw);
+    if removed == 2 { 1 } else { 0 }
+};
+
+fn test_common() -> i64 = {
+    // a = [1, 2, 3, 4], b = [2, 4, 6, 8]
+    // common = [2, 4] -> 2
+    let a = make_vec(1, 2, 3, 4, 4);
+    let b = make_vec(2, 4, 6, 8, 4);
+    let c = diff_common(a, 4, b, 4);
+    let _f1 = vec_free(a);
+    let _f2 = vec_free(b);
+    if c == 2 { 1 } else { 0 }
+};
+
+fn test_empty_sequences() -> i64 = {
+    let a = vec_new();
+    let b = vec_new();
+    let cnt = diff_count(a, 0, b, 0);
+    let add = diff_added(a, 0, b, 0);
+    let rem = diff_removed(a, 0, b, 0);
+    let com = diff_common(a, 0, b, 0);
+    let _f1 = vec_free(a);
+    let _f2 = vec_free(b);
+    if cnt == 0 and add == 0 and rem == 0 and com == 0 { 1 } else { 0 }
+};
+
+fn test_disjoint() -> i64 = {
+    // a = [1, 2, 3], b = [4, 5, 6]: no common elements
+    let a = make_vec(1, 2, 3, 0, 3);
+    let b = make_vec(4, 5, 6, 0, 3);
+    let com = diff_common(a, 3, b, 3);
+    let add = diff_added(a, 3, b, 3);
+    let rem = diff_removed(a, 3, b, 3);
+    let _f1 = vec_free(a);
+    let _f2 = vec_free(b);
+    if com == 0 and add == 3 and rem == 3 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("count_identical", test_count_identical());
+    let t2 = report("count_all_differ", test_count_all_differ());
+    let t3 = report("count_some_differ", test_count_some_differ());
+    let t4 = report("added", test_added());
+    let t5 = report("removed", test_removed());
+    let t6 = report("common", test_common());
+    let t7 = report("empty_sequences", test_empty_sequences());
+    let t8 = report("disjoint", test_disjoint());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-diff: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

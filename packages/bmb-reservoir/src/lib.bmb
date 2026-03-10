@@ -1,0 +1,368 @@
+// bmb-reservoir: Reservoir sampling
+// Select K random items from a stream of unknown size.
+// Uses a deterministic LCG PRNG seeded by vec_len for reproducibility.
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================
+// Deterministic PRNG (Linear Congruential Generator)
+// ============================================================
+
+// LCG parameters (same as glibc): a=1103515245, c=12345, m=2^31
+// State is stored in a 1-element vec to allow mutation.
+fn rng_new(seed: i64) -> i64
+  post ret != 0
+= {
+    let state = vec_new();
+    // Use absolute value of seed
+    let s = if seed < 0 { 0 - seed } else { seed };
+    let _p = vec_push(state, s);
+    state
+};
+
+// Generate next random number (returns non-negative i64)
+fn rng_next(rng: i64) -> i64
+  pre rng != 0
+  post ret >= 0
+= {
+    let cur = vec_get(rng, 0);
+    // LCG: next = (a * cur + c) mod m
+    // a = 1103515245, c = 12345, m = 2147483648 (2^31)
+    let next = ((1103515245 * cur) + 12345) band 2147483647;
+    let _s = vec_set(rng, 0, next);
+    next
+};
+
+// Generate random number in range [0, bound)
+fn rng_range(rng: i64, bound: i64) -> i64
+  pre rng != 0 and bound > 0
+  post ret >= 0 and ret < bound
+= {
+    let r = rng_next(rng);
+    r - (r / bound) * bound
+};
+
+fn rng_free(rng: i64) -> i64
+  pre rng != 0
+= { let _f = vec_free(rng); 0 };
+
+// ============================================================
+// Reservoir Sampling
+// ============================================================
+
+// Select k items uniformly at random from stream of n items.
+// stream is a vec of n elements.
+// Returns a vec of k selected elements.
+// Uses Algorithm R (Vitter, 1985).
+fn reservoir_sample(stream: i64, n: i64, k: i64, seed: i64) -> i64
+  pre n >= k and k > 0
+= {
+    let reservoir = vec_new();
+    // Fill reservoir with first k elements
+    let mut i = 0;
+    while i < k {
+        let _p = vec_push(reservoir, vec_get(stream, i));
+        i = i + 1;
+        0
+    };
+    // Process remaining elements
+    let rng = rng_new(seed);
+    let mut j = k;
+    while j < n {
+        let r = rng_range(rng, j + 1);
+        if r < k {
+            let _s = vec_set(reservoir, r, vec_get(stream, j));
+            0
+        } else { 0 };
+        j = j + 1;
+        0
+    };
+    let _rf = rng_free(rng);
+    reservoir
+};
+
+// ============================================================
+// Weighted Reservoir Sampling (Algorithm A-Res)
+// ============================================================
+
+// Select k items with probability proportional to weights.
+// Uses A-Res: assign key = rng / weight, keep k smallest keys.
+// Here we simplify: assign key = rng_next() / weight (integer approx),
+// keep k items with largest (weight * random_priority).
+// For simplicity we use: priority = weight * rng_next()
+// and keep the k highest priorities.
+fn weighted_reservoir_sample(stream: i64, weights: i64, n: i64, k: i64, seed: i64) -> i64
+  pre n >= k and k > 0
+= {
+    let reservoir = vec_new();
+    let priorities = vec_new();
+    let rng = rng_new(seed);
+    // Fill with first k
+    let mut i = 0;
+    while i < k {
+        let _p = vec_push(reservoir, vec_get(stream, i));
+        let pri = vec_get(weights, i) * rng_next(rng);
+        let _pp = vec_push(priorities, pri);
+        i = i + 1;
+        0
+    };
+    // Process remaining
+    let mut j = k;
+    while j < n {
+        let pri = vec_get(weights, j) * rng_next(rng);
+        // Find minimum priority in reservoir
+        let mut min_idx = 0;
+        let mut min_pri = vec_get(priorities, 0);
+        let mut m = 1;
+        while m < k {
+            let p = vec_get(priorities, m);
+            if p < min_pri {
+                min_pri = p;
+                min_idx = m;
+                0
+            } else { 0 };
+            m = m + 1;
+            0
+        };
+        if pri > min_pri {
+            let _s1 = vec_set(reservoir, min_idx, vec_get(stream, j));
+            let _s2 = vec_set(priorities, min_idx, pri);
+            0
+        } else { 0 };
+        j = j + 1;
+        0
+    };
+    let _rf = rng_free(rng);
+    let _pf = vec_free(priorities);
+    reservoir
+};
+
+// ============================================================
+// Reservoir: select single random element (k=1 special case)
+// ============================================================
+
+fn reservoir_single(stream: i64, n: i64, seed: i64) -> i64
+  pre n > 0
+= {
+    let mut chosen = vec_get(stream, 0);
+    let rng = rng_new(seed);
+    let mut i = 1;
+    while i < n {
+        let r = rng_range(rng, i + 1);
+        if r == 0 {
+            chosen = vec_get(stream, i);
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    let _rf = rng_free(rng);
+    chosen
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_rng_deterministic() -> i64 = {
+    // Same seed should produce same sequence
+    let r1 = rng_new(42);
+    let r2 = rng_new(42);
+    let a1 = rng_next(r1);
+    let a2 = rng_next(r2);
+    let b1 = rng_next(r1);
+    let b2 = rng_next(r2);
+    let _f1 = rng_free(r1);
+    let _f2 = rng_free(r2);
+    if a1 != a2 { 0 }
+    else if b1 != b2 { 0 }
+    else { 1 }
+};
+
+fn test_rng_range_bounds() -> i64 = {
+    // All values from rng_range should be in [0, bound)
+    let rng = rng_new(123);
+    let mut ok = true;
+    let mut i = 0;
+    while i < 100 {
+        let v = rng_range(rng, 10);
+        if v < 0 { ok = false; 0 }
+        else if v >= 10 { ok = false; 0 }
+        else { 0 };
+        i = i + 1;
+        0
+    };
+    let _f = rng_free(rng);
+    b2i(ok)
+};
+
+fn test_reservoir_size() -> i64 = {
+    // Reservoir should have exactly k elements
+    let stream = vec_new();
+    let mut i = 0;
+    while i < 20 {
+        let _p = vec_push(stream, i * 10);
+        i = i + 1;
+        0
+    };
+    let res = reservoir_sample(stream, 20, 5, 42);
+    let ok = vec_len(res) == 5;
+    let _f1 = vec_free(stream);
+    let _f2 = vec_free(res);
+    b2i(ok)
+};
+
+fn test_reservoir_k_equals_n() -> i64 = {
+    // When k == n, all elements should be selected
+    let stream = vec_new();
+    let _p1 = vec_push(stream, 10);
+    let _p2 = vec_push(stream, 20);
+    let _p3 = vec_push(stream, 30);
+    let res = reservoir_sample(stream, 3, 3, 99);
+    // All original elements should be present (order may differ)
+    let mut sum = 0;
+    let mut i = 0;
+    while i < 3 {
+        sum = sum + vec_get(res, i);
+        i = i + 1;
+        0
+    };
+    let _f1 = vec_free(stream);
+    let _f2 = vec_free(res);
+    // Sum must be 10+20+30=60
+    b2i(sum == 60)
+};
+
+fn test_reservoir_deterministic() -> i64 = {
+    // Same seed produces same sample
+    let stream = vec_new();
+    let mut i = 0;
+    while i < 50 {
+        let _p = vec_push(stream, i);
+        i = i + 1;
+        0
+    };
+    let r1 = reservoir_sample(stream, 50, 5, 777);
+    let r2 = reservoir_sample(stream, 50, 5, 777);
+    let mut ok = true;
+    let mut j = 0;
+    while j < 5 {
+        if vec_get(r1, j) != vec_get(r2, j) { ok = false; 0 } else { 0 };
+        j = j + 1;
+        0
+    };
+    let _f1 = vec_free(stream);
+    let _f2 = vec_free(r1);
+    let _f3 = vec_free(r2);
+    b2i(ok)
+};
+
+fn test_reservoir_single_elem() -> i64 = {
+    // Single element stream, k=1
+    let stream = vec_new();
+    let _p = vec_push(stream, 42);
+    let res = reservoir_sample(stream, 1, 1, 0);
+    let ok = vec_get(res, 0) == 42;
+    let _f1 = vec_free(stream);
+    let _f2 = vec_free(res);
+    b2i(ok)
+};
+
+fn test_single_random() -> i64 = {
+    // reservoir_single should pick one element from stream
+    let stream = vec_new();
+    let _p1 = vec_push(stream, 100);
+    let _p2 = vec_push(stream, 200);
+    let _p3 = vec_push(stream, 300);
+    let _p4 = vec_push(stream, 400);
+    let _p5 = vec_push(stream, 500);
+    let chosen = reservoir_single(stream, 5, 42);
+    // Must be one of the stream elements
+    let ok = if chosen == 100 { true }
+             else if chosen == 200 { true }
+             else if chosen == 300 { true }
+             else if chosen == 400 { true }
+             else if chosen == 500 { true }
+             else { false };
+    let _f = vec_free(stream);
+    b2i(ok)
+};
+
+fn test_weighted_sample() -> i64 = {
+    // Weighted sampling: heavier items more likely
+    let stream = vec_new();
+    let weights = vec_new();
+    let mut i = 0;
+    while i < 10 {
+        let _p1 = vec_push(stream, i);
+        let _p2 = vec_push(weights, i + 1);
+        i = i + 1;
+        0
+    };
+    let res = weighted_reservoir_sample(stream, weights, 10, 3, 42);
+    let ok = vec_len(res) == 3;
+    let _f1 = vec_free(stream);
+    let _f2 = vec_free(weights);
+    let _f3 = vec_free(res);
+    b2i(ok)
+};
+
+fn test_reservoir_elements_from_stream() -> i64 = {
+    // Every element in reservoir must exist in original stream
+    let stream = vec_new();
+    let mut i = 0;
+    while i < 15 {
+        let _p = vec_push(stream, (i + 1) * 7);
+        i = i + 1;
+        0
+    };
+    let res = reservoir_sample(stream, 15, 4, 314);
+    let mut ok = true;
+    let mut j = 0;
+    while j < 4 {
+        let val = vec_get(res, j);
+        // Check if val is in stream
+        let mut found = false;
+        let mut m = 0;
+        while m < 15 {
+            if vec_get(stream, m) == val { found = true; 0 } else { 0 };
+            m = m + 1;
+            0
+        };
+        if not found { ok = false; 0 } else { 0 };
+        j = j + 1;
+        0
+    };
+    let _f1 = vec_free(stream);
+    let _f2 = vec_free(res);
+    b2i(ok)
+};
+
+fn main() -> i64 = {
+    let t1 = report("rng_deterministic", test_rng_deterministic());
+    let t2 = report("rng_range_bounds", test_rng_range_bounds());
+    let t3 = report("reservoir_size", test_reservoir_size());
+    let t4 = report("reservoir_k_equals_n", test_reservoir_k_equals_n());
+    let t5 = report("reservoir_deterministic", test_reservoir_deterministic());
+    let t6 = report("reservoir_single_elem", test_reservoir_single_elem());
+    let t7 = report("single_random", test_single_random());
+    let t8 = report("weighted_sample", test_weighted_sample());
+    let t9 = report("reservoir_elements_from_stream", test_reservoir_elements_from_stream());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+    let total = 9;
+    let _p1 = print_str("bmb-reservoir: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

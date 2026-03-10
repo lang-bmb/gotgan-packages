@@ -1,0 +1,428 @@
+// bmb-md5: Simplified MD5 hash implementation
+// v0.1.0
+//
+// Implements the 4-register (a,b,c,d) MD5 mixing with F,G,H,I auxiliary functions
+// and left-rotation. Processes bytes fed one at a time via md5_update_byte.
+//
+// State layout (vec with 8 slots):
+//   [0] a  - register A (initial: 0x67452301)
+//   [1] b  - register B (initial: 0xEFCDAB89)
+//   [2] c  - register C (initial: 0x98BADCFE)
+//   [3] d  - register D (initial: 0x10325476)
+//   [4] byte_count   - number of bytes fed so far
+//   [5] block_ptr    - pointer to current 64-byte block buffer
+//   [6] block_pos    - current write position within block (0-63)
+//   [7] spare        - reserved
+//
+// md5_finalize processes any remaining bytes with MD5 padding and returns
+// (a ^ b ^ c ^ d) & MASK32 as a single i64 fingerprint.
+
+// ============================================================================
+// 32-bit arithmetic helpers
+// ============================================================================
+
+fn MASK32() -> i64 = 4294967295;
+
+fn add32(a: i64, b: i64) -> i64 = (a + b) band MASK32();
+
+// Left rotate 32-bit value by n bits
+fn rotl32(x: i64, n: i64) -> i64 = {
+    let m = x band MASK32();
+    ((m << n) bor (m >> (32 - n))) band MASK32()
+};
+
+// ============================================================================
+// MD5 auxiliary functions
+// ============================================================================
+
+fn md5_F(b: i64, c: i64, d: i64) -> i64 =
+    ((b band c) bor ((b bxor MASK32()) band d)) band MASK32();
+
+fn md5_G(b: i64, c: i64, d: i64) -> i64 =
+    ((b band d) bor (c band (d bxor MASK32()))) band MASK32();
+
+fn md5_H(b: i64, c: i64, d: i64) -> i64 =
+    (b bxor c bxor d) band MASK32();
+
+fn md5_I(b: i64, c: i64, d: i64) -> i64 =
+    (c bxor (b bor (d bxor MASK32()))) band MASK32();
+
+// ============================================================================
+// MD5 per-round constants T[i] = floor(2^32 * abs(sin(i+1)))
+// (i is 0-based, 64 constants total)
+// ============================================================================
+
+fn md5_T(i: i64) -> i64 =
+    if i == 0  { 3614090360 } else if i == 1  { 3905402710 } else if i == 2  { 606105819  }
+    else if i == 3  { 3250441966 } else if i == 4  { 4118548399 } else if i == 5  { 1200080426 }
+    else if i == 6  { 2821735955 } else if i == 7  { 4249261313 } else if i == 8  { 1770035416 }
+    else if i == 9  { 2336552879 } else if i == 10 { 4294925233 } else if i == 11 { 2304563134 }
+    else if i == 12 { 1804603682 } else if i == 13 { 4254626195 } else if i == 14 { 2792965006 }
+    else if i == 15 { 1236535329 } else if i == 16 { 4129170786 } else if i == 17 { 3225465664 }
+    else if i == 18 { 643717713  } else if i == 19 { 3921069994 } else if i == 20 { 3593408605 }
+    else if i == 21 { 38016083   } else if i == 22 { 3634488961 } else if i == 23 { 3889429448 }
+    else if i == 24 { 568446438  } else if i == 25 { 3275163606 } else if i == 26 { 4107603335 }
+    else if i == 27 { 1163531501 } else if i == 28 { 2850285829 } else if i == 29 { 4243563512 }
+    else if i == 30 { 1735328473 } else if i == 31 { 2368359562 } else if i == 32 { 4294588738 }
+    else if i == 33 { 2272392833 } else if i == 34 { 1839030562 } else if i == 35 { 4259657740 }
+    else if i == 36 { 2763975236 } else if i == 37 { 1272893353 } else if i == 38 { 4139469664 }
+    else if i == 39 { 3200236656 } else if i == 40 { 681279174  } else if i == 41 { 3936430074 }
+    else if i == 42 { 3572445317 } else if i == 43 { 76029189   } else if i == 44 { 3654602809 }
+    else if i == 45 { 3873151461 } else if i == 46 { 530742520  } else if i == 47 { 3299628645 }
+    else if i == 48 { 4096336452 } else if i == 49 { 1126891415 } else if i == 50 { 2878612391 }
+    else if i == 51 { 4237533241 } else if i == 52 { 1700485571 } else if i == 53 { 2399980690 }
+    else if i == 54 { 4293915773 } else if i == 55 { 2240044497 } else if i == 56 { 1873313359 }
+    else if i == 57 { 4264355552 } else if i == 58 { 2734768916 } else if i == 59 { 1309151649 }
+    else if i == 60 { 4149444226 } else if i == 61 { 3174756917 } else if i == 62 { 718787259  }
+    else { 3951481745 };
+
+// Round shift amounts
+fn md5_S(i: i64) -> i64 =
+    if i == 0  { 7  } else if i == 1  { 12 } else if i == 2  { 17 } else if i == 3  { 22 }
+    else if i == 4  { 7  } else if i == 5  { 12 } else if i == 6  { 17 } else if i == 7  { 22 }
+    else if i == 8  { 7  } else if i == 9  { 12 } else if i == 10 { 17 } else if i == 11 { 22 }
+    else if i == 12 { 7  } else if i == 13 { 12 } else if i == 14 { 17 } else if i == 15 { 22 }
+    else if i == 16 { 5  } else if i == 17 { 9  } else if i == 18 { 14 } else if i == 19 { 20 }
+    else if i == 20 { 5  } else if i == 21 { 9  } else if i == 22 { 14 } else if i == 23 { 20 }
+    else if i == 24 { 5  } else if i == 25 { 9  } else if i == 26 { 14 } else if i == 27 { 20 }
+    else if i == 28 { 5  } else if i == 29 { 9  } else if i == 30 { 14 } else if i == 31 { 20 }
+    else if i == 32 { 4  } else if i == 33 { 11 } else if i == 34 { 16 } else if i == 35 { 23 }
+    else if i == 36 { 4  } else if i == 37 { 11 } else if i == 38 { 16 } else if i == 39 { 23 }
+    else if i == 40 { 4  } else if i == 41 { 11 } else if i == 42 { 16 } else if i == 43 { 23 }
+    else if i == 44 { 4  } else if i == 45 { 11 } else if i == 46 { 16 } else if i == 47 { 23 }
+    else if i == 48 { 6  } else if i == 49 { 10 } else if i == 50 { 15 } else if i == 51 { 21 }
+    else if i == 52 { 6  } else if i == 53 { 10 } else if i == 54 { 15 } else if i == 55 { 21 }
+    else if i == 56 { 6  } else if i == 57 { 10 } else if i == 58 { 15 } else if i == 59 { 21 }
+    else if i == 60 { 6  } else if i == 61 { 10 } else if i == 62 { 15 }
+    else { 21 };
+
+// Message schedule index for round i
+fn md5_M(i: i64) -> i64 =
+    if i < 16 { i }
+    else if i < 32 { (5 * i + 1) - ((5 * i + 1) / 16) * 16 }
+    else if i < 48 { (3 * i + 5) - ((3 * i + 5) / 16) * 16 }
+    else { (7 * i) - (7 * i / 16) * 16 };
+
+// ============================================================================
+// Block buffer helpers (one byte stored in full i64 slot)
+// ============================================================================
+
+fn blk_get(blk: i64, idx: i64) -> i64 = load_i64(blk + idx * 8);
+fn blk_set(blk: i64, idx: i64, v: i64) -> i64 = store_i64(blk + idx * 8, v band 255);
+
+// Read 4 bytes at byte offset off as little-endian u32
+fn blk_read_le32(blk: i64, off: i64) -> i64 = {
+    let b0 = blk_get(blk, off);
+    let b1 = blk_get(blk, off + 1);
+    let b2 = blk_get(blk, off + 2);
+    let b3 = blk_get(blk, off + 3);
+    (b0 bor (b1 << 8) bor (b2 << 16) bor (b3 << 24)) band MASK32()
+};
+
+// ============================================================================
+// State helpers (vec-backed)
+// ============================================================================
+
+fn md5_reg_a(state: i64) -> i64 = vec_get(state, 0);
+fn md5_reg_b(state: i64) -> i64 = vec_get(state, 1);
+fn md5_reg_c(state: i64) -> i64 = vec_get(state, 2);
+fn md5_reg_d(state: i64) -> i64 = vec_get(state, 3);
+fn md5_byte_count(state: i64) -> i64 = vec_get(state, 4);
+fn md5_block_ptr(state: i64) -> i64 = vec_get(state, 5);
+fn md5_block_pos(state: i64) -> i64 = vec_get(state, 6);
+
+fn md5_set_a(state: i64, v: i64) -> i64 = { let _s = vec_set(state, 0, v band MASK32()); 0 };
+fn md5_set_b(state: i64, v: i64) -> i64 = { let _s = vec_set(state, 1, v band MASK32()); 0 };
+fn md5_set_c(state: i64, v: i64) -> i64 = { let _s = vec_set(state, 2, v band MASK32()); 0 };
+fn md5_set_d(state: i64, v: i64) -> i64 = { let _s = vec_set(state, 3, v band MASK32()); 0 };
+fn md5_set_byte_count(state: i64, v: i64) -> i64 = { let _s = vec_set(state, 4, v); 0 };
+fn md5_set_block_ptr(state: i64, v: i64) -> i64 = { let _s = vec_set(state, 5, v); 0 };
+fn md5_set_block_pos(state: i64, v: i64) -> i64 = { let _s = vec_set(state, 6, v); 0 };
+
+// ============================================================================
+// Core: compress one 64-byte block
+// ============================================================================
+
+fn md5_compress(state: i64, blk: i64) -> i64 = {
+    let mut a = md5_reg_a(state);
+    let mut b = md5_reg_b(state);
+    let mut c = md5_reg_c(state);
+    let mut d = md5_reg_d(state);
+    let mut i = 0;
+    while i < 64 {
+        let f = if i < 16 { md5_F(b, c, d) }
+                else if i < 32 { md5_G(b, c, d) }
+                else if i < 48 { md5_H(b, c, d) }
+                else { md5_I(b, c, d) };
+        let m_idx = md5_M(i);
+        let m_val = blk_read_le32(blk, m_idx * 4);
+        let temp = add32(add32(add32(a, f), m_val), md5_T(i));
+        let new_b = add32(b, rotl32(temp, md5_S(i)));
+        a = d;
+        d = c;
+        c = b;
+        b = new_b;
+        i = i + 1;
+        0
+    };
+    let _sa = md5_set_a(state, add32(md5_reg_a(state), a));
+    let _sb = md5_set_b(state, add32(md5_reg_b(state), b));
+    let _sc = md5_set_c(state, add32(md5_reg_c(state), c));
+    let _sd = md5_set_d(state, add32(md5_reg_d(state), d));
+    0
+};
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+// Initialize MD5 state (8-element vec)
+fn md5_init() -> i64
+  post ret != 0
+= {
+    let state = vec_new();
+    // Allocate block buffer: 64 bytes × 8 bytes/slot = 512 bytes
+    let blk = malloc(512);
+    // Zero the block
+    let mut i = 0;
+    while i < 512 {
+        let _s = store_i64(blk + i, 0);
+        i = i + 8;
+        0
+    };
+    let _pa = vec_push(state, 1732584193);  // A = 0x67452301
+    let _pb = vec_push(state, 4023233417);  // B = 0xEFCDAB89
+    let _pc = vec_push(state, 2562383102);  // C = 0x98BADCFE
+    let _pd = vec_push(state, 271733878);   // D = 0x10325476
+    let _pe = vec_push(state, 0);           // byte_count
+    let _pf = vec_push(state, blk);         // block_ptr
+    let _pg = vec_push(state, 0);           // block_pos
+    let _ph = vec_push(state, 0);           // spare
+    state
+};
+
+// Feed one byte into the MD5 state
+fn md5_update_byte(state: i64, byte: i64) -> i64
+  pre state != 0
+= {
+    let blk = md5_block_ptr(state);
+    let pos = md5_block_pos(state);
+    let _sb = blk_set(blk, pos, byte band 255);
+    let new_pos = pos + 1;
+    let cnt = md5_byte_count(state);
+    let _sc = md5_set_byte_count(state, cnt + 1);
+    if new_pos == 64 {
+        let _comp = md5_compress(state, blk);
+        let _sp = md5_set_block_pos(state, 0);
+        // Zero block
+        let mut j = 0;
+        while j < 512 {
+            let _s = store_i64(blk + j, 0);
+            j = j + 8;
+            0
+        };
+        0
+    } else {
+        let _sp = md5_set_block_pos(state, new_pos);
+        0
+    }
+};
+
+// Finalize: apply MD5 padding and return (a ^ b ^ c ^ d) & MASK32
+fn md5_finalize(state: i64) -> i64
+  pre state != 0
+= {
+    let blk = md5_block_ptr(state);
+    let pos = md5_block_pos(state);
+    let total_bytes = md5_byte_count(state);
+    // Append 0x80 padding byte
+    let _pb = blk_set(blk, pos, 128);
+    let pos1 = pos + 1;
+    // Zero remaining bytes up to position 56
+    let mut i = pos1;
+    while i < 64 {
+        let _s = blk_set(blk, i, 0);
+        i = i + 1;
+        0
+    };
+    // If pos >= 56, compress current block and start a new one
+    let _pad = if pos1 > 56 {
+        let _comp = md5_compress(state, blk);
+        let mut j = 0;
+        while j < 512 {
+            let _s = store_i64(blk + j, 0);
+            j = j + 8;
+            0
+        };
+        0
+    } else { 0 };
+    // Write message length in bits as little-endian 64-bit at offset 56
+    let bits_lo = (total_bytes * 8) band MASK32();
+    let bits_hi = (total_bytes * 8) >> 32;
+    let _b0 = blk_set(blk, 56, bits_lo band 255);
+    let _b1 = blk_set(blk, 57, (bits_lo >> 8) band 255);
+    let _b2 = blk_set(blk, 58, (bits_lo >> 16) band 255);
+    let _b3 = blk_set(blk, 59, (bits_lo >> 24) band 255);
+    let _b4 = blk_set(blk, 60, bits_hi band 255);
+    let _b5 = blk_set(blk, 61, (bits_hi >> 8) band 255);
+    let _b6 = blk_set(blk, 62, (bits_hi >> 16) band 255);
+    let _b7 = blk_set(blk, 63, (bits_hi >> 24) band 255);
+    let _comp2 = md5_compress(state, blk);
+    // Return combined fingerprint
+    (md5_reg_a(state) bxor md5_reg_b(state) bxor md5_reg_c(state) bxor md5_reg_d(state)) band MASK32()
+};
+
+// Free state and its block buffer
+fn md5_free(state: i64) -> i64
+  pre state != 0
+= {
+    let blk = md5_block_ptr(state);
+    let _fb = free(blk);
+    let _fs = vec_free(state);
+    0
+};
+
+// Convenience: hash a vec of bytes, return fingerprint
+fn md5_hash_bytes(data: i64, len: i64) -> i64
+  pre data != 0 and len >= 0
+= {
+    let state = md5_init();
+    let mut i = 0;
+    while i < len {
+        let b = vec_get(data, i);
+        let _u = md5_update_byte(state, b);
+        i = i + 1;
+        0
+    };
+    let result = md5_finalize(state);
+    let _f = md5_free(state);
+    result
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_empty_deterministic() -> i64 = {
+    // Two empty inputs should produce same result
+    let s1 = md5_init();
+    let h1 = md5_finalize(s1);
+    let _f1 = md5_free(s1);
+    let s2 = md5_init();
+    let h2 = md5_finalize(s2);
+    let _f2 = md5_free(s2);
+    if h1 == h2 { 1 } else { 0 }
+};
+
+fn test_single_byte_deterministic() -> i64 = {
+    let s1 = md5_init();
+    let _u1 = md5_update_byte(s1, 65);
+    let h1 = md5_finalize(s1);
+    let _f1 = md5_free(s1);
+    let s2 = md5_init();
+    let _u2 = md5_update_byte(s2, 65);
+    let h2 = md5_finalize(s2);
+    let _f2 = md5_free(s2);
+    if h1 == h2 { 1 } else { 0 }
+};
+
+fn test_different_inputs_differ() -> i64 = {
+    let s1 = md5_init();
+    let _u1 = md5_update_byte(s1, 1);
+    let h1 = md5_finalize(s1);
+    let _f1 = md5_free(s1);
+    let s2 = md5_init();
+    let _u2 = md5_update_byte(s2, 2);
+    let h2 = md5_finalize(s2);
+    let _f2 = md5_free(s2);
+    if h1 != h2 { 1 } else { 0 }
+};
+
+fn test_multi_byte() -> i64 = {
+    // abc = bytes 65, 66, 67
+    let s1 = md5_init();
+    let _ua = md5_update_byte(s1, 65);
+    let _ub = md5_update_byte(s1, 66);
+    let _uc = md5_update_byte(s1, 67);
+    let h1 = md5_finalize(s1);
+    let _f1 = md5_free(s1);
+    let s2 = md5_init();
+    let _ud = md5_update_byte(s2, 65);
+    let _ue = md5_update_byte(s2, 66);
+    let _uf = md5_update_byte(s2, 67);
+    let h2 = md5_finalize(s2);
+    let _f2 = md5_free(s2);
+    if h1 == h2 { 1 } else { 0 }
+};
+
+fn test_hash_bytes_matches_manual() -> i64 = {
+    let data = vec_new();
+    let _p1 = vec_push(data, 72);  // H
+    let _p2 = vec_push(data, 101); // e
+    let _p3 = vec_push(data, 108); // l
+    let _p4 = vec_push(data, 108); // l
+    let _p5 = vec_push(data, 111); // o
+    let h1 = md5_hash_bytes(data, 5);
+    // Manual
+    let s = md5_init();
+    let _u1 = md5_update_byte(s, 72);
+    let _u2 = md5_update_byte(s, 101);
+    let _u3 = md5_update_byte(s, 108);
+    let _u4 = md5_update_byte(s, 108);
+    let _u5 = md5_update_byte(s, 111);
+    let h2 = md5_finalize(s);
+    let _f2 = md5_free(s);
+    let _fv = vec_free(data);
+    if h1 == h2 { 1 } else { 0 }
+};
+
+fn test_result_is_32bit() -> i64 = {
+    // Hash result must fit in 32 bits
+    let s = md5_init();
+    let _u = md5_update_byte(s, 42);
+    let h = md5_finalize(s);
+    let _f = md5_free(s);
+    if h >= 0 and h <= 4294967295 { 1 } else { 0 }
+};
+
+fn test_64_bytes_crosses_block() -> i64 = {
+    // Feeding exactly 64 bytes should trigger a compression midway
+    let s1 = md5_init();
+    let mut i = 0;
+    while i < 64 { let _u = md5_update_byte(s1, i band 255); i = i + 1; 0 };
+    let h1 = md5_finalize(s1);
+    let _f1 = md5_free(s1);
+    let s2 = md5_init();
+    let mut j = 0;
+    while j < 64 { let _u = md5_update_byte(s2, j band 255); j = j + 1; 0 };
+    let h2 = md5_finalize(s2);
+    let _f2 = md5_free(s2);
+    if h1 == h2 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("empty_deterministic",     test_empty_deterministic());
+    let t2 = report("single_byte_deterministic", test_single_byte_deterministic());
+    let t3 = report("different_inputs_differ", test_different_inputs_differ());
+    let t4 = report("multi_byte",              test_multi_byte());
+    let t5 = report("hash_bytes_matches",      test_hash_bytes_matches_manual());
+    let t6 = report("result_is_32bit",         test_result_is_32bit());
+    let t7 = report("64_bytes_crosses_block",  test_64_bytes_crosses_block());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = 7;
+    let _p1 = print_str("bmb-md5: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

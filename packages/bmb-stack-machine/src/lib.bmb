@@ -1,0 +1,221 @@
+// bmb-stack-machine: Simple stack-based virtual machine
+// Uses a Vec as the underlying stack.
+// Values are i64. Operations pop operands and push results.
+
+// Create a new stack machine
+fn sm_new() -> i64
+  post ret != 0
+= vec_new();
+
+// Push a value onto the stack
+fn sm_push(sm: i64, val: i64) -> i64
+  pre sm != 0
+= { let _p = vec_push(sm, val); 0 };
+
+// Pop the top value from the stack (returns 0 on empty)
+fn sm_pop(sm: i64) -> i64
+  pre sm != 0
+= {
+    if vec_len(sm) == 0 { 0 }
+    else { vec_pop(sm) }
+};
+
+// Peek at the top value without removing it (returns 0 on empty)
+fn sm_peek(sm: i64) -> i64
+  pre sm != 0
+= {
+    let len = vec_len(sm);
+    if len == 0 { 0 }
+    else { vec_get(sm, len - 1) }
+};
+
+// Return current stack depth
+fn sm_size(sm: i64) -> i64
+  pre sm != 0
+  post ret >= 0
+= vec_len(sm);
+
+// Add: pop two values, push their sum
+fn sm_add(sm: i64) -> i64
+  pre sm != 0
+= {
+    let b = sm_pop(sm);
+    let a = sm_pop(sm);
+    let _p = vec_push(sm, a + b);
+    0
+};
+
+// Sub: pop two values, push (second-from-top - top)
+fn sm_sub(sm: i64) -> i64
+  pre sm != 0
+= {
+    let b = sm_pop(sm);
+    let a = sm_pop(sm);
+    let _p = vec_push(sm, a - b);
+    0
+};
+
+// Mul: pop two values, push their product
+fn sm_mul(sm: i64) -> i64
+  pre sm != 0
+= {
+    let b = sm_pop(sm);
+    let a = sm_pop(sm);
+    let _p = vec_push(sm, a * b);
+    0
+};
+
+// Dup: duplicate the top value
+fn sm_dup(sm: i64) -> i64
+  pre sm != 0
+= {
+    let top = sm_peek(sm);
+    let _p = vec_push(sm, top);
+    0
+};
+
+// Swap: exchange the top two values
+fn sm_swap(sm: i64) -> i64
+  pre sm != 0
+= {
+    let len = vec_len(sm);
+    if len < 2 { 0 }
+    else {
+        let top = vec_get(sm, len - 1);
+        let sec = vec_get(sm, len - 2);
+        let _s1 = vec_set(sm, len - 1, sec);
+        let _s2 = vec_set(sm, len - 2, top);
+        0
+    }
+};
+
+// Free the stack machine
+fn sm_free(sm: i64) -> i64
+  pre sm != 0
+= { let _f = vec_free(sm); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_push_pop() -> i64 = {
+    let sm = sm_new();
+    let _p1 = sm_push(sm, 10);
+    let _p2 = sm_push(sm, 20);
+    let _p3 = sm_push(sm, 30);
+    if sm_size(sm) != 3 { let _f = sm_free(sm); 0 }
+    else if sm_pop(sm) != 30 { let _f = sm_free(sm); 0 }
+    else if sm_pop(sm) != 20 { let _f = sm_free(sm); 0 }
+    else if sm_pop(sm) != 10 { let _f = sm_free(sm); 0 }
+    else if sm_size(sm) != 0 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_peek() -> i64 = {
+    let sm = sm_new();
+    let _p1 = sm_push(sm, 42);
+    if sm_peek(sm) != 42 { let _f = sm_free(sm); 0 }
+    else if sm_size(sm) != 1 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_add() -> i64 = {
+    let sm = sm_new();
+    let _p1 = sm_push(sm, 3);
+    let _p2 = sm_push(sm, 4);
+    let _a = sm_add(sm);
+    if sm_size(sm) != 1 { let _f = sm_free(sm); 0 }
+    else if sm_pop(sm) != 7 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_sub() -> i64 = {
+    let sm = sm_new();
+    let _p1 = sm_push(sm, 10);
+    let _p2 = sm_push(sm, 3);
+    let _s = sm_sub(sm);
+    if sm_pop(sm) != 7 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_mul() -> i64 = {
+    let sm = sm_new();
+    let _p1 = sm_push(sm, 6);
+    let _p2 = sm_push(sm, 7);
+    let _m = sm_mul(sm);
+    if sm_pop(sm) != 42 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_dup() -> i64 = {
+    let sm = sm_new();
+    let _p = sm_push(sm, 99);
+    let _d = sm_dup(sm);
+    if sm_size(sm) != 2 { let _f = sm_free(sm); 0 }
+    else if sm_pop(sm) != 99 { let _f = sm_free(sm); 0 }
+    else if sm_pop(sm) != 99 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_swap() -> i64 = {
+    let sm = sm_new();
+    let _p1 = sm_push(sm, 1);
+    let _p2 = sm_push(sm, 2);
+    let _sw = sm_swap(sm);
+    if sm_pop(sm) != 1 { let _f = sm_free(sm); 0 }
+    else if sm_pop(sm) != 2 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_expression() -> i64 = {
+    // Compute: (3 + 4) * (2 + 1) = 7 * 3 = 21
+    let sm = sm_new();
+    let _p1 = sm_push(sm, 3);
+    let _p2 = sm_push(sm, 4);
+    let _a1 = sm_add(sm);     // [7]
+    let _p3 = sm_push(sm, 2);
+    let _p4 = sm_push(sm, 1);
+    let _a2 = sm_add(sm);     // [7, 3]
+    let _m = sm_mul(sm);      // [21]
+    if sm_pop(sm) != 21 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn test_empty_pop() -> i64 = {
+    let sm = sm_new();
+    // Popping from empty returns 0
+    if sm_pop(sm) != 0 { let _f = sm_free(sm); 0 }
+    else if sm_peek(sm) != 0 { let _f = sm_free(sm); 0 }
+    else { let _f = sm_free(sm); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("push_pop", test_push_pop());
+    let t2 = report("peek", test_peek());
+    let t3 = report("add", test_add());
+    let t4 = report("sub", test_sub());
+    let t5 = report("mul", test_mul());
+    let t6 = report("dup", test_dup());
+    let t7 = report("swap", test_swap());
+    let t8 = report("expression", test_expression());
+    let t9 = report("empty_pop", test_empty_pop());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+    let total = 9;
+    let _p1 = print_str("bmb-stack-machine: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

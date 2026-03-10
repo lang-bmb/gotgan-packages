@@ -1,0 +1,277 @@
+// bmb-priority-queue: Min-heap priority queue with (key, value) pairs.
+// Ordering is by key (smallest key = highest priority).
+// Backed by two parallel vecs: one for keys, one for values.
+// Both vecs are kept in sync during all heap operations.
+//
+// Usage:
+//   let pq = pq_new();
+//   let _p = pq_push(pq, 5, 100);
+//   let _p = pq_push(pq, 2, 200);
+//   let val = pq_pop_min(pq);    // returns 200 (key 2 was smallest)
+//   let _f = pq_free(pq);
+//
+// Memory layout:
+//   PQ header: [keys_vec: i64, vals_vec: i64] = 16 bytes
+
+// Create a new priority queue
+fn pq_new() -> i64
+  post ret != 0
+= {
+    let pq = malloc(16);
+    let keys = vec_new();
+    let vals = vec_new();
+    let _s1 = store_i64(pq, keys);
+    let _s2 = store_i64(pq + 8, vals);
+    pq
+};
+
+// Number of elements in the priority queue
+fn pq_size(pq: i64) -> i64
+  pre pq != 0
+  post ret >= 0
+= vec_len(load_i64(pq));
+
+// Helper: swap entries at positions i and j in both key and value vecs
+fn pq_swap_pair(keys: i64, vals: i64, i: i64, j: i64) -> i64 = {
+    let ki = vec_get(keys, i);
+    let kj = vec_get(keys, j);
+    let vi = vec_get(vals, i);
+    let vj = vec_get(vals, j);
+    let _sk1 = vec_set(keys, i, kj);
+    let _sk2 = vec_set(keys, j, ki);
+    let _sv1 = vec_set(vals, i, vj);
+    let _sv2 = vec_set(vals, j, vi);
+    0
+};
+
+// Sift up: restore heap property after inserting at position idx
+fn pq_sift_up(keys: i64, vals: i64, idx: i64) -> i64 = {
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        if i == 0 { done = true; 0 }
+        else {
+            let parent = (i - 1) / 2;
+            if vec_get(keys, i) < vec_get(keys, parent) {
+                let _sw = pq_swap_pair(keys, vals, i, parent);
+                i = parent;
+                0
+            } else { done = true; 0 }
+        }
+    };
+    0
+};
+
+// Sift down: restore heap property after removing root
+fn pq_sift_down(keys: i64, vals: i64, len: i64, idx: i64) -> i64 = {
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        let left = 2 * i + 1;
+        let right = 2 * i + 2;
+        let mut smallest = i;
+        if left < len {
+            if vec_get(keys, left) < vec_get(keys, smallest) {
+                smallest = left;
+                0
+            } else { 0 }
+        } else { 0 };
+        if right < len {
+            if vec_get(keys, right) < vec_get(keys, smallest) {
+                smallest = right;
+                0
+            } else { 0 }
+        } else { 0 };
+        if smallest != i {
+            let _sw = pq_swap_pair(keys, vals, i, smallest);
+            i = smallest;
+            0
+        } else { done = true; 0 }
+    };
+    0
+};
+
+// Push a (key, value) pair into the priority queue
+fn pq_push(pq: i64, key: i64, value: i64) -> i64
+  pre pq != 0
+= {
+    let keys = load_i64(pq);
+    let vals = load_i64(pq + 8);
+    let _pk = vec_push(keys, key);
+    let _pv = vec_push(vals, value);
+    let idx = vec_len(keys) - 1;
+    pq_sift_up(keys, vals, idx)
+};
+
+// Remove and return the value of the minimum-key element
+// Returns 0 if the queue is empty
+fn pq_pop_min(pq: i64) -> i64
+  pre pq != 0
+= {
+    let keys = load_i64(pq);
+    let vals = load_i64(pq + 8);
+    let len = vec_len(keys);
+    if len == 0 { 0 }
+    else if len == 1 {
+        let _k = vec_pop(keys);
+        vec_pop(vals)
+    } else {
+        let min_val = vec_get(vals, 0);
+        let last_k = vec_pop(keys);
+        let last_v = vec_pop(vals);
+        let _sk = vec_set(keys, 0, last_k);
+        let _sv = vec_set(vals, 0, last_v);
+        let new_len = vec_len(keys);
+        let _d = pq_sift_down(keys, vals, new_len, 0);
+        min_val
+    }
+};
+
+// Peek at the minimum key without removing
+// Returns 0 if the queue is empty
+fn pq_peek_min_key(pq: i64) -> i64
+  pre pq != 0
+= {
+    let keys = load_i64(pq);
+    if vec_len(keys) == 0 { 0 }
+    else { vec_get(keys, 0) }
+};
+
+// Peek at the value associated with the minimum key
+// Returns 0 if the queue is empty
+fn pq_peek_min_val(pq: i64) -> i64
+  pre pq != 0
+= {
+    let vals = load_i64(pq + 8);
+    if vec_len(vals) == 0 { 0 }
+    else { vec_get(vals, 0) }
+};
+
+// Free all memory used by the priority queue
+fn pq_free(pq: i64) -> i64
+  pre pq != 0
+= {
+    let keys = load_i64(pq);
+    let vals = load_i64(pq + 8);
+    let _fk = vec_free(keys);
+    let _fv = vec_free(vals);
+    let _fp = free(pq);
+    0
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_basic_push_pop() -> i64 = {
+    let pq = pq_new();
+    let _p1 = pq_push(pq, 5, 500);
+    let _p2 = pq_push(pq, 2, 200);
+    let _p3 = pq_push(pq, 8, 800);
+    // min key = 2, value = 200
+    let v = pq_pop_min(pq);
+    let _f = pq_free(pq);
+    if v == 200 { 1 } else { 0 }
+};
+
+fn test_pop_order() -> i64 = {
+    let pq = pq_new();
+    let _p1 = pq_push(pq, 30, 3);
+    let _p2 = pq_push(pq, 10, 1);
+    let _p3 = pq_push(pq, 50, 5);
+    let _p4 = pq_push(pq, 20, 2);
+    let _p5 = pq_push(pq, 40, 4);
+    let v1 = pq_pop_min(pq);
+    let v2 = pq_pop_min(pq);
+    let v3 = pq_pop_min(pq);
+    let v4 = pq_pop_min(pq);
+    let v5 = pq_pop_min(pq);
+    let _f = pq_free(pq);
+    if v1 == 1 and v2 == 2 and v3 == 3 and v4 == 4 and v5 == 5 { 1 } else { 0 }
+};
+
+fn test_peek() -> i64 = {
+    let pq = pq_new();
+    let _p1 = pq_push(pq, 10, 100);
+    let _p2 = pq_push(pq, 3, 30);
+    let _p3 = pq_push(pq, 7, 70);
+    let pk = pq_peek_min_key(pq);
+    let pv = pq_peek_min_val(pq);
+    let sz = pq_size(pq);
+    let _f = pq_free(pq);
+    if pk == 3 and pv == 30 and sz == 3 { 1 } else { 0 }
+};
+
+fn test_size() -> i64 = {
+    let pq = pq_new();
+    let s0 = pq_size(pq);
+    let _p1 = pq_push(pq, 1, 10);
+    let s1 = pq_size(pq);
+    let _p2 = pq_push(pq, 2, 20);
+    let s2 = pq_size(pq);
+    let _v = pq_pop_min(pq);
+    let s3 = pq_size(pq);
+    let _f = pq_free(pq);
+    if s0 == 0 and s1 == 1 and s2 == 2 and s3 == 1 { 1 } else { 0 }
+};
+
+fn test_single_element() -> i64 = {
+    let pq = pq_new();
+    let _p = pq_push(pq, 42, 99);
+    let v = pq_pop_min(pq);
+    let sz = pq_size(pq);
+    let _f = pq_free(pq);
+    if v == 99 and sz == 0 { 1 } else { 0 }
+};
+
+fn test_empty_pop() -> i64 = {
+    let pq = pq_new();
+    let v = pq_pop_min(pq);
+    let _f = pq_free(pq);
+    if v == 0 { 1 } else { 0 }
+};
+
+fn test_duplicate_keys() -> i64 = {
+    let pq = pq_new();
+    let _p1 = pq_push(pq, 5, 50);
+    let _p2 = pq_push(pq, 5, 51);
+    let _p3 = pq_push(pq, 3, 30);
+    // min key = 3, then either of key=5 items
+    let v1 = pq_pop_min(pq);
+    let v2 = pq_pop_min(pq);
+    let v3 = pq_pop_min(pq);
+    let _f = pq_free(pq);
+    // v1 must be 30 (key 3), v2 and v3 must be 50 and 51 in some order
+    let ok_v1 = b2i(v1 == 30);
+    let ok_v23 = b2i((v2 == 50 and v3 == 51) or (v2 == 51 and v3 == 50));
+    if ok_v1 == 1 and ok_v23 == 1 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_push_pop", test_basic_push_pop());
+    let t2 = report("pop_order", test_pop_order());
+    let t3 = report("peek", test_peek());
+    let t4 = report("size", test_size());
+    let t5 = report("single_element", test_single_element());
+    let t6 = report("empty_pop", test_empty_pop());
+    let t7 = report("duplicate_keys", test_duplicate_keys());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = 7;
+    let _p1 = print_str("bmb-priority-queue: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

@@ -1,0 +1,9 @@
+[package]
+name = "bmb-assert"
+version = "0.1.0"
+description = "Assertion and testing utilities for BMB programs"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

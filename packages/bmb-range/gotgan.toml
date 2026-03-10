@@ -1,0 +1,9 @@
+[package]
+name = "bmb-range"
+version = "0.1.0"
+description = "Range utilities: construction, iteration, and arithmetic"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

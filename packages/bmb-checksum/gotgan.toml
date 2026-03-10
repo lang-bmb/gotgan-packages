@@ -1,0 +1,9 @@
+[package]
+name = "bmb-checksum"
+version = "0.1.0"
+description = "Simple checksum algorithms: Adler-32, Fletcher-16, XOR, and sum checksum"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

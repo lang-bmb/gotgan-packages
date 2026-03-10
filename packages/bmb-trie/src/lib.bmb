@@ -1,0 +1,300 @@
+// bmb-trie: Integer trie (digit sequences 0-9)
+// v0.1.0
+//
+// Each node has 10 child pointers (for digits 0-9) and an is_end flag.
+// Keys are sequences of digits represented as i64 values in a vec/array.
+// The trie supports insert, exact search, and prefix search.
+//
+// Node layout (96 bytes):
+//   children[0..9]: 10 * 8 = 80 bytes (child node pointers, 0 = null)
+//   is_end:          8 bytes (1 if a key ends here, else 0)
+//   _pad:            8 bytes (unused, keeps alignment)
+
+// ============================================================================
+// Constants
+// ============================================================================
+
+fn TRIE_NODE_SIZE() -> i64 = 96;
+fn TRIE_NULL() -> i64 = 0;
+fn TRIE_CHILDREN() -> i64 = 10;
+
+// ============================================================================
+// Node helpers
+// ============================================================================
+
+fn tnode_child_addr(node: i64, digit: i64) -> i64 = node + digit * 8;
+
+fn tnode_child(node: i64, digit: i64) -> i64
+  pre digit >= 0 and digit < 10
+= load_i64(tnode_child_addr(node, digit));
+
+fn tnode_set_child(node: i64, digit: i64, child: i64) -> i64
+  pre digit >= 0 and digit < 10
+= store_i64(tnode_child_addr(node, digit), child);
+
+fn tnode_is_end(node: i64) -> i64 = load_i64(node + 80);
+
+fn tnode_set_end(node: i64, v: i64) -> i64 = store_i64(node + 80, v);
+
+fn tnode_alloc() -> i64 = {
+    let n = malloc(TRIE_NODE_SIZE());
+    // Zero all children and is_end
+    let mut i = 0;
+    while i < TRIE_NODE_SIZE() {
+        let _s = store_i64(n + i, 0);
+        i = i + 8;
+        0
+    };
+    n
+};
+
+// ============================================================================
+// Trie creation / destruction
+// ============================================================================
+
+fn trie_new() -> i64
+  post ret != 0
+= tnode_alloc();
+
+// Recursively free all nodes
+fn tnode_free_recursive(node: i64) -> i64 = {
+    if node == TRIE_NULL() { 0 }
+    else {
+        let mut i = 0;
+        while i < TRIE_CHILDREN() {
+            let child = tnode_child(node, i);
+            let _r = if child != TRIE_NULL() { tnode_free_recursive(child) } else { 0 };
+            i = i + 1;
+            0
+        };
+        free(node)
+    }
+};
+
+fn trie_free(t: i64) -> i64
+  pre t != 0
+= { let _r = tnode_free_recursive(t); 0 };
+
+// ============================================================================
+// Insert
+// ============================================================================
+
+// Insert a key given as a vec (i64 pointer with vec_len/vec_get) of digit values 0-9
+fn trie_insert(t: i64, key_vec: i64, len: i64) -> i64
+  pre t != 0 and len >= 0
+= {
+    let mut node = t;
+    let mut i = 0;
+    while i < len {
+        let digit = vec_get(key_vec, i);
+        let child = tnode_child(node, digit);
+        let next = if child == TRIE_NULL() {
+            let nc = tnode_alloc();
+            let _sc = tnode_set_child(node, digit, nc);
+            nc
+        } else { child };
+        node = next;
+        i = i + 1;
+        0
+    };
+    tnode_set_end(node, 1)
+};
+
+// ============================================================================
+// Search (exact key)
+// ============================================================================
+
+fn trie_search(t: i64, key_vec: i64, len: i64) -> bool
+  pre t != 0 and len >= 0
+= {
+    let mut node = t;
+    let mut i = 0;
+    let mut found = true;
+    while i < len {
+        let digit = vec_get(key_vec, i);
+        let child = tnode_child(node, digit);
+        if child == TRIE_NULL() {
+            found = false; i = len; 0
+        } else {
+            node = child; i = i + 1; 0
+        };
+        0
+    };
+    if not found { false }
+    else { tnode_is_end(node) == 1 }
+};
+
+// ============================================================================
+// Prefix search
+// ============================================================================
+
+fn trie_starts_with(t: i64, prefix_vec: i64, len: i64) -> bool
+  pre t != 0 and len >= 0
+= {
+    let mut node = t;
+    let mut i = 0;
+    let mut found = true;
+    while i < len {
+        let digit = vec_get(prefix_vec, i);
+        let child = tnode_child(node, digit);
+        if child == TRIE_NULL() {
+            found = false; i = len; 0
+        } else {
+            node = child; i = i + 1; 0
+        };
+        0
+    };
+    found
+};
+
+// ============================================================================
+// Helper: build a vec from individual digit values
+// ============================================================================
+
+fn make_key(d0: i64) -> i64 = {
+    let v = vec_new();
+    let _p0 = vec_push(v, d0);
+    v
+};
+
+fn make_key2(d0: i64, d1: i64) -> i64 = {
+    let v = vec_new();
+    let _p0 = vec_push(v, d0);
+    let _p1 = vec_push(v, d1);
+    v
+};
+
+fn make_key3(d0: i64, d1: i64, d2: i64) -> i64 = {
+    let v = vec_new();
+    let _p0 = vec_push(v, d0);
+    let _p1 = vec_push(v, d1);
+    let _p2 = vec_push(v, d2);
+    v
+};
+
+fn make_key4(d0: i64, d1: i64, d2: i64, d3: i64) -> i64 = {
+    let v = vec_new();
+    let _p0 = vec_push(v, d0);
+    let _p1 = vec_push(v, d1);
+    let _p2 = vec_push(v, d2);
+    let _p3 = vec_push(v, d3);
+    v
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_insert_search() -> i64 = {
+    let t = trie_new();
+    // Insert key [1,2,3]
+    let k = make_key3(1, 2, 3);
+    let _ins = trie_insert(t, k, 3);
+    let found = trie_search(t, k, 3);
+    // Search for [1,2] - not inserted
+    let k2 = make_key2(1, 2);
+    let not_found = trie_search(t, k2, 2);
+    let _f1 = vec_free(k);
+    let _f2 = vec_free(k2);
+    let _ft = trie_free(t);
+    if b2i(found) == 1 and b2i(not_found) == 0 { 1 } else { 0 }
+};
+
+fn test_prefix() -> i64 = {
+    let t = trie_new();
+    let k = make_key4(4, 2, 0, 9);
+    let _ins = trie_insert(t, k, 4);
+    // Prefix [4,2] should exist
+    let p1 = make_key2(4, 2);
+    let has_prefix = trie_starts_with(t, p1, 2);
+    // Prefix [4,3] should not
+    let p2 = make_key2(4, 3);
+    let no_prefix = trie_starts_with(t, p2, 2);
+    let _f1 = vec_free(k);
+    let _f2 = vec_free(p1);
+    let _f3 = vec_free(p2);
+    let _ft = trie_free(t);
+    if b2i(has_prefix) == 1 and b2i(no_prefix) == 0 { 1 } else { 0 }
+};
+
+fn test_multiple_keys() -> i64 = {
+    let t = trie_new();
+    let k1 = make_key2(1, 0);
+    let k2 = make_key2(1, 1);
+    let k3 = make_key3(1, 0, 5);
+    let _i1 = trie_insert(t, k1, 2);
+    let _i2 = trie_insert(t, k2, 2);
+    let _i3 = trie_insert(t, k3, 3);
+    let f1 = trie_search(t, k1, 2);
+    let f2 = trie_search(t, k2, 2);
+    let f3 = trie_search(t, k3, 3);
+    // [1,0,5] is inserted, but [1,0] is also separately inserted
+    let p = trie_starts_with(t, k1, 2);
+    let _ff1 = vec_free(k1);
+    let _ff2 = vec_free(k2);
+    let _ff3 = vec_free(k3);
+    let _ft = trie_free(t);
+    if b2i(f1) == 1 and b2i(f2) == 1 and b2i(f3) == 1 and b2i(p) == 1 { 1 } else { 0 }
+};
+
+fn test_empty_key() -> i64 = {
+    let t = trie_new();
+    // Insert empty key (len=0): marks root as end
+    let v = vec_new();
+    let _ins = trie_insert(t, v, 0);
+    let found = trie_search(t, v, 0);
+    let _fv = vec_free(v);
+    let _ft = trie_free(t);
+    if b2i(found) == 1 { 1 } else { 0 }
+};
+
+fn test_single_digits() -> i64 = {
+    let t = trie_new();
+    let mut i = 0;
+    while i < 10 {
+        let k = make_key(i);
+        let _ins = trie_insert(t, k, 1);
+        let _fk = vec_free(k);
+        i = i + 1;
+        0
+    };
+    let mut ok = 1;
+    let mut j = 0;
+    while j < 10 {
+        let k2 = make_key(j);
+        let found = trie_search(t, k2, 1);
+        if b2i(found) == 0 { ok = 0; 0 } else { 0 };
+        let _fk = vec_free(k2);
+        j = j + 1;
+        0
+    };
+    let _ft = trie_free(t);
+    ok
+};
+
+fn main() -> i64 = {
+    let t1 = report("insert_search", test_insert_search());
+    let t2 = report("prefix", test_prefix());
+    let t3 = report("multiple_keys", test_multiple_keys());
+    let t4 = report("empty_key", test_empty_key());
+    let t5 = report("single_digits", test_single_digits());
+    let passed = t1 + t2 + t3 + t4 + t5;
+    let total = 5;
+    let _p1 = print_str("bmb-trie: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

@@ -1,0 +1,9 @@
+[package]
+name = "bmb-euler"
+version = "0.1.0"
+description = "Euler's totient function, GCD/LCM extensions, modular multiplicative order"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

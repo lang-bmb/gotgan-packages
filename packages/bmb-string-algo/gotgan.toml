@@ -1,0 +1,8 @@
+[package]
+name = "bmb-string-algo"
+version = "0.1.0"
+description = "String algorithm utilities: KMP search, palindrome check, char count, reverse"
+authors = ["BMB Team"]
+license = "MIT"
+
+[dependencies]

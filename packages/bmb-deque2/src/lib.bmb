@@ -1,0 +1,312 @@
+// bmb-deque2: Double-ended queue using a malloc-based circular buffer
+// Supports O(1) push/pop from both front and back.
+// Grows by doubling capacity when full.
+//
+// Layout: [capacity, length, head, data...]
+//   head = index of the front element
+//   Elements stored circularly: element i at data[(head + i) % capacity]
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Create a new deque with initial capacity
+fn deque_new(init_cap: i64) -> i64
+  pre init_cap > 0
+  post ret != 0
+= {
+    let ptr = malloc((3 + init_cap) * 8);
+    let _s1 = store_i64(ptr, init_cap);      // capacity
+    let _s2 = store_i64(ptr + 8, 0);          // length
+    let _s3 = store_i64(ptr + 16, 0);         // head
+    ptr
+};
+
+// Get capacity
+fn deque_cap(dq: i64) -> i64
+  pre dq != 0
+= load_i64(dq);
+
+// Get length
+fn deque_len(dq: i64) -> i64
+  pre dq != 0
+  post ret >= 0
+= load_i64(dq + 8);
+
+// Get head index
+fn deque_head(dq: i64) -> i64
+  pre dq != 0
+= load_i64(dq + 16);
+
+// Check if empty
+fn deque_is_empty(dq: i64) -> bool
+  pre dq != 0
+= deque_len(dq) == 0;
+
+// Modular index helper
+fn deque_mod(val: i64, cap: i64) -> i64
+  pre cap > 0
+= {
+    let r = val - (val / cap) * cap;
+    if r < 0 { r + cap } else { r }
+};
+
+// Read data at physical index
+fn deque_read(dq: i64, phys: i64) -> i64
+  pre dq != 0
+= load_i64(dq + 24 + phys * 8);
+
+// Write data at physical index
+fn deque_write(dq: i64, phys: i64, val: i64) -> i64
+  pre dq != 0
+= { let _s = store_i64(dq + 24 + phys * 8, val); 0 };
+
+// Grow: allocate a new buffer with double capacity, copy elements.
+// Returns pointer to new deque (old one is freed).
+fn deque_grow(dq: i64) -> i64
+  pre dq != 0
+  post ret != 0
+= {
+    let old_cap = deque_cap(dq);
+    let len = deque_len(dq);
+    let head = deque_head(dq);
+    let new_cap = old_cap * 2;
+    let new_dq = malloc((3 + new_cap) * 8);
+    let _s1 = store_i64(new_dq, new_cap);
+    let _s2 = store_i64(new_dq + 8, len);
+    let _s3 = store_i64(new_dq + 16, 0);
+    // Copy elements to new buffer starting at index 0
+    let mut i = 0;
+    while i < len {
+        let phys = deque_mod(head + i, old_cap);
+        let val = deque_read(dq, phys);
+        let _w = store_i64(new_dq + 24 + i * 8, val);
+        i = i + 1;
+        0
+    };
+    let _f = free(dq);
+    new_dq
+};
+
+// Push to back. Returns the (possibly new) deque pointer.
+fn deque_push_back(dq: i64, val: i64) -> i64
+  pre dq != 0
+  post ret != 0
+= {
+    let cur = if deque_len(dq) == deque_cap(dq) { deque_grow(dq) } else { dq };
+    let cap = deque_cap(cur);
+    let len = deque_len(cur);
+    let head = deque_head(cur);
+    let phys = deque_mod(head + len, cap);
+    let _w = deque_write(cur, phys, val);
+    let _sl = store_i64(cur + 8, len + 1);
+    cur
+};
+
+// Push to front. Returns the (possibly new) deque pointer.
+fn deque_push_front(dq: i64, val: i64) -> i64
+  pre dq != 0
+  post ret != 0
+= {
+    let cur = if deque_len(dq) == deque_cap(dq) { deque_grow(dq) } else { dq };
+    let cap = deque_cap(cur);
+    let len = deque_len(cur);
+    let head = deque_head(cur);
+    let new_head = deque_mod(head - 1 + cap, cap);
+    let _w = deque_write(cur, new_head, val);
+    let _sh = store_i64(cur + 16, new_head);
+    let _sl = store_i64(cur + 8, len + 1);
+    cur
+};
+
+// Pop from back. Returns the value (0 if empty). Deque pointer unchanged.
+fn deque_pop_back(dq: i64) -> i64
+  pre dq != 0
+= {
+    let len = deque_len(dq);
+    if len == 0 { 0 }
+    else {
+        let cap = deque_cap(dq);
+        let head = deque_head(dq);
+        let phys = deque_mod(head + len - 1, cap);
+        let val = deque_read(dq, phys);
+        let _sl = store_i64(dq + 8, len - 1);
+        val
+    }
+};
+
+// Pop from front. Returns the value (0 if empty). Deque pointer unchanged.
+fn deque_pop_front(dq: i64) -> i64
+  pre dq != 0
+= {
+    let len = deque_len(dq);
+    if len == 0 { 0 }
+    else {
+        let cap = deque_cap(dq);
+        let head = deque_head(dq);
+        let val = deque_read(dq, head);
+        let new_head = deque_mod(head + 1, cap);
+        let _sh = store_i64(dq + 16, new_head);
+        let _sl = store_i64(dq + 8, len - 1);
+        val
+    }
+};
+
+// Get element at logical index (0 = front)
+fn deque_get(dq: i64, idx: i64) -> i64
+  pre dq != 0 and idx >= 0
+= {
+    let len = deque_len(dq);
+    if idx >= len { 0 }
+    else {
+        let cap = deque_cap(dq);
+        let head = deque_head(dq);
+        let phys = deque_mod(head + idx, cap);
+        deque_read(dq, phys)
+    }
+};
+
+// Peek at front (0 if empty)
+fn deque_front(dq: i64) -> i64
+  pre dq != 0
+= if deque_is_empty(dq) { 0 } else { deque_get(dq, 0) };
+
+// Peek at back (0 if empty)
+fn deque_back(dq: i64) -> i64
+  pre dq != 0
+= {
+    let len = deque_len(dq);
+    if len == 0 { 0 }
+    else { deque_get(dq, len - 1) }
+};
+
+// Free memory
+fn deque_free(dq: i64) -> i64
+  pre dq != 0
+= { let _f = free(dq); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_push_back_pop_front() -> i64 = {
+    let mut dq = deque_new(4);
+    dq = deque_push_back(dq, 10);
+    dq = deque_push_back(dq, 20);
+    dq = deque_push_back(dq, 30);
+    if deque_len(dq) != 3 { let _f = deque_free(dq); 0 }
+    else {
+        let v1 = deque_pop_front(dq);
+        let v2 = deque_pop_front(dq);
+        let v3 = deque_pop_front(dq);
+        if v1 != 10 { let _f = deque_free(dq); 0 }
+        else if v2 != 20 { let _f = deque_free(dq); 0 }
+        else if v3 != 30 { let _f = deque_free(dq); 0 }
+        else { let _f = deque_free(dq); 1 }
+    }
+};
+
+fn test_push_front_pop_back() -> i64 = {
+    let mut dq = deque_new(4);
+    dq = deque_push_front(dq, 10);
+    dq = deque_push_front(dq, 20);
+    dq = deque_push_front(dq, 30);
+    // front: 30, 20, 10
+    if deque_len(dq) != 3 { let _f = deque_free(dq); 0 }
+    else {
+        let v1 = deque_pop_back(dq);  // 10
+        let v2 = deque_pop_back(dq);  // 20
+        let v3 = deque_pop_back(dq);  // 30
+        if v1 != 10 { let _f = deque_free(dq); 0 }
+        else if v2 != 20 { let _f = deque_free(dq); 0 }
+        else if v3 != 30 { let _f = deque_free(dq); 0 }
+        else { let _f = deque_free(dq); 1 }
+    }
+};
+
+fn test_mixed_ops() -> i64 = {
+    let mut dq = deque_new(4);
+    dq = deque_push_back(dq, 1);
+    dq = deque_push_back(dq, 2);
+    dq = deque_push_front(dq, 0);
+    // deque: [0, 1, 2]
+    if deque_len(dq) != 3 { let _f = deque_free(dq); 0 }
+    else if deque_front(dq) != 0 { let _f = deque_free(dq); 0 }
+    else if deque_back(dq) != 2 { let _f = deque_free(dq); 0 }
+    else if deque_get(dq, 1) != 1 { let _f = deque_free(dq); 0 }
+    else { let _f = deque_free(dq); 1 }
+};
+
+fn test_grow() -> i64 = {
+    // Start with capacity 2, push 5 elements -> triggers growth
+    let mut dq = deque_new(2);
+    dq = deque_push_back(dq, 10);
+    dq = deque_push_back(dq, 20);
+    dq = deque_push_back(dq, 30);
+    dq = deque_push_back(dq, 40);
+    dq = deque_push_back(dq, 50);
+    if deque_len(dq) != 5 { let _f = deque_free(dq); 0 }
+    else {
+        let v1 = deque_pop_front(dq);
+        let v2 = deque_pop_front(dq);
+        let v3 = deque_pop_front(dq);
+        let v4 = deque_pop_front(dq);
+        let v5 = deque_pop_front(dq);
+        if v1 != 10 { let _f = deque_free(dq); 0 }
+        else if v2 != 20 { let _f = deque_free(dq); 0 }
+        else if v3 != 30 { let _f = deque_free(dq); 0 }
+        else if v4 != 40 { let _f = deque_free(dq); 0 }
+        else if v5 != 50 { let _f = deque_free(dq); 0 }
+        else { let _f = deque_free(dq); 1 }
+    }
+};
+
+fn test_empty_ops() -> i64 = {
+    let dq = deque_new(4);
+    if b2i(deque_is_empty(dq)) != 1 { let _f = deque_free(dq); 0 }
+    else if deque_pop_front(dq) != 0 { let _f = deque_free(dq); 0 }
+    else if deque_pop_back(dq) != 0 { let _f = deque_free(dq); 0 }
+    else if deque_front(dq) != 0 { let _f = deque_free(dq); 0 }
+    else if deque_back(dq) != 0 { let _f = deque_free(dq); 0 }
+    else { let _f = deque_free(dq); 1 }
+};
+
+fn test_wrap_around() -> i64 = {
+    // Push front then back to exercise wrap-around
+    let mut dq = deque_new(4);
+    dq = deque_push_front(dq, 1);   // head wraps to 3
+    dq = deque_push_front(dq, 2);   // head wraps to 2
+    dq = deque_push_back(dq, 3);    // goes after 1
+    dq = deque_push_back(dq, 4);    // fills buffer
+    // deque logical: [2, 1, 3, 4]
+    if deque_len(dq) != 4 { let _f = deque_free(dq); 0 }
+    else if deque_get(dq, 0) != 2 { let _f = deque_free(dq); 0 }
+    else if deque_get(dq, 1) != 1 { let _f = deque_free(dq); 0 }
+    else if deque_get(dq, 2) != 3 { let _f = deque_free(dq); 0 }
+    else if deque_get(dq, 3) != 4 { let _f = deque_free(dq); 0 }
+    else { let _f = deque_free(dq); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("push_back_pop_front", test_push_back_pop_front());
+    let t2 = report("push_front_pop_back", test_push_front_pop_back());
+    let t3 = report("mixed_ops", test_mixed_ops());
+    let t4 = report("grow", test_grow());
+    let t5 = report("empty_ops", test_empty_ops());
+    let t6 = report("wrap_around", test_wrap_around());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-deque2: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

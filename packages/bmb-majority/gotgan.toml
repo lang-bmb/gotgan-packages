@@ -1,0 +1,9 @@
+[package]
+name = "bmb-majority"
+version = "0.1.0"
+description = "Boyer-Moore majority vote algorithm for finding majority elements"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

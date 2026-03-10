@@ -1,0 +1,9 @@
+[package]
+name = "bmb-insertion-sort"
+version = "0.1.0"
+description = "Insertion sort with binary search optimization"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

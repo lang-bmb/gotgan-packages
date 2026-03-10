@@ -1,0 +1,207 @@
+// bmb-sparse: Sparse array backed by an integer hashmap
+// v0.1.0
+//
+// A sparse array is an array where most indices are absent (default 0).
+// It is implemented on top of the runtime hashmap_new/hashmap_insert/
+// hashmap_get/hashmap_contains/hashmap_len/hashmap_free builtins.
+//
+// hashmap_contains returns i64 (1 if present, 0 if absent).
+// hashmap_get returns 0 for absent keys.
+//
+// Usage:
+//   let s = sparse_new();
+//   let _r = sparse_set(s, 100, 42);
+//   let v  = sparse_get(s, 100);      // 42
+//   let ok = sparse_has(s, 100);      // true
+//   let n  = sparse_count(s);         // 1
+//   let _f = sparse_free(s);
+
+// ============================================================================
+// Sentinel for "value stored as zero" vs "absent"
+// ============================================================================
+// We store values shifted by 1 internally so that explicitly stored 0
+// is distinguishable from an absent key (which hashmap_get returns as 0).
+// Stored internal value = user value + 1.
+// On retrieval: internal - 1.
+// This means user values in [-1 .. i64_max-1] are supported.
+
+// ============================================================================
+// Constructor / Destructor
+// ============================================================================
+
+// Create a new sparse array. Returns a hashmap handle.
+fn sparse_new() -> i64
+  post ret != 0
+= hashmap_new();
+
+// Free the sparse array.
+fn sparse_free(s: i64) -> i64
+  pre s != 0
+= {
+    let _f = hashmap_free(s);
+    0
+};
+
+// ============================================================================
+// Core operations
+// ============================================================================
+
+// Set value at index idx. Overwrites any existing value.
+fn sparse_set(s: i64, idx: i64, val: i64) -> i64
+  pre s != 0
+= hashmap_insert(s, idx, val + 1);
+
+// Get value at index idx. Returns 0 if idx is not set.
+fn sparse_get(s: i64, idx: i64) -> i64
+  pre s != 0
+  post ret >= 0 - 1
+= {
+    let present = hashmap_contains(s, idx);
+    if present == 0 { 0 }
+    else { hashmap_get(s, idx) - 1 }
+};
+
+// Returns true if index idx has been explicitly set.
+fn sparse_has(s: i64, idx: i64) -> bool
+  pre s != 0
+= hashmap_contains(s, idx) != 0;
+
+// Returns the number of explicitly set entries.
+fn sparse_count(s: i64) -> i64
+  pre s != 0
+  post ret >= 0
+= hashmap_len(s);
+
+// Remove a key (set it back to "absent"). Returns 1 if removed, 0 if absent.
+fn sparse_remove(s: i64, idx: i64) -> i64
+  pre s != 0
+  post ret == 0 or ret == 1
+= hashmap_remove(s, idx);
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_sparse_new() -> i64 = {
+    let s = sparse_new();
+    let ok = s != 0 and sparse_count(s) == 0;
+    let _f = sparse_free(s);
+    b2i(ok)
+};
+
+fn test_sparse_set_get() -> i64 = {
+    let s = sparse_new();
+    let _r = sparse_set(s, 5, 42);
+    let v = sparse_get(s, 5);
+    let _f = sparse_free(s);
+    if v == 42 { 1 } else { 0 }
+};
+
+fn test_sparse_get_absent() -> i64 = {
+    let s = sparse_new();
+    let v = sparse_get(s, 99);
+    let _f = sparse_free(s);
+    if v == 0 { 1 } else { 0 }
+};
+
+fn test_sparse_has_true() -> i64 = {
+    let s = sparse_new();
+    let _r = sparse_set(s, 10, 7);
+    let ok = sparse_has(s, 10);
+    let _f = sparse_free(s);
+    b2i(ok)
+};
+
+fn test_sparse_has_false() -> i64 = {
+    let s = sparse_new();
+    let _r = sparse_set(s, 10, 7);
+    let ok = sparse_has(s, 20);
+    let _f = sparse_free(s);
+    if ok { 0 } else { 1 }
+};
+
+fn test_sparse_count() -> i64 = {
+    let s = sparse_new();
+    let _r1 = sparse_set(s, 1, 10);
+    let _r2 = sparse_set(s, 100, 20);
+    let _r3 = sparse_set(s, 9999, 30);
+    let n = sparse_count(s);
+    let _f = sparse_free(s);
+    if n == 3 { 1 } else { 0 }
+};
+
+fn test_sparse_overwrite() -> i64 = {
+    let s = sparse_new();
+    let _r1 = sparse_set(s, 7, 11);
+    let _r2 = sparse_set(s, 7, 22);
+    let v = sparse_get(s, 7);
+    let n = sparse_count(s);
+    let _f = sparse_free(s);
+    if v == 22 and n == 1 { 1 } else { 0 }
+};
+
+fn test_sparse_store_zero() -> i64 = {
+    let s = sparse_new();
+    let _r = sparse_set(s, 3, 0);
+    let v = sparse_get(s, 3);
+    let ok = sparse_has(s, 3);
+    let _f = sparse_free(s);
+    if v == 0 and ok { 1 } else { 0 }
+};
+
+fn test_sparse_remove() -> i64 = {
+    let s = sparse_new();
+    let _r1 = sparse_set(s, 5, 99);
+    let _r2 = sparse_remove(s, 5);
+    let ok_gone = sparse_has(s, 5);
+    let v = sparse_get(s, 5);
+    let n = sparse_count(s);
+    let _f = sparse_free(s);
+    if not ok_gone and v == 0 and n == 0 { 1 } else { 0 }
+};
+
+fn test_sparse_large_index() -> i64 = {
+    let s = sparse_new();
+    let _r = sparse_set(s, 1000000, 777);
+    let v = sparse_get(s, 1000000);
+    let ok = sparse_has(s, 1000000);
+    let _f = sparse_free(s);
+    if v == 777 and ok { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1  = report("sparse_new",         test_sparse_new());
+    let t2  = report("sparse_set_get",     test_sparse_set_get());
+    let t3  = report("sparse_get_absent",  test_sparse_get_absent());
+    let t4  = report("sparse_has_true",    test_sparse_has_true());
+    let t5  = report("sparse_has_false",   test_sparse_has_false());
+    let t6  = report("sparse_count",       test_sparse_count());
+    let t7  = report("sparse_overwrite",   test_sparse_overwrite());
+    let t8  = report("sparse_store_zero",  test_sparse_store_zero());
+    let t9  = report("sparse_remove",      test_sparse_remove());
+    let t10 = report("sparse_large_index", test_sparse_large_index());
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let total = 10;
+    let _p1 = print_str("bmb-sparse: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

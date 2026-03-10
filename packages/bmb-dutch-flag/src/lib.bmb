@@ -1,0 +1,329 @@
+// bmb-dutch-flag: Dutch National Flag 3-way partitioning
+// Partitions array into three regions: < pivot, == pivot, > pivot
+// Also: sort array of 0s, 1s, 2s in linear time
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================
+// Core: Swap helper
+// ============================================================
+
+fn vec_swap(v: i64, i: i64, j: i64) -> i64 = {
+    let a = vec_get(v, i);
+    let b = vec_get(v, j);
+    let _s1 = vec_set(v, i, b);
+    let _s2 = vec_set(v, j, a);
+    0
+};
+
+// ============================================================
+// Dutch National Flag Partition
+// ============================================================
+
+// 3-way partition in-place around a pivot value.
+// After partitioning:
+//   arr[0..lo-1]    < pivot
+//   arr[lo..hi]     == pivot
+//   arr[hi+1..n-1]  > pivot
+// Returns a vec [lo, hi] with the boundaries of the pivot region.
+fn dutch_flag_partition(arr: i64, n: i64, pivot: i64) -> i64
+  pre n >= 0
+= {
+    let mut lo = 0;
+    let mut mid = 0;
+    let mut hi = n - 1;
+    let mut done = false;
+    while not done {
+        if mid > hi { done = true; 0 }
+        else {
+            let val = vec_get(arr, mid);
+            if val < pivot {
+                let _sw = vec_swap(arr, lo, mid);
+                lo = lo + 1;
+                mid = mid + 1;
+                0
+            } else if val > pivot {
+                let _sw = vec_swap(arr, mid, hi);
+                hi = hi - 1;
+                0
+            } else {
+                mid = mid + 1;
+                0
+            }
+        }
+    };
+    let result = vec_new();
+    let _p1 = vec_push(result, lo);
+    let _p2 = vec_push(result, hi);
+    result
+};
+
+// ============================================================
+// Sort 0-1-2 (Dutch Flag Sort)
+// ============================================================
+
+// Sort an array containing only values 0, 1, and 2 in O(n) time.
+fn sort_012(arr: i64, n: i64) -> i64
+  pre n >= 0
+= {
+    let mut lo = 0;
+    let mut mid = 0;
+    let mut hi = n - 1;
+    let mut done = false;
+    while not done {
+        if mid > hi { done = true; 0 }
+        else {
+            let val = vec_get(arr, mid);
+            if val == 0 {
+                let _sw = vec_swap(arr, lo, mid);
+                lo = lo + 1;
+                mid = mid + 1;
+                0
+            } else if val == 2 {
+                let _sw = vec_swap(arr, mid, hi);
+                hi = hi - 1;
+                0
+            } else {
+                // val == 1, already in place
+                mid = mid + 1;
+                0
+            }
+        }
+    };
+    0
+};
+
+// ============================================================
+// 3-way partition check: verify all regions are correct
+// ============================================================
+
+fn check_partitioned(arr: i64, n: i64, pivot: i64, lo: i64, hi: i64) -> bool = {
+    let mut ok = true;
+    // Check elements before lo: all < pivot
+    let mut i = 0;
+    while i < lo {
+        if vec_get(arr, i) >= pivot { ok = false; 0 } else { 0 };
+        i = i + 1;
+        0
+    };
+    // Check elements in [lo, hi]: all == pivot
+    let mut j = lo;
+    while j <= hi {
+        if vec_get(arr, j) != pivot { ok = false; 0 } else { 0 };
+        j = j + 1;
+        0
+    };
+    // Check elements after hi: all > pivot
+    let mut k = hi + 1;
+    while k < n {
+        if vec_get(arr, k) <= pivot { ok = false; 0 } else { 0 };
+        k = k + 1;
+        0
+    };
+    ok
+};
+
+// ============================================================
+// Count elements in array equal to a value
+// ============================================================
+
+fn count_val(arr: i64, n: i64, val: i64) -> i64 = {
+    let mut count = 0;
+    let mut i = 0;
+    while i < n {
+        if vec_get(arr, i) == val { count = count + 1; 0 } else { 0 };
+        i = i + 1;
+        0
+    };
+    count
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_partition_basic() -> i64 = {
+    // arr = [3, 5, 2, 7, 3, 1, 3, 8]
+    // pivot = 3
+    // After: [<3 region] [3,3,3] [>3 region]
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 3);
+    let _p2 = vec_push(arr, 5);
+    let _p3 = vec_push(arr, 2);
+    let _p4 = vec_push(arr, 7);
+    let _p5 = vec_push(arr, 3);
+    let _p6 = vec_push(arr, 1);
+    let _p7 = vec_push(arr, 3);
+    let _p8 = vec_push(arr, 8);
+    let bounds = dutch_flag_partition(arr, 8, 3);
+    let lo = vec_get(bounds, 0);
+    let hi = vec_get(bounds, 1);
+    let ok = check_partitioned(arr, 8, 3, lo, hi);
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(bounds);
+    b2i(ok)
+};
+
+fn test_partition_all_equal() -> i64 = {
+    // arr = [5, 5, 5, 5]
+    // pivot = 5 => lo=0, hi=3
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 5);
+    let _p2 = vec_push(arr, 5);
+    let _p3 = vec_push(arr, 5);
+    let _p4 = vec_push(arr, 5);
+    let bounds = dutch_flag_partition(arr, 4, 5);
+    let lo = vec_get(bounds, 0);
+    let hi = vec_get(bounds, 1);
+    let ok = if lo != 0 { false }
+             else if hi != 3 { false }
+             else { check_partitioned(arr, 4, 5, lo, hi) };
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(bounds);
+    b2i(ok)
+};
+
+fn test_partition_no_pivot() -> i64 = {
+    // arr = [1, 2, 4, 5]
+    // pivot = 3 => no elements equal to pivot
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 1);
+    let _p2 = vec_push(arr, 2);
+    let _p3 = vec_push(arr, 4);
+    let _p4 = vec_push(arr, 5);
+    let bounds = dutch_flag_partition(arr, 4, 3);
+    let lo = vec_get(bounds, 0);
+    let hi = vec_get(bounds, 1);
+    // lo > hi means empty pivot region, which is fine
+    let ok = check_partitioned(arr, 4, 3, lo, hi);
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(bounds);
+    b2i(ok)
+};
+
+fn test_sort_012_basic() -> i64 = {
+    // arr = [2, 0, 1, 2, 0, 1, 0]
+    // After: [0, 0, 0, 1, 1, 2, 2]
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 2);
+    let _p2 = vec_push(arr, 0);
+    let _p3 = vec_push(arr, 1);
+    let _p4 = vec_push(arr, 2);
+    let _p5 = vec_push(arr, 0);
+    let _p6 = vec_push(arr, 1);
+    let _p7 = vec_push(arr, 0);
+    let _s = sort_012(arr, 7);
+    let ok = if vec_get(arr, 0) != 0 { false }
+             else if vec_get(arr, 1) != 0 { false }
+             else if vec_get(arr, 2) != 0 { false }
+             else if vec_get(arr, 3) != 1 { false }
+             else if vec_get(arr, 4) != 1 { false }
+             else if vec_get(arr, 5) != 2 { false }
+             else if vec_get(arr, 6) != 2 { false }
+             else { true };
+    let _f = vec_free(arr);
+    b2i(ok)
+};
+
+fn test_sort_012_already_sorted() -> i64 = {
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 0);
+    let _p2 = vec_push(arr, 0);
+    let _p3 = vec_push(arr, 1);
+    let _p4 = vec_push(arr, 2);
+    let _p5 = vec_push(arr, 2);
+    let _s = sort_012(arr, 5);
+    let ok = if vec_get(arr, 0) != 0 { false }
+             else if vec_get(arr, 1) != 0 { false }
+             else if vec_get(arr, 2) != 1 { false }
+             else if vec_get(arr, 3) != 2 { false }
+             else if vec_get(arr, 4) != 2 { false }
+             else { true };
+    let _f = vec_free(arr);
+    b2i(ok)
+};
+
+fn test_sort_012_reverse() -> i64 = {
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 2);
+    let _p2 = vec_push(arr, 2);
+    let _p3 = vec_push(arr, 1);
+    let _p4 = vec_push(arr, 0);
+    let _p5 = vec_push(arr, 0);
+    let _s = sort_012(arr, 5);
+    let ok = if vec_get(arr, 0) != 0 { false }
+             else if vec_get(arr, 1) != 0 { false }
+             else if vec_get(arr, 2) != 1 { false }
+             else if vec_get(arr, 3) != 2 { false }
+             else if vec_get(arr, 4) != 2 { false }
+             else { true };
+    let _f = vec_free(arr);
+    b2i(ok)
+};
+
+fn test_sort_012_single_type() -> i64 = {
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 1);
+    let _p2 = vec_push(arr, 1);
+    let _p3 = vec_push(arr, 1);
+    let _s = sort_012(arr, 3);
+    let ok = if vec_get(arr, 0) != 1 { false }
+             else if vec_get(arr, 1) != 1 { false }
+             else if vec_get(arr, 2) != 1 { false }
+             else { true };
+    let _f = vec_free(arr);
+    b2i(ok)
+};
+
+fn test_partition_preserves_counts() -> i64 = {
+    // Verify element counts are preserved after partition
+    let arr = vec_new();
+    let _p1 = vec_push(arr, 4);
+    let _p2 = vec_push(arr, 2);
+    let _p3 = vec_push(arr, 6);
+    let _p4 = vec_push(arr, 4);
+    let _p5 = vec_push(arr, 1);
+    let _p6 = vec_push(arr, 4);
+    // Before: three 4s, one 2, one 6, one 1
+    let bounds = dutch_flag_partition(arr, 6, 4);
+    let c4 = count_val(arr, 6, 4);
+    let c2 = count_val(arr, 6, 2);
+    let c6 = count_val(arr, 6, 6);
+    let c1 = count_val(arr, 6, 1);
+    let ok = if c4 != 3 { false }
+             else if c2 != 1 { false }
+             else if c6 != 1 { false }
+             else if c1 != 1 { false }
+             else { true };
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(bounds);
+    b2i(ok)
+};
+
+fn main() -> i64 = {
+    let t1 = report("partition_basic", test_partition_basic());
+    let t2 = report("partition_all_equal", test_partition_all_equal());
+    let t3 = report("partition_no_pivot", test_partition_no_pivot());
+    let t4 = report("sort_012_basic", test_sort_012_basic());
+    let t5 = report("sort_012_already_sorted", test_sort_012_already_sorted());
+    let t6 = report("sort_012_reverse", test_sort_012_reverse());
+    let t7 = report("sort_012_single_type", test_sort_012_single_type());
+    let t8 = report("partition_preserves_counts", test_partition_preserves_counts());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-dutch-flag: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

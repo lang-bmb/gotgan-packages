@@ -1,0 +1,329 @@
+// bmb-string-algo: String algorithm utilities for BMB
+// v0.1.0
+//
+// Operates on vecs of i64 character codes.
+//
+// Functions:
+//   kmp_search     - KMP substring search; returns first match index or -1
+//   build_kmp_table - Build KMP failure function table
+//   is_palindrome  - Check if a sequence is a palindrome
+//   count_char     - Count occurrences of a character code in a sequence
+//   reverse_vec    - Return a new vec that is the reverse of the input
+
+// ============================================================================
+// build_kmp_table: KMP failure function ("partial match" table)
+// Returns a new vec of length p_len where table[i] is the length of the
+// longest proper prefix of pattern[0..i] that is also a suffix.
+// ============================================================================
+
+fn build_kmp_table(pattern_vec: i64, p_len: i64) -> i64
+  pre p_len > 0
+  post ret != 0
+= {
+    let table = vec_new();
+    // push p_len zeros
+    let mut fi = 0;
+    while fi < p_len {
+        let _p = vec_push(table, 0);
+        fi = fi + 1;
+        0
+    };
+    // table[0] is always 0 (already set)
+    // len = length of previous longest prefix-suffix
+    let mut len = 0;
+    let mut i = 1;
+    let mut done = false;
+    while not done {
+        let _r = if i >= p_len {
+            { done = true; 0 }
+        } else {
+            {
+                let pi = vec_get(pattern_vec, i);
+                let pl = vec_get(pattern_vec, len);
+                let _c = if pi == pl {
+                    { len = len + 1; let _s = vec_set(table, i, len); i = i + 1; 0 }
+                } else if len != 0 {
+                    { len = vec_get(table, len - 1); 0 }
+                } else {
+                    { let _s = vec_set(table, i, 0); i = i + 1; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    table
+};
+
+// ============================================================================
+// kmp_search: find first occurrence of pattern in text using KMP algorithm
+// Returns index of first match, or -1 if not found.
+// ============================================================================
+
+fn kmp_search(text_vec: i64, t_len: i64, pattern_vec: i64, p_len: i64) -> i64
+  pre t_len >= 0 and p_len > 0
+= {
+    let result = if p_len > t_len {
+        0 - 1
+    } else {
+        {
+            let table = build_kmp_table(pattern_vec, p_len);
+            let mut i = 0;  // text index
+            let mut j = 0;  // pattern index
+            let mut found = 0 - 1;
+            let mut done = false;
+            while not done {
+                let _r = if i >= t_len {
+                    { done = true; 0 }
+                } else if found != 0 - 1 {
+                    { done = true; 0 }
+                } else {
+                    {
+                        let ti = vec_get(text_vec, i);
+                        let pj = vec_get(pattern_vec, j);
+                        let _c = if ti == pj {
+                            {
+                                i = i + 1;
+                                j = j + 1;
+                                let _m = if j == p_len {
+                                    { found = i - j; done = true; 0 }
+                                } else { 0 };
+                                0
+                            }
+                        } else if j != 0 {
+                            { j = vec_get(table, j - 1); 0 }
+                        } else {
+                            { i = i + 1; 0 }
+                        };
+                        0
+                    }
+                };
+                0
+            };
+            let _f = vec_free(table);
+            found
+        }
+    };
+    result
+};
+
+// ============================================================================
+// is_palindrome: returns true if v[0..len-1] reads the same forwards and back
+// ============================================================================
+
+fn is_palindrome(v: i64, len: i64) -> bool
+  pre len >= 0
+= {
+    let mut ok = true;
+    let mut i = 0;
+    while i < len / 2 {
+        let _c = if vec_get(v, i) != vec_get(v, len - 1 - i) {
+            { ok = false; 0 }
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    ok
+};
+
+// ============================================================================
+// count_char: count occurrences of character code `ch` in v[0..len-1]
+// ============================================================================
+
+fn count_char(v: i64, len: i64, ch: i64) -> i64
+  pre len >= 0
+  post ret >= 0
+= {
+    let mut cnt = 0;
+    let mut i = 0;
+    while i < len {
+        let _c = if vec_get(v, i) == ch {
+            { cnt = cnt + 1; 0 }
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    cnt
+};
+
+// ============================================================================
+// reverse_vec: return a new vec that is the reverse of v[0..len-1]
+// The caller is responsible for freeing the returned vec.
+// ============================================================================
+
+fn reverse_vec(v: i64, len: i64) -> i64
+  pre len >= 0
+  post ret != 0
+= {
+    let out = vec_new();
+    let mut i = len - 1;
+    let mut done = false;
+    while not done {
+        let _r = if i < 0 {
+            { done = true; 0 }
+        } else {
+            { let _p = vec_push(out, vec_get(v, i)); i = i - 1; 0 }
+        };
+        0
+    };
+    out
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_build_kmp_table() -> i64 = {
+    // pattern "AABAAB" -> [0,1,0,1,2,3]
+    let p = vec_new();
+    let _p0 = vec_push(p, 65); // A
+    let _p1 = vec_push(p, 65); // A
+    let _p2 = vec_push(p, 66); // B
+    let _p3 = vec_push(p, 65); // A
+    let _p4 = vec_push(p, 65); // A
+    let _p5 = vec_push(p, 66); // B
+    let t = build_kmp_table(p, 6);
+    let ok = vec_get(t, 0) == 0 and
+             vec_get(t, 1) == 1 and
+             vec_get(t, 2) == 0 and
+             vec_get(t, 3) == 1 and
+             vec_get(t, 4) == 2 and
+             vec_get(t, 5) == 3;
+    let _fp = vec_free(p);
+    let _ft = vec_free(t);
+    if ok { 1 } else { 0 }
+};
+
+fn test_kmp_search() -> i64 = {
+    // text "AABAABAABAAB", pattern "AABAA" -> first match at index 0
+    let text = vec_new();
+    let _t0 = vec_push(text, 65);
+    let _t1 = vec_push(text, 65);
+    let _t2 = vec_push(text, 66);
+    let _t3 = vec_push(text, 65);
+    let _t4 = vec_push(text, 65);
+    let _t5 = vec_push(text, 66);
+    let _t6 = vec_push(text, 65);
+    let _t7 = vec_push(text, 65);
+    let _t8 = vec_push(text, 66);
+    let _t9 = vec_push(text, 65);
+    let _ta = vec_push(text, 65);
+    let _tb = vec_push(text, 66);
+    let pat1 = vec_new();
+    let _p0 = vec_push(pat1, 65);
+    let _p1 = vec_push(pat1, 65);
+    let _p2 = vec_push(pat1, 66);
+    let _p3 = vec_push(pat1, 65);
+    let _p4 = vec_push(pat1, 65);
+    let r1 = kmp_search(text, 12, pat1, 5);
+    let _fp1 = vec_free(pat1);
+    // Pattern "ZZZ" not in text -> -1
+    let pat2 = vec_new();
+    let _q0 = vec_push(pat2, 90);
+    let _q1 = vec_push(pat2, 90);
+    let _q2 = vec_push(pat2, 90);
+    let r2 = kmp_search(text, 12, pat2, 3);
+    let _fp2 = vec_free(pat2);
+    // Pattern longer than text -> -1
+    let pat3 = vec_new();
+    let _s0 = vec_push(pat3, 65);
+    let r3 = kmp_search(text, 0, pat3, 1);
+    let _fp3 = vec_free(pat3);
+    let _ft = vec_free(text);
+    if r1 == 0 and r2 == 0 - 1 and r3 == 0 - 1 { 1 } else { 0 }
+};
+
+fn test_is_palindrome() -> i64 = {
+    // "racecar" -> true
+    let v = vec_new();
+    let _v0 = vec_push(v, 114); // r
+    let _v1 = vec_push(v, 97);  // a
+    let _v2 = vec_push(v, 99);  // c
+    let _v3 = vec_push(v, 101); // e
+    let _v4 = vec_push(v, 99);  // c
+    let _v5 = vec_push(v, 97);  // a
+    let _v6 = vec_push(v, 114); // r
+    let r1 = b2i(is_palindrome(v, 7));
+    let _fv = vec_free(v);
+    // "hello" -> false
+    let v2 = vec_new();
+    let _u0 = vec_push(v2, 104); // h
+    let _u1 = vec_push(v2, 101); // e
+    let _u2 = vec_push(v2, 108); // l
+    let _u3 = vec_push(v2, 108); // l
+    let _u4 = vec_push(v2, 111); // o
+    let r2 = b2i(is_palindrome(v2, 5));
+    let _fv2 = vec_free(v2);
+    // single element -> true
+    let v3 = vec_new();
+    let _w0 = vec_push(v3, 65);
+    let r3 = b2i(is_palindrome(v3, 1));
+    let _fv3 = vec_free(v3);
+    if r1 == 1 and r2 == 0 and r3 == 1 { 1 } else { 0 }
+};
+
+fn test_count_char() -> i64 = {
+    // [65,66,65,67,65] count of 65 = 3, count of 68 = 0
+    let v = vec_new();
+    let _v0 = vec_push(v, 65);
+    let _v1 = vec_push(v, 66);
+    let _v2 = vec_push(v, 65);
+    let _v3 = vec_push(v, 67);
+    let _v4 = vec_push(v, 65);
+    let r1 = count_char(v, 5, 65);
+    let r2 = count_char(v, 5, 68);
+    let _fv = vec_free(v);
+    if r1 == 3 and r2 == 0 { 1 } else { 0 }
+};
+
+fn test_reverse_vec() -> i64 = {
+    // [1,2,3,4,5] reversed -> [5,4,3,2,1]
+    let v = vec_new();
+    let _v0 = vec_push(v, 1);
+    let _v1 = vec_push(v, 2);
+    let _v2 = vec_push(v, 3);
+    let _v3 = vec_push(v, 4);
+    let _v4 = vec_push(v, 5);
+    let r = reverse_vec(v, 5);
+    let ok = vec_get(r, 0) == 5 and
+             vec_get(r, 1) == 4 and
+             vec_get(r, 2) == 3 and
+             vec_get(r, 3) == 2 and
+             vec_get(r, 4) == 1;
+    let _fv = vec_free(v);
+    let _fr = vec_free(r);
+    // empty vec
+    let e = vec_new();
+    let re = reverse_vec(e, 0);
+    let elen = vec_len(re);
+    let _fe = vec_free(e);
+    let _fre = vec_free(re);
+    if ok and elen == 0 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("build_kmp_table", test_build_kmp_table());
+    let t2 = report("kmp_search",      test_kmp_search());
+    let t3 = report("is_palindrome",   test_is_palindrome());
+    let t4 = report("count_char",      test_count_char());
+    let t5 = report("reverse_vec",     test_reverse_vec());
+    let passed = t1 + t2 + t3 + t4 + t5;
+    let total = 5;
+    let _p1 = print_str("bmb-string-algo: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

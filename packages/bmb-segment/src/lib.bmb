@@ -1,0 +1,417 @@
+// bmb-segment: Segment tree for range queries on arrays
+// Supports range min, max, and sum queries with point updates
+// Uses a flat array representation: tree[1] is root, tree[2i] left child, tree[2i+1] right child
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Large sentinel values for min/max queries
+fn seg_inf() -> i64 = 4611686018427387903;
+fn seg_neg_inf() -> i64 = 0 - 4611686018427387903;
+
+// ============================================================
+// Sum Segment Tree
+// ============================================================
+
+// Build sum segment tree from array
+// Returns: tree vec (size 4*n), caller must also track n
+fn seg_sum_build_helper(tree: i64, arr: i64, node: i64, lo: i64, hi: i64) -> i64 = {
+    if lo == hi {
+        let _s = vec_set(tree, node, vec_get(arr, lo));
+        0
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        let _l = seg_sum_build_helper(tree, arr, 2 * node, lo, mid);
+        let _r = seg_sum_build_helper(tree, arr, 2 * node + 1, mid + 1, hi);
+        let _s = vec_set(tree, node, vec_get(tree, 2 * node) + vec_get(tree, 2 * node + 1));
+        0
+    }
+};
+
+fn seg_sum_build(arr: i64) -> i64
+  pre arr != 0
+  post ret != 0
+= {
+    let n = vec_len(arr);
+    let size = 4 * n;
+    let tree = vec_new();
+    let mut i = 0;
+    while i < size {
+        let _p = vec_push(tree, 0);
+        i = i + 1;
+        0
+    };
+    if n > 0 {
+        let _b = seg_sum_build_helper(tree, arr, 1, 0, n - 1);
+        tree
+    } else { tree }
+};
+
+// Point update for sum tree
+fn seg_sum_update_helper(tree: i64, node: i64, lo: i64, hi: i64, idx: i64, val: i64) -> i64 = {
+    if lo == hi {
+        let _s = vec_set(tree, node, val);
+        0
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        if idx <= mid {
+            let _l = seg_sum_update_helper(tree, 2 * node, lo, mid, idx, val);
+            0
+        } else {
+            let _r = seg_sum_update_helper(tree, 2 * node + 1, mid + 1, hi, idx, val);
+            0
+        };
+        let _s = vec_set(tree, node, vec_get(tree, 2 * node) + vec_get(tree, 2 * node + 1));
+        0
+    }
+};
+
+fn seg_sum_update(tree: i64, n: i64, idx: i64, val: i64) -> i64
+  pre tree != 0 and n > 0 and idx >= 0 and idx < n
+= seg_sum_update_helper(tree, 1, 0, n - 1, idx, val);
+
+// Range sum query [ql, qr] inclusive
+fn seg_sum_query_helper(tree: i64, node: i64, lo: i64, hi: i64, ql: i64, qr: i64) -> i64 = {
+    if ql > hi { 0 }
+    else if qr < lo { 0 }
+    else if ql <= lo {
+        if hi <= qr { vec_get(tree, node) }
+        else {
+            let mid = lo + (hi - lo) / 2;
+            seg_sum_query_helper(tree, 2 * node, lo, mid, ql, qr) +
+            seg_sum_query_helper(tree, 2 * node + 1, mid + 1, hi, ql, qr)
+        }
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        seg_sum_query_helper(tree, 2 * node, lo, mid, ql, qr) +
+        seg_sum_query_helper(tree, 2 * node + 1, mid + 1, hi, ql, qr)
+    }
+};
+
+fn seg_sum_query(tree: i64, n: i64, ql: i64, qr: i64) -> i64
+  pre tree != 0 and n > 0 and ql >= 0 and qr < n and ql <= qr
+= seg_sum_query_helper(tree, 1, 0, n - 1, ql, qr);
+
+// ============================================================
+// Min Segment Tree
+// ============================================================
+
+fn seg_min_of(a: i64, b: i64) -> i64 = if a < b { a } else { b };
+
+fn seg_min_build_helper(tree: i64, arr: i64, node: i64, lo: i64, hi: i64) -> i64 = {
+    if lo == hi {
+        let _s = vec_set(tree, node, vec_get(arr, lo));
+        0
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        let _l = seg_min_build_helper(tree, arr, 2 * node, lo, mid);
+        let _r = seg_min_build_helper(tree, arr, 2 * node + 1, mid + 1, hi);
+        let _s = vec_set(tree, node, seg_min_of(vec_get(tree, 2 * node), vec_get(tree, 2 * node + 1)));
+        0
+    }
+};
+
+fn seg_min_build(arr: i64) -> i64
+  pre arr != 0
+  post ret != 0
+= {
+    let n = vec_len(arr);
+    let size = 4 * n;
+    let tree = vec_new();
+    let mut i = 0;
+    while i < size {
+        let _p = vec_push(tree, seg_inf());
+        i = i + 1;
+        0
+    };
+    if n > 0 {
+        let _b = seg_min_build_helper(tree, arr, 1, 0, n - 1);
+        tree
+    } else { tree }
+};
+
+fn seg_min_update_helper(tree: i64, node: i64, lo: i64, hi: i64, idx: i64, val: i64) -> i64 = {
+    if lo == hi {
+        let _s = vec_set(tree, node, val);
+        0
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        if idx <= mid {
+            let _l = seg_min_update_helper(tree, 2 * node, lo, mid, idx, val);
+            0
+        } else {
+            let _r = seg_min_update_helper(tree, 2 * node + 1, mid + 1, hi, idx, val);
+            0
+        };
+        let _s = vec_set(tree, node, seg_min_of(vec_get(tree, 2 * node), vec_get(tree, 2 * node + 1)));
+        0
+    }
+};
+
+fn seg_min_update(tree: i64, n: i64, idx: i64, val: i64) -> i64
+  pre tree != 0 and n > 0 and idx >= 0 and idx < n
+= seg_min_update_helper(tree, 1, 0, n - 1, idx, val);
+
+fn seg_min_query_helper(tree: i64, node: i64, lo: i64, hi: i64, ql: i64, qr: i64) -> i64 = {
+    if ql > hi { seg_inf() }
+    else if qr < lo { seg_inf() }
+    else if ql <= lo {
+        if hi <= qr { vec_get(tree, node) }
+        else {
+            let mid = lo + (hi - lo) / 2;
+            seg_min_of(
+                seg_min_query_helper(tree, 2 * node, lo, mid, ql, qr),
+                seg_min_query_helper(tree, 2 * node + 1, mid + 1, hi, ql, qr)
+            )
+        }
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        seg_min_of(
+            seg_min_query_helper(tree, 2 * node, lo, mid, ql, qr),
+            seg_min_query_helper(tree, 2 * node + 1, mid + 1, hi, ql, qr)
+        )
+    }
+};
+
+fn seg_min_query(tree: i64, n: i64, ql: i64, qr: i64) -> i64
+  pre tree != 0 and n > 0 and ql >= 0 and qr < n and ql <= qr
+= seg_min_query_helper(tree, 1, 0, n - 1, ql, qr);
+
+// ============================================================
+// Max Segment Tree
+// ============================================================
+
+fn seg_max_of(a: i64, b: i64) -> i64 = if a > b { a } else { b };
+
+fn seg_max_build_helper(tree: i64, arr: i64, node: i64, lo: i64, hi: i64) -> i64 = {
+    if lo == hi {
+        let _s = vec_set(tree, node, vec_get(arr, lo));
+        0
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        let _l = seg_max_build_helper(tree, arr, 2 * node, lo, mid);
+        let _r = seg_max_build_helper(tree, arr, 2 * node + 1, mid + 1, hi);
+        let _s = vec_set(tree, node, seg_max_of(vec_get(tree, 2 * node), vec_get(tree, 2 * node + 1)));
+        0
+    }
+};
+
+fn seg_max_build(arr: i64) -> i64
+  pre arr != 0
+  post ret != 0
+= {
+    let n = vec_len(arr);
+    let size = 4 * n;
+    let tree = vec_new();
+    let mut i = 0;
+    while i < size {
+        let _p = vec_push(tree, seg_neg_inf());
+        i = i + 1;
+        0
+    };
+    if n > 0 {
+        let _b = seg_max_build_helper(tree, arr, 1, 0, n - 1);
+        tree
+    } else { tree }
+};
+
+fn seg_max_update_helper(tree: i64, node: i64, lo: i64, hi: i64, idx: i64, val: i64) -> i64 = {
+    if lo == hi {
+        let _s = vec_set(tree, node, val);
+        0
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        if idx <= mid {
+            let _l = seg_max_update_helper(tree, 2 * node, lo, mid, idx, val);
+            0
+        } else {
+            let _r = seg_max_update_helper(tree, 2 * node + 1, mid + 1, hi, idx, val);
+            0
+        };
+        let _s = vec_set(tree, node, seg_max_of(vec_get(tree, 2 * node), vec_get(tree, 2 * node + 1)));
+        0
+    }
+};
+
+fn seg_max_update(tree: i64, n: i64, idx: i64, val: i64) -> i64
+  pre tree != 0 and n > 0 and idx >= 0 and idx < n
+= seg_max_update_helper(tree, 1, 0, n - 1, idx, val);
+
+fn seg_max_query_helper(tree: i64, node: i64, lo: i64, hi: i64, ql: i64, qr: i64) -> i64 = {
+    if ql > hi { seg_neg_inf() }
+    else if qr < lo { seg_neg_inf() }
+    else if ql <= lo {
+        if hi <= qr { vec_get(tree, node) }
+        else {
+            let mid = lo + (hi - lo) / 2;
+            seg_max_of(
+                seg_max_query_helper(tree, 2 * node, lo, mid, ql, qr),
+                seg_max_query_helper(tree, 2 * node + 1, mid + 1, hi, ql, qr)
+            )
+        }
+    } else {
+        let mid = lo + (hi - lo) / 2;
+        seg_max_of(
+            seg_max_query_helper(tree, 2 * node, lo, mid, ql, qr),
+            seg_max_query_helper(tree, 2 * node + 1, mid + 1, hi, ql, qr)
+        )
+    }
+};
+
+fn seg_max_query(tree: i64, n: i64, ql: i64, qr: i64) -> i64
+  pre tree != 0 and n > 0 and ql >= 0 and qr < n and ql <= qr
+= seg_max_query_helper(tree, 1, 0, n - 1, ql, qr);
+
+// Free segment tree memory
+fn seg_free(tree: i64) -> i64
+  pre tree != 0
+= { let _f = vec_free(tree); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_sum_basic() -> i64 = {
+    // arr = [1, 3, 5, 7, 9, 11]
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 1);
+    let _p1 = vec_push(arr, 3);
+    let _p2 = vec_push(arr, 5);
+    let _p3 = vec_push(arr, 7);
+    let _p4 = vec_push(arr, 9);
+    let _p5 = vec_push(arr, 11);
+    let tree = seg_sum_build(arr);
+    let s_all = seg_sum_query(tree, 6, 0, 5);
+    let s_mid = seg_sum_query(tree, 6, 1, 4);
+    let s_one = seg_sum_query(tree, 6, 2, 2);
+    let _fa = vec_free(arr);
+    let _ft = seg_free(tree);
+    // total = 36, sum(1..4) = 3+5+7+9 = 24, sum(2..2) = 5
+    if s_all != 36 { 0 }
+    else if s_mid != 24 { 0 }
+    else if s_one != 5 { 0 }
+    else { 1 }
+};
+
+fn test_sum_update() -> i64 = {
+    // arr = [2, 4, 6]
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 2);
+    let _p1 = vec_push(arr, 4);
+    let _p2 = vec_push(arr, 6);
+    let tree = seg_sum_build(arr);
+    // Update index 1 to 10: [2, 10, 6]
+    let _u = seg_sum_update(tree, 3, 1, 10);
+    let s = seg_sum_query(tree, 3, 0, 2);
+    let _fa = vec_free(arr);
+    let _ft = seg_free(tree);
+    // 2 + 10 + 6 = 18
+    if s != 18 { 0 } else { 1 }
+};
+
+fn test_min_basic() -> i64 = {
+    // arr = [5, 2, 8, 1, 6, 3]
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 5);
+    let _p1 = vec_push(arr, 2);
+    let _p2 = vec_push(arr, 8);
+    let _p3 = vec_push(arr, 1);
+    let _p4 = vec_push(arr, 6);
+    let _p5 = vec_push(arr, 3);
+    let tree = seg_min_build(arr);
+    let m_all = seg_min_query(tree, 6, 0, 5);
+    let m_left = seg_min_query(tree, 6, 0, 2);
+    let m_right = seg_min_query(tree, 6, 3, 5);
+    let _fa = vec_free(arr);
+    let _ft = seg_free(tree);
+    if m_all != 1 { 0 }
+    else if m_left != 2 { 0 }
+    else if m_right != 1 { 0 }
+    else { 1 }
+};
+
+fn test_min_update() -> i64 = {
+    // arr = [10, 20, 30]
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 10);
+    let _p1 = vec_push(arr, 20);
+    let _p2 = vec_push(arr, 30);
+    let tree = seg_min_build(arr);
+    // Update index 2 to 5: [10, 20, 5]
+    let _u = seg_min_update(tree, 3, 2, 5);
+    let m = seg_min_query(tree, 3, 0, 2);
+    let _fa = vec_free(arr);
+    let _ft = seg_free(tree);
+    if m != 5 { 0 } else { 1 }
+};
+
+fn test_max_basic() -> i64 = {
+    // arr = [3, 7, 2, 9, 4]
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 3);
+    let _p1 = vec_push(arr, 7);
+    let _p2 = vec_push(arr, 2);
+    let _p3 = vec_push(arr, 9);
+    let _p4 = vec_push(arr, 4);
+    let tree = seg_max_build(arr);
+    let m_all = seg_max_query(tree, 5, 0, 4);
+    let m_first3 = seg_max_query(tree, 5, 0, 2);
+    let m_last2 = seg_max_query(tree, 5, 3, 4);
+    let _fa = vec_free(arr);
+    let _ft = seg_free(tree);
+    if m_all != 9 { 0 }
+    else if m_first3 != 7 { 0 }
+    else if m_last2 != 9 { 0 }
+    else { 1 }
+};
+
+fn test_max_update() -> i64 = {
+    // arr = [1, 2, 3]
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 1);
+    let _p1 = vec_push(arr, 2);
+    let _p2 = vec_push(arr, 3);
+    let tree = seg_max_build(arr);
+    // Update index 0 to 100: [100, 2, 3]
+    let _u = seg_max_update(tree, 3, 0, 100);
+    let m = seg_max_query(tree, 3, 0, 2);
+    let _fa = vec_free(arr);
+    let _ft = seg_free(tree);
+    if m != 100 { 0 } else { 1 }
+};
+
+fn test_single_element() -> i64 = {
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 42);
+    let tree = seg_sum_build(arr);
+    let s = seg_sum_query(tree, 1, 0, 0);
+    let _fa = vec_free(arr);
+    let _ft = seg_free(tree);
+    if s != 42 { 0 } else { 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("sum_basic", test_sum_basic());
+    let t2 = report("sum_update", test_sum_update());
+    let t3 = report("min_basic", test_min_basic());
+    let t4 = report("min_update", test_min_update());
+    let t5 = report("max_basic", test_max_basic());
+    let t6 = report("max_update", test_max_update());
+    let t7 = report("single_element", test_single_element());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = 7;
+    let _p1 = print_str("bmb-segment: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

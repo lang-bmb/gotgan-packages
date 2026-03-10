@@ -1,0 +1,218 @@
+// bmb-assert: Assertion and testing utilities for BMB
+// v0.1.0
+//
+// All assert functions return i64:
+//   1 = assertion passed
+//   0 = assertion failed (diagnostic printed)
+//
+// Usage:
+//   let ok = assert_eq(actual, expected);
+//   let ok = assert_true(some_bool_expr);
+
+// ============================================================================
+// Core assertion functions
+// ============================================================================
+
+// assert_eq: passes when actual == expected
+fn assert_eq(actual: i64, expected: i64) -> i64 =
+    if actual == expected { 1 }
+    else {
+        let _a = print_str("FAIL assert_eq: expected ");
+        let _b = print(expected);
+        let _c = print_str(" got ");
+        let _d = println(actual);
+        0
+    };
+
+// assert_neq: passes when a != b
+fn assert_neq(a: i64, b: i64) -> i64 =
+    if a != b { 1 }
+    else {
+        let _a = print_str("FAIL assert_neq: both equal ");
+        let _b = println(a);
+        0
+    };
+
+// assert_gt: passes when a > b
+fn assert_gt(a: i64, b: i64) -> i64 =
+    if a > b { 1 }
+    else {
+        let _a = print_str("FAIL assert_gt: ");
+        let _b = print(a);
+        let _c = print_str(" not > ");
+        let _d = println(b);
+        0
+    };
+
+// assert_lt: passes when a < b
+fn assert_lt(a: i64, b: i64) -> i64 =
+    if a < b { 1 }
+    else {
+        let _a = print_str("FAIL assert_lt: ");
+        let _b = print(a);
+        let _c = print_str(" not < ");
+        let _d = println(b);
+        0
+    };
+
+// assert_true: passes when b is true
+fn assert_true(b: bool) -> i64 =
+    if b { 1 }
+    else {
+        let _a = print_str("FAIL assert_true: got false\n");
+        0
+    };
+
+// assert_false: passes when b is false
+fn assert_false(b: bool) -> i64 =
+    if not b { 1 }
+    else {
+        let _a = print_str("FAIL assert_false: got true\n");
+        0
+    };
+
+// assert_in_range: passes when lo <= val <= hi
+fn assert_in_range(val: i64, lo: i64, hi: i64) -> i64
+  pre lo <= hi
+=
+    if val >= lo and val <= hi { 1 }
+    else {
+        let _a = print_str("FAIL assert_in_range: ");
+        let _b = print(val);
+        let _c = print_str(" not in [");
+        let _d = print(lo);
+        let _e = print_str(", ");
+        let _f = print(hi);
+        let _g = print_str("]\n");
+        0
+    };
+
+// ============================================================================
+// Helper: convert bool to i64
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// Report helper (prints FAIL for test functions that return 0)
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_assert_eq_pass() -> i64 = {
+    let r1 = assert_eq(42, 42);
+    let r2 = assert_eq(0, 0);
+    let r3 = assert_eq(0 - 5, 0 - 5);
+    if r1 == 1 and r2 == 1 and r3 == 1 { 1 } else { 0 }
+};
+
+fn test_assert_eq_fail() -> i64 = {
+    let r = assert_eq(1, 2);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_assert_neq_pass() -> i64 = {
+    let r1 = assert_neq(1, 2);
+    let r2 = assert_neq(100, 0 - 100);
+    if r1 == 1 and r2 == 1 { 1 } else { 0 }
+};
+
+fn test_assert_neq_fail() -> i64 = {
+    let r = assert_neq(7, 7);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_assert_gt_pass() -> i64 = {
+    let r1 = assert_gt(10, 5);
+    let r2 = assert_gt(0, 0 - 1);
+    if r1 == 1 and r2 == 1 { 1 } else { 0 }
+};
+
+fn test_assert_gt_fail() -> i64 = {
+    let r1 = assert_gt(5, 5);
+    let r2 = assert_gt(3, 5);
+    if r1 == 0 and r2 == 0 { 1 } else { 0 }
+};
+
+fn test_assert_lt_pass() -> i64 = {
+    let r1 = assert_lt(3, 5);
+    let r2 = assert_lt(0 - 1, 0);
+    if r1 == 1 and r2 == 1 { 1 } else { 0 }
+};
+
+fn test_assert_lt_fail() -> i64 = {
+    let r1 = assert_lt(5, 5);
+    let r2 = assert_lt(10, 5);
+    if r1 == 0 and r2 == 0 { 1 } else { 0 }
+};
+
+fn test_assert_true_pass() -> i64 = {
+    let r1 = assert_true(true);
+    let r2 = assert_true(1 == 1);
+    if r1 == 1 and r2 == 1 { 1 } else { 0 }
+};
+
+fn test_assert_true_fail() -> i64 = {
+    let r = assert_true(false);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_assert_false_pass() -> i64 = {
+    let r1 = assert_false(false);
+    let r2 = assert_false(1 == 2);
+    if r1 == 1 and r2 == 1 { 1 } else { 0 }
+};
+
+fn test_assert_false_fail() -> i64 = {
+    let r = assert_false(true);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_assert_in_range_pass() -> i64 = {
+    let r1 = assert_in_range(5, 1, 10);
+    let r2 = assert_in_range(1, 1, 10);
+    let r3 = assert_in_range(10, 1, 10);
+    if r1 == 1 and r2 == 1 and r3 == 1 { 1 } else { 0 }
+};
+
+fn test_assert_in_range_fail() -> i64 = {
+    let r1 = assert_in_range(0, 1, 10);
+    let r2 = assert_in_range(11, 1, 10);
+    if r1 == 0 and r2 == 0 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1  = report("assert_eq_pass",       test_assert_eq_pass());
+    let t2  = report("assert_eq_fail",        test_assert_eq_fail());
+    let t3  = report("assert_neq_pass",       test_assert_neq_pass());
+    let t4  = report("assert_neq_fail",       test_assert_neq_fail());
+    let t5  = report("assert_gt_pass",        test_assert_gt_pass());
+    let t6  = report("assert_gt_fail",        test_assert_gt_fail());
+    let t7  = report("assert_lt_pass",        test_assert_lt_pass());
+    let t8  = report("assert_lt_fail",        test_assert_lt_fail());
+    let t9  = report("assert_true_pass",      test_assert_true_pass());
+    let t10 = report("assert_true_fail",      test_assert_true_fail());
+    let t11 = report("assert_false_pass",     test_assert_false_pass());
+    let t12 = report("assert_false_fail",     test_assert_false_fail());
+    let t13 = report("assert_in_range_pass",  test_assert_in_range_pass());
+    let t14 = report("assert_in_range_fail",  test_assert_in_range_fail());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12 + t13 + t14;
+    let total = 14;
+    let _p1 = print_str("bmb-assert: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

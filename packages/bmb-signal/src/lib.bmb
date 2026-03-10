@@ -1,0 +1,180 @@
+// bmb-signal: Signal/event bus simulation
+// v0.1.0
+//
+// An event bus backed by a vec of handler IDs.
+// signal_new()               -> i64  create a new signal bus (returns vec handle)
+// signal_connect(bus, id)    -> i64  register a handler id
+// signal_disconnect(bus, id) -> i64  remove a handler id (first match)
+// signal_emit(bus)           -> i64  returns count of currently connected handlers
+// signal_count(bus)          -> i64  number of connected handlers
+// signal_clear(bus)          -> i64  remove all handlers
+// signal_free(bus)           -> i64  release memory
+
+fn signal_new() -> i64
+  post ret != 0
+= vec_new();
+
+// Add handler_id to the bus
+fn signal_connect(bus: i64, handler_id: i64) -> i64
+  pre bus != 0
+= {
+    let _p = vec_push(bus, handler_id);
+    0
+};
+
+// Remove first occurrence of handler_id from the bus
+fn signal_disconnect(bus: i64, handler_id: i64) -> i64
+  pre bus != 0
+= {
+    let n = vec_len(bus);
+    let mut i = 0;
+    let mut found_at = 0 - 1;
+    while i < n {
+        let _r = if found_at == (0 - 1) and vec_get(bus, i) == handler_id {
+            found_at = i;
+            i = i + 1;
+            0
+        } else {
+            i = i + 1;
+            0
+        };
+        0
+    };
+    if found_at == (0 - 1) { 0 }
+    else {
+        // Shift remaining elements left from found_at
+        let mut j = found_at;
+        while j < n - 1 {
+            let _s = vec_set(bus, j, vec_get(bus, j + 1));
+            j = j + 1;
+            0
+        };
+        let _pop = vec_pop(bus);
+        1
+    }
+};
+
+// "Emit" a signal: returns the count of connected handlers
+fn signal_emit(bus: i64) -> i64
+  pre bus != 0
+= vec_len(bus);
+
+// Return number of connected handlers
+fn signal_count(bus: i64) -> i64
+  pre bus != 0
+= vec_len(bus);
+
+// Remove all handlers from the bus
+fn signal_clear(bus: i64) -> i64
+  pre bus != 0
+= {
+    let mut n = vec_len(bus);
+    while n > 0 {
+        let _p = vec_pop(bus);
+        n = n - 1;
+        0
+    };
+    0
+};
+
+// Free the bus
+fn signal_free(bus: i64) -> i64
+  pre bus != 0
+= { let _v = vec_free(bus); 0 };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_connect_count() -> i64 = {
+    let bus = signal_new();
+    let _c1 = signal_connect(bus, 1);
+    let _c2 = signal_connect(bus, 2);
+    let _c3 = signal_connect(bus, 3);
+    let cnt = signal_count(bus);
+    let emitted = signal_emit(bus);
+    let _f = signal_free(bus);
+    if cnt == 3 and emitted == 3 { 1 } else { 0 }
+};
+
+fn test_disconnect() -> i64 = {
+    let bus = signal_new();
+    let _c1 = signal_connect(bus, 10);
+    let _c2 = signal_connect(bus, 20);
+    let _c3 = signal_connect(bus, 30);
+    let _d = signal_disconnect(bus, 20);
+    let cnt = signal_count(bus);
+    // Remaining: 10, 30
+    let v0 = vec_get(bus, 0);
+    let v1 = vec_get(bus, 1);
+    let _f = signal_free(bus);
+    if cnt == 2 and v0 == 10 and v1 == 30 { 1 } else { 0 }
+};
+
+fn test_disconnect_not_found() -> i64 = {
+    let bus = signal_new();
+    let _c1 = signal_connect(bus, 1);
+    let r = signal_disconnect(bus, 999);
+    let cnt = signal_count(bus);
+    let _f = signal_free(bus);
+    if r == 0 and cnt == 1 { 1 } else { 0 }
+};
+
+fn test_clear() -> i64 = {
+    let bus = signal_new();
+    let _c1 = signal_connect(bus, 1);
+    let _c2 = signal_connect(bus, 2);
+    let _c3 = signal_connect(bus, 3);
+    let _cl = signal_clear(bus);
+    let cnt = signal_count(bus);
+    let _f = signal_free(bus);
+    if cnt == 0 { 1 } else { 0 }
+};
+
+fn test_empty_emit() -> i64 = {
+    let bus = signal_new();
+    let emitted = signal_emit(bus);
+    let _f = signal_free(bus);
+    if emitted == 0 { 1 } else { 0 }
+};
+
+fn test_multiple_disconnect() -> i64 = {
+    let bus = signal_new();
+    let _c1 = signal_connect(bus, 5);
+    let _c2 = signal_connect(bus, 10);
+    let _c3 = signal_connect(bus, 15);
+    let _c4 = signal_connect(bus, 20);
+    let _d1 = signal_disconnect(bus, 5);
+    let _d2 = signal_disconnect(bus, 15);
+    let cnt = signal_count(bus);
+    let v0 = vec_get(bus, 0);
+    let v1 = vec_get(bus, 1);
+    let _f = signal_free(bus);
+    if cnt == 2 and v0 == 10 and v1 == 20 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("connect_count", test_connect_count());
+    let t2 = report("disconnect", test_disconnect());
+    let t3 = report("disconnect_not_found", test_disconnect_not_found());
+    let t4 = report("clear", test_clear());
+    let t5 = report("empty_emit", test_empty_emit());
+    let t6 = report("multiple_disconnect", test_multiple_disconnect());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-signal: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

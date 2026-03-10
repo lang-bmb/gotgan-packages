@@ -1,0 +1,320 @@
+// bmb-topk: Top-K selection using a min-heap
+// Finds the K largest elements from a vec of i64 values.
+// Uses a min-heap of size K: for each element, if it is larger than the
+// heap minimum, replace the minimum and sift down. After processing all
+// elements, the heap contains the K largest in arbitrary order.
+
+// ============================================================
+// Helpers
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================
+// Min-Heap (internal, size-bounded)
+// ============================================================
+
+// Swap two elements in a vec
+fn heap_swap(h: i64, i: i64, j: i64) -> i64 = {
+    let a = vec_get(h, i);
+    let b = vec_get(h, j);
+    let _s1 = vec_set(h, i, b);
+    let _s2 = vec_set(h, j, a);
+    0
+};
+
+// Sift down element at idx to restore min-heap property
+fn sift_down(h: i64, idx: i64, size: i64) -> i64 = {
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        let left = 2 * i + 1;
+        let right = 2 * i + 2;
+        let mut smallest = i;
+        let _l = if left < size {
+            if vec_get(h, left) < vec_get(h, smallest) {
+                smallest = left; 0
+            } else { 0 }
+        } else { 0 };
+        let _r = if right < size {
+            if vec_get(h, right) < vec_get(h, smallest) {
+                smallest = right; 0
+            } else { 0 }
+        } else { 0 };
+        if smallest != i {
+            let _sw = heap_swap(h, i, smallest);
+            i = smallest;
+            0
+        } else { done = true; 0 }
+    };
+    0
+};
+
+// Sift up element at idx to restore min-heap property
+fn sift_up(h: i64, idx: i64) -> i64 = {
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        if i == 0 { done = true; 0 }
+        else {
+            let parent = (i - 1) / 2;
+            if vec_get(h, i) < vec_get(h, parent) {
+                let _sw = heap_swap(h, i, parent);
+                i = parent;
+                0
+            } else { done = true; 0 }
+        }
+    };
+    0
+};
+
+// Build a min-heap from the first k elements of data
+fn build_min_heap(data: i64, k: i64) -> i64 = {
+    let h = vec_new();
+    let mut i = 0;
+    while i < k {
+        let _p = vec_push(h, vec_get(data, i));
+        let _su = sift_up(h, i);
+        i = i + 1;
+        0
+    };
+    h
+};
+
+// ============================================================
+// Core Functions
+// ============================================================
+
+// Find the K largest elements from a vec.
+// Returns a new vec containing exactly K elements (the K largest),
+// sorted in descending order.
+// If k >= n, returns all elements sorted in descending order.
+fn topk(data: i64, n: i64, k: i64) -> i64
+  pre n > 0 and k > 0
+= {
+    let actual_k = if k > n { n } else { k };
+
+    // Build min-heap of first actual_k elements
+    let h = build_min_heap(data, actual_k);
+
+    // Process remaining elements
+    let mut i = actual_k;
+    while i < n {
+        let val = vec_get(data, i);
+        let heap_min = vec_get(h, 0);
+        let _u = if val > heap_min {
+            let _s = vec_set(h, 0, val);
+            let _sd = sift_down(h, 0, actual_k);
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+
+    // Extract elements from heap in sorted descending order
+    // Pop min repeatedly, then reverse
+    let result = vec_new();
+    let mut remaining = actual_k;
+    while remaining > 0 {
+        if remaining == 1 {
+            let _p = vec_push(result, vec_get(h, 0));
+            remaining = 0;
+            0
+        } else {
+            let min_val = vec_get(h, 0);
+            let last = vec_get(h, remaining - 1);
+            let _s = vec_set(h, 0, last);
+            remaining = remaining - 1;
+            let _sd = sift_down(h, 0, remaining);
+            let _p = vec_push(result, min_val);
+            0
+        }
+    };
+    let _fh = vec_free(h);
+
+    // result is in ascending order; reverse for descending
+    let rev = vec_new();
+    let rlen = vec_len(result);
+    let mut ri = rlen - 1;
+    let mut rdone = false;
+    if rlen == 0 { rdone = true; 0 } else { 0 };
+    while not rdone {
+        let _p = vec_push(rev, vec_get(result, ri));
+        if ri == 0 { rdone = true; 0 }
+        else { ri = ri - 1; 0 }
+    };
+    let _fr = vec_free(result);
+    rev
+};
+
+// Find the K-th largest element (1-indexed: k=1 is the largest).
+// Returns the element value.
+fn kth_largest(data: i64, n: i64, k: i64) -> i64
+  pre n > 0 and k > 0 and k <= n
+= {
+    // Use a min-heap of size k
+    let h = build_min_heap(data, k);
+
+    let mut i = k;
+    while i < n {
+        let val = vec_get(data, i);
+        let heap_min = vec_get(h, 0);
+        let _u = if val > heap_min {
+            let _s = vec_set(h, 0, val);
+            let _sd = sift_down(h, 0, k);
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+
+    // The root of the min-heap is the k-th largest
+    let result = vec_get(h, 0);
+    let _fh = vec_free(h);
+    result
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_topk_basic() -> i64 = {
+    // data = [3, 1, 4, 1, 5, 9, 2, 6], top 3 = [9, 6, 5]
+    let data = vec_new();
+    let _p0 = vec_push(data, 3);
+    let _p1 = vec_push(data, 1);
+    let _p2 = vec_push(data, 4);
+    let _p3 = vec_push(data, 1);
+    let _p4 = vec_push(data, 5);
+    let _p5 = vec_push(data, 9);
+    let _p6 = vec_push(data, 2);
+    let _p7 = vec_push(data, 6);
+    let result = topk(data, 8, 3);
+    let rlen = vec_len(result);
+    let ok = if rlen != 3 { 0 }
+        else if vec_get(result, 0) != 9 { 0 }
+        else if vec_get(result, 1) != 6 { 0 }
+        else if vec_get(result, 2) != 5 { 0 }
+        else { 1 };
+    let _fr = vec_free(result);
+    let _fd = vec_free(data);
+    ok
+};
+
+fn test_topk_single() -> i64 = {
+    // data = [42, 10, 30], top 1 = [42]
+    let data = vec_new();
+    let _p0 = vec_push(data, 42);
+    let _p1 = vec_push(data, 10);
+    let _p2 = vec_push(data, 30);
+    let result = topk(data, 3, 1);
+    let ok = if vec_len(result) != 1 { 0 }
+        else if vec_get(result, 0) != 42 { 0 }
+        else { 1 };
+    let _fr = vec_free(result);
+    let _fd = vec_free(data);
+    ok
+};
+
+fn test_topk_all() -> i64 = {
+    // k >= n: return all sorted descending
+    let data = vec_new();
+    let _p0 = vec_push(data, 5);
+    let _p1 = vec_push(data, 3);
+    let _p2 = vec_push(data, 8);
+    let result = topk(data, 3, 5);
+    let ok = if vec_len(result) != 3 { 0 }
+        else if vec_get(result, 0) != 8 { 0 }
+        else if vec_get(result, 1) != 5 { 0 }
+        else if vec_get(result, 2) != 3 { 0 }
+        else { 1 };
+    let _fr = vec_free(result);
+    let _fd = vec_free(data);
+    ok
+};
+
+fn test_topk_duplicates() -> i64 = {
+    // data = [5, 5, 5, 3, 3], top 3 = [5, 5, 5]
+    let data = vec_new();
+    let _p0 = vec_push(data, 5);
+    let _p1 = vec_push(data, 5);
+    let _p2 = vec_push(data, 5);
+    let _p3 = vec_push(data, 3);
+    let _p4 = vec_push(data, 3);
+    let result = topk(data, 5, 3);
+    let ok = if vec_len(result) != 3 { 0 }
+        else if vec_get(result, 0) != 5 { 0 }
+        else if vec_get(result, 1) != 5 { 0 }
+        else if vec_get(result, 2) != 5 { 0 }
+        else { 1 };
+    let _fr = vec_free(result);
+    let _fd = vec_free(data);
+    ok
+};
+
+fn test_kth_largest() -> i64 = {
+    // data = [3, 1, 4, 1, 5, 9, 2, 6]
+    // sorted desc: [9, 6, 5, 4, 3, 2, 1, 1]
+    // 1st largest = 9, 2nd = 6, 3rd = 5
+    let data = vec_new();
+    let _p0 = vec_push(data, 3);
+    let _p1 = vec_push(data, 1);
+    let _p2 = vec_push(data, 4);
+    let _p3 = vec_push(data, 1);
+    let _p4 = vec_push(data, 5);
+    let _p5 = vec_push(data, 9);
+    let _p6 = vec_push(data, 2);
+    let _p7 = vec_push(data, 6);
+    let r1 = kth_largest(data, 8, 1);
+    let r2 = kth_largest(data, 8, 2);
+    let r3 = kth_largest(data, 8, 3);
+    let _fd = vec_free(data);
+    if r1 != 9 { 0 }
+    else if r2 != 6 { 0 }
+    else if r3 != 5 { 0 }
+    else { 1 }
+};
+
+fn test_topk_negative() -> i64 = {
+    // data = [-5, -1, -10, -3, -7], top 2 = [-1, -3]
+    let data = vec_new();
+    let _p0 = vec_push(data, 0 - 5);
+    let _p1 = vec_push(data, 0 - 1);
+    let _p2 = vec_push(data, 0 - 10);
+    let _p3 = vec_push(data, 0 - 3);
+    let _p4 = vec_push(data, 0 - 7);
+    let result = topk(data, 5, 2);
+    let ok = if vec_len(result) != 2 { 0 }
+        else if vec_get(result, 0) != 0 - 1 { 0 }
+        else if vec_get(result, 1) != 0 - 3 { 0 }
+        else { 1 };
+    let _fr = vec_free(result);
+    let _fd = vec_free(data);
+    ok
+};
+
+fn main() -> i64 = {
+    let t1 = report("topk_basic", test_topk_basic());
+    let t2 = report("topk_single", test_topk_single());
+    let t3 = report("topk_all", test_topk_all());
+    let t4 = report("topk_duplicates", test_topk_duplicates());
+    let t5 = report("kth_largest", test_kth_largest());
+    let t6 = report("topk_negative", test_topk_negative());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-topk: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

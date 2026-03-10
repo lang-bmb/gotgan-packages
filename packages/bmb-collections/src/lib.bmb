@@ -372,5 +372,7 @@ fn main() -> i64 = {
     let t1 = test_hashmap();
     let t2 = test_deque();
     let t3 = test_stack();
-    t1 + t2 + t3
+    let passed = t1 + t2 + t3;
+    let total = 3;
+    if passed == total { 0 } else { 1 }
 };

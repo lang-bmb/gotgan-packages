@@ -1,0 +1,230 @@
+// bmb-dedup: Deduplication utilities for sorted vecs
+// All functions assume the input vec is already sorted in non-decreasing order.
+
+// ============================================================
+// Core API
+// ============================================================
+
+// dedup_sorted: returns a new vec with consecutive duplicates removed.
+// The original vec is not modified. Caller must free the returned vec.
+fn dedup_sorted(v: i64, len: i64) -> i64
+  pre len >= 0
+  post ret != 0
+= {
+    let out = vec_new();
+    if len == 0 { out }
+    else {
+        let first = vec_get(v, 0);
+        let _p = vec_push(out, first);
+        let mut prev = first;
+        let mut i = 1;
+        while i < len {
+            let cur = vec_get(v, i);
+            let _r = if cur != prev {
+                let _push = vec_push(out, cur);
+                prev = cur;
+                0
+            } else { 0 };
+            i = i + 1;
+            0
+        };
+        out
+    }
+};
+
+// dedup_count: number of unique elements in a sorted vec.
+fn dedup_count(v: i64, len: i64) -> i64
+  pre len >= 0
+  post ret >= 0
+= {
+    if len == 0 { 0 }
+    else {
+        let mut count = 1;
+        let mut prev = vec_get(v, 0);
+        let mut i = 1;
+        while i < len {
+            let cur = vec_get(v, i);
+            let _r = if cur != prev {
+                count = count + 1;
+                prev = cur;
+                0
+            } else { 0 };
+            i = i + 1;
+            0
+        };
+        count
+    }
+};
+
+// unique_sorted: alias for dedup_sorted — returns new vec of unique values.
+// Caller must free the returned vec.
+fn unique_sorted(v: i64, len: i64) -> i64
+  pre len >= 0
+  post ret != 0
+= dedup_sorted(v, len);
+
+// has_duplicates: returns true if any consecutive pair of elements are equal.
+fn has_duplicates(v: i64, len: i64) -> bool
+  pre len >= 0
+= {
+    if len <= 1 { false }
+    else {
+        let mut found = false;
+        let mut prev = vec_get(v, 0);
+        let mut i = 1;
+        let mut done = false;
+        while not done {
+            if i >= len { done = true; 0 }
+            else {
+                let cur = vec_get(v, i);
+                let _r = if cur == prev {
+                    found = true;
+                    done = true;
+                    0
+                } else {
+                    prev = cur;
+                    i = i + 1;
+                    0
+                };
+                0
+            }
+        };
+        found
+    }
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Build sorted vec: [1, 1, 2, 3, 3, 3, 4, 5, 5]
+fn make_sorted_vec() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 1);
+    let _p3 = vec_push(v, 2);
+    let _p4 = vec_push(v, 3);
+    let _p5 = vec_push(v, 3);
+    let _p6 = vec_push(v, 3);
+    let _p7 = vec_push(v, 4);
+    let _p8 = vec_push(v, 5);
+    let _p9 = vec_push(v, 5);
+    v
+};
+
+fn test_dedup_sorted() -> i64 = {
+    let v = make_sorted_vec();
+    let out = dedup_sorted(v, 9);
+    // Expected: [1, 2, 3, 4, 5]
+    let ok = vec_len(out) == 5
+             and vec_get(out, 0) == 1
+             and vec_get(out, 1) == 2
+             and vec_get(out, 2) == 3
+             and vec_get(out, 3) == 4
+             and vec_get(out, 4) == 5;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(out);
+    if ok { 1 } else { 0 }
+};
+
+fn test_dedup_count() -> i64 = {
+    let v = make_sorted_vec();
+    let cnt = dedup_count(v, 9);
+    let _f = vec_free(v);
+    if cnt == 5 { 1 } else { 0 }
+};
+
+fn test_unique_sorted() -> i64 = {
+    let v = make_sorted_vec();
+    let out = unique_sorted(v, 9);
+    let ok = vec_len(out) == 5;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(out);
+    if ok { 1 } else { 0 }
+};
+
+fn test_has_duplicates_true() -> i64 = {
+    let v = make_sorted_vec();
+    let hd = has_duplicates(v, 9);
+    let _f = vec_free(v);
+    if b2i(hd) == 1 { 1 } else { 0 }
+};
+
+fn test_has_duplicates_false() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 2);
+    let _p3 = vec_push(v, 3);
+    let hd = has_duplicates(v, 3);
+    let _f = vec_free(v);
+    if b2i(hd) == 0 { 1 } else { 0 }
+};
+
+fn test_empty_vec() -> i64 = {
+    let v = vec_new();
+    let cnt = dedup_count(v, 0);
+    let hd = has_duplicates(v, 0);
+    let out = dedup_sorted(v, 0);
+    let out_len = vec_len(out);
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(out);
+    if cnt == 0 and b2i(hd) == 0 and out_len == 0 { 1 } else { 0 }
+};
+
+fn test_single_element() -> i64 = {
+    let v = vec_new();
+    let _p = vec_push(v, 42);
+    let cnt = dedup_count(v, 1);
+    let hd = has_duplicates(v, 1);
+    let out = dedup_sorted(v, 1);
+    let out_len = vec_len(out);
+    let out_val = vec_get(out, 0);
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(out);
+    if cnt == 1 and b2i(hd) == 0 and out_len == 1 and out_val == 42 { 1 } else { 0 }
+};
+
+fn test_all_same() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 7);
+    let _p2 = vec_push(v, 7);
+    let _p3 = vec_push(v, 7);
+    let cnt = dedup_count(v, 3);
+    let hd = has_duplicates(v, 3);
+    let out = dedup_sorted(v, 3);
+    let out_len = vec_len(out);
+    let out_val = vec_get(out, 0);
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(out);
+    if cnt == 1 and b2i(hd) == 1 and out_len == 1 and out_val == 7 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("dedup_sorted", test_dedup_sorted());
+    let t2 = report("dedup_count", test_dedup_count());
+    let t3 = report("unique_sorted", test_unique_sorted());
+    let t4 = report("has_duplicates_true", test_has_duplicates_true());
+    let t5 = report("has_duplicates_false", test_has_duplicates_false());
+    let t6 = report("empty_vec", test_empty_vec());
+    let t7 = report("single_element", test_single_element());
+    let t8 = report("all_same", test_all_same());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-dedup: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

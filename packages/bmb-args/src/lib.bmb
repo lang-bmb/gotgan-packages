@@ -209,5 +209,7 @@ fn main() -> i64 = {
     let t1 = test_argc();
     let t2 = test_program_name();
     let t3 = test_parse_int();
-    t1 + t2 + t3
+    let passed = t1 + t2 + t3;
+    let total = 3;
+    if passed == total { 0 } else { 1 }
 };

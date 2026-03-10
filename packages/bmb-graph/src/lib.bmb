@@ -1,0 +1,290 @@
+// bmb-graph: Graph data structure using adjacency lists
+// v0.1.0
+//
+// Directed graph backed by a vec-of-vecs adjacency list.
+// The main graph handle is a vec of length n, where each element
+// is itself a vec handle storing the outgoing neighbour node IDs.
+//
+// Memory layout:
+//   graph handle  = vec of n i64 elements (each element = adjacency vec handle)
+//
+// Usage:
+//   let g = graph_new(5);
+//   let _e = graph_add_edge(g, 0, 1);
+//   let deg = graph_degree(g, 0);     // 1
+//   let vis = graph_bfs(g, 0);        // visited vec (caller owns)
+//   let ok  = graph_has_path(g, 0, 4); // false
+
+// ============================================================================
+// Constructor / Destructor
+// ============================================================================
+
+// Create a directed graph with n nodes (0..n-1), no edges.
+// Returns a vec handle where element i is the adjacency vec for node i.
+fn graph_new(n: i64) -> i64
+  pre n > 0
+  post ret != 0
+= {
+    let g = vec_with_capacity(n);
+    let mut i = 0;
+    while i < n {
+        let adj = vec_with_capacity(4);
+        let _p = vec_push(g, adj);
+        i = i + 1;
+        0
+    };
+    g
+};
+
+// Free all adjacency vecs and the main graph vec.
+fn graph_free(g: i64) -> i64
+  pre g != 0
+= {
+    let n = vec_len(g);
+    let mut i = 0;
+    while i < n {
+        let adj = vec_get(g, i);
+        let _f = vec_free(adj);
+        i = i + 1;
+        0
+    };
+    let _fg = vec_free(g);
+    0
+};
+
+// ============================================================================
+// Edge Operations
+// ============================================================================
+
+// Add a directed edge from -> to.
+fn graph_add_edge(g: i64, from: i64, to: i64) -> i64
+  pre g != 0 and from >= 0 and to >= 0
+= {
+    let adj = vec_get(g, from);
+    let _p = vec_push(adj, to);
+    0
+};
+
+// Return the out-degree of node.
+fn graph_degree(g: i64, node: i64) -> i64
+  pre g != 0 and node >= 0
+  post ret >= 0
+= {
+    let adj = vec_get(g, node);
+    vec_len(adj)
+};
+
+// ============================================================================
+// BFS
+// ============================================================================
+
+// Breadth-first traversal from start node.
+// Returns a vec of visited node IDs in BFS order.
+// Caller is responsible for freeing the returned vec.
+fn graph_bfs(g: i64, start: i64) -> i64
+  pre g != 0 and start >= 0
+  post ret != 0
+= {
+    let n = vec_len(g);
+    // visited array: 0 = unvisited, 1 = visited
+    let visited = vec_with_capacity(n);
+    let mut vi = 0;
+    while vi < n {
+        let _p = vec_push(visited, 0);
+        vi = vi + 1;
+        0
+    };
+
+    // queue: simple vec used as FIFO via head index
+    let queue = vec_with_capacity(n);
+    let _p0 = vec_push(queue, start);
+    let _sv = vec_set(visited, start, 1);
+
+    // result vec
+    let result = vec_with_capacity(n);
+    let mut head = 0;
+
+    while head < vec_len(queue) {
+        let node = vec_get(queue, head);
+        head = head + 1;
+        let _pr = vec_push(result, node);
+
+        let adj = vec_get(g, node);
+        let adj_len = vec_len(adj);
+        let mut j = 0;
+        while j < adj_len {
+            let nb = vec_get(adj, j);
+            let was_visited = vec_get(visited, nb);
+            let _r = if was_visited == 0 {
+                let _sv2 = vec_set(visited, nb, 1);
+                let _pq = vec_push(queue, nb);
+                0
+            } else { 0 };
+            j = j + 1;
+            0
+        };
+        0
+    };
+
+    let _fv = vec_free(visited);
+    let _fq = vec_free(queue);
+    result
+};
+
+// ============================================================================
+// Path Query
+// ============================================================================
+
+// Returns true if there is a directed path from node `from` to node `to`.
+fn graph_has_path(g: i64, from: i64, to: i64) -> bool
+  pre g != 0 and from >= 0 and to >= 0
+= {
+    let bfs_result = graph_bfs(g, from);
+    let rlen = vec_len(bfs_result);
+    let mut found = false;
+    let mut i = 0;
+    while i < rlen {
+        let v = vec_get(bfs_result, i);
+        let _r = if v == to { found = true; 0 } else { 0 };
+        i = i + 1;
+        0
+    };
+    let _fr = vec_free(bfs_result);
+    found
+};
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_graph_new() -> i64 = {
+    let g = graph_new(3);
+    let ok = vec_len(g) == 3;
+    let _f = graph_free(g);
+    b2i(ok)
+};
+
+fn test_graph_add_edge() -> i64 = {
+    let g = graph_new(4);
+    let _e1 = graph_add_edge(g, 0, 1);
+    let _e2 = graph_add_edge(g, 0, 2);
+    let _e3 = graph_add_edge(g, 1, 3);
+    let d0 = graph_degree(g, 0);
+    let d1 = graph_degree(g, 1);
+    let d2 = graph_degree(g, 2);
+    let _f = graph_free(g);
+    if d0 == 2 and d1 == 1 and d2 == 0 { 1 } else { 0 }
+};
+
+fn test_graph_bfs_linear() -> i64 = {
+    // 0 -> 1 -> 2 -> 3
+    let g = graph_new(4);
+    let _e1 = graph_add_edge(g, 0, 1);
+    let _e2 = graph_add_edge(g, 1, 2);
+    let _e3 = graph_add_edge(g, 2, 3);
+    let vis = graph_bfs(g, 0);
+    let ok = vec_len(vis) == 4 and
+             vec_get(vis, 0) == 0 and
+             vec_get(vis, 1) == 1 and
+             vec_get(vis, 2) == 2 and
+             vec_get(vis, 3) == 3;
+    let _fv = vec_free(vis);
+    let _fg = graph_free(g);
+    b2i(ok)
+};
+
+fn test_graph_bfs_tree() -> i64 = {
+    // Tree: 0 -> 1, 0 -> 2, 1 -> 3, 1 -> 4
+    let g = graph_new(5);
+    let _e1 = graph_add_edge(g, 0, 1);
+    let _e2 = graph_add_edge(g, 0, 2);
+    let _e3 = graph_add_edge(g, 1, 3);
+    let _e4 = graph_add_edge(g, 1, 4);
+    let vis = graph_bfs(g, 0);
+    // BFS order: 0, 1, 2, 3, 4
+    let ok = vec_len(vis) == 5 and
+             vec_get(vis, 0) == 0 and
+             vec_get(vis, 1) == 1 and
+             vec_get(vis, 2) == 2;
+    let _fv = vec_free(vis);
+    let _fg = graph_free(g);
+    b2i(ok)
+};
+
+fn test_graph_has_path_true() -> i64 = {
+    let g = graph_new(4);
+    let _e1 = graph_add_edge(g, 0, 1);
+    let _e2 = graph_add_edge(g, 1, 2);
+    let _e3 = graph_add_edge(g, 2, 3);
+    let ok = graph_has_path(g, 0, 3);
+    let _f = graph_free(g);
+    b2i(ok)
+};
+
+fn test_graph_has_path_false() -> i64 = {
+    // 0 -> 1, 2 -> 3, no path 0..3
+    let g = graph_new(4);
+    let _e1 = graph_add_edge(g, 0, 1);
+    let _e2 = graph_add_edge(g, 2, 3);
+    let ok = graph_has_path(g, 0, 3);
+    let _f = graph_free(g);
+    if ok { 0 } else { 1 }
+};
+
+fn test_graph_cycle() -> i64 = {
+    // 0 -> 1 -> 2 -> 0 (cycle); BFS from 0 visits all 3 nodes
+    let g = graph_new(3);
+    let _e1 = graph_add_edge(g, 0, 1);
+    let _e2 = graph_add_edge(g, 1, 2);
+    let _e3 = graph_add_edge(g, 2, 0);
+    let vis = graph_bfs(g, 0);
+    let ok = vec_len(vis) == 3;
+    let _fv = vec_free(vis);
+    let _fg = graph_free(g);
+    b2i(ok)
+};
+
+fn test_graph_self_loop() -> i64 = {
+    let g = graph_new(2);
+    let _e1 = graph_add_edge(g, 0, 0);
+    let _e2 = graph_add_edge(g, 0, 1);
+    let deg = graph_degree(g, 0);
+    let ok = graph_has_path(g, 0, 1);
+    let _f = graph_free(g);
+    if deg == 2 and ok { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("graph_new", test_graph_new());
+    let t2 = report("graph_add_edge", test_graph_add_edge());
+    let t3 = report("graph_bfs_linear", test_graph_bfs_linear());
+    let t4 = report("graph_bfs_tree", test_graph_bfs_tree());
+    let t5 = report("graph_has_path_true", test_graph_has_path_true());
+    let t6 = report("graph_has_path_false", test_graph_has_path_false());
+    let t7 = report("graph_cycle", test_graph_cycle());
+    let t8 = report("graph_self_loop", test_graph_self_loop());
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-graph: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

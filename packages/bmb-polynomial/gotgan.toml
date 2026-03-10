@@ -1,0 +1,9 @@
+[package]
+name = "bmb-polynomial"
+version = "0.1.0"
+description = "Polynomial evaluation and operations for BMB"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

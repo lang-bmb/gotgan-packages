@@ -1,0 +1,9 @@
+[package]
+name = "bmb-rle"
+version = "0.1.0"
+description = "Run-length encoding/decoding for vec of i64 values"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

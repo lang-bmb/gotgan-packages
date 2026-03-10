@@ -1,0 +1,185 @@
+// bmb-ring: Ring buffer (circular buffer) implementation
+// Fixed-size buffer with O(1) push/pop, overwrites oldest on overflow
+
+// Layout: [capacity, length, head, data...]
+// head = index of next write position
+
+// Create a new ring buffer with given capacity
+fn ring_new(capacity: i64) -> i64
+  pre capacity > 0
+  post ret != 0
+= {
+    let ptr = malloc((3 + capacity) * 8);
+    let _s1 = store_i64(ptr, capacity);
+    let _s2 = store_i64(ptr + 8, 0);
+    let _s3 = store_i64(ptr + 16, 0);
+    ptr
+};
+
+// Get capacity
+fn ring_capacity(ring: i64) -> i64
+  pre ring != 0
+  post ret > 0
+= load_i64(ring);
+
+// Get current element count
+fn ring_len(ring: i64) -> i64
+  pre ring != 0
+  post ret >= 0
+= load_i64(ring + 8);
+
+// Check if empty
+fn ring_is_empty(ring: i64) -> bool
+  pre ring != 0
+= ring_len(ring) == 0;
+
+// Check if full
+fn ring_is_full(ring: i64) -> bool
+  pre ring != 0
+= ring_len(ring) == ring_capacity(ring);
+
+// Push value (overwrites oldest if full)
+fn ring_push(ring: i64, value: i64) -> i64
+  pre ring != 0
+= {
+    let cap = load_i64(ring);
+    let len = load_i64(ring + 8);
+    let head = load_i64(ring + 16);
+    let _s = store_i64(ring + 24 + head * 8, value);
+    let new_head = if head + 1 >= cap { 0 } else { head + 1 };
+    let _sh = store_i64(ring + 16, new_head);
+    let new_len = if len < cap { len + 1 } else { len };
+    let _sl = store_i64(ring + 8, new_len);
+    0
+};
+
+// Get element at logical index (0 = oldest)
+fn ring_get(ring: i64, index: i64) -> i64
+  pre ring != 0 and index >= 0
+= {
+    let cap = load_i64(ring);
+    let len = load_i64(ring + 8);
+    let head = load_i64(ring + 16);
+    if index >= len { 0 }
+    else {
+        let start = if len < cap { 0 } else { head };
+        let actual = if start + index >= cap { start + index - cap } else { start + index };
+        load_i64(ring + 24 + actual * 8)
+    }
+};
+
+// Get most recent element
+fn ring_latest(ring: i64) -> i64
+  pre ring != 0
+= {
+    let len = ring_len(ring);
+    if len == 0 { 0 }
+    else { ring_get(ring, len - 1) }
+};
+
+// Get oldest element
+fn ring_oldest(ring: i64) -> i64
+  pre ring != 0
+= {
+    if ring_is_empty(ring) { 0 }
+    else { ring_get(ring, 0) }
+};
+
+// Clear all elements
+fn ring_clear(ring: i64) -> i64
+  pre ring != 0
+= {
+    let _sl = store_i64(ring + 8, 0);
+    let _sh = store_i64(ring + 16, 0);
+    0
+};
+
+// Free memory
+fn ring_free(ring: i64) -> i64
+  pre ring != 0
+= { let _f = free(ring); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_basic() -> i64 = {
+    let r = ring_new(3);
+    let _p1 = ring_push(r, 10);
+    let _p2 = ring_push(r, 20);
+    if ring_len(r) != 2 { 0 }
+    else if ring_get(r, 0) != 10 { 0 }
+    else if ring_get(r, 1) != 20 { 0 }
+    else { let _f = ring_free(r); 1 }
+};
+
+fn test_overflow() -> i64 = {
+    let r = ring_new(3);
+    let _p1 = ring_push(r, 1);
+    let _p2 = ring_push(r, 2);
+    let _p3 = ring_push(r, 3);
+    let _p4 = ring_push(r, 4);  // overwrites 1
+    if ring_len(r) != 3 { 0 }
+    else if ring_oldest(r) != 2 { 0 }
+    else if ring_latest(r) != 4 { 0 }
+    else { let _f = ring_free(r); 1 }
+};
+
+fn test_wrap_around() -> i64 = {
+    let r = ring_new(3);
+    let _p1 = ring_push(r, 10);
+    let _p2 = ring_push(r, 20);
+    let _p3 = ring_push(r, 30);
+    let _p4 = ring_push(r, 40);
+    let _p5 = ring_push(r, 50);
+    // Should have [30, 40, 50] logically
+    if ring_get(r, 0) != 30 { 0 }
+    else if ring_get(r, 1) != 40 { 0 }
+    else if ring_get(r, 2) != 50 { 0 }
+    else { let _f = ring_free(r); 1 }
+};
+
+fn test_empty_ops() -> i64 = {
+    let r = ring_new(5);
+    if b2i(ring_is_empty(r)) != 1 { 0 }
+    else if ring_latest(r) != 0 { 0 }
+    else if ring_oldest(r) != 0 { 0 }
+    else { let _f = ring_free(r); 1 }
+};
+
+fn test_clear() -> i64 = {
+    let r = ring_new(3);
+    let _p1 = ring_push(r, 1);
+    let _p2 = ring_push(r, 2);
+    let _c = ring_clear(r);
+    if ring_len(r) != 0 { 0 }
+    else if b2i(ring_is_empty(r)) != 1 { 0 }
+    else { let _f = ring_free(r); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("overflow", test_overflow());
+    let t3 = report("wrap_around", test_wrap_around());
+    let t4 = report("empty_ops", test_empty_ops());
+    let t5 = report("clear", test_clear());
+    let passed = t1 + t2 + t3 + t4 + t5;
+    let total = 5;
+    let _p1 = print_str("bmb-ring: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

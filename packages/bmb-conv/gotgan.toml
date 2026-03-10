@@ -1,0 +1,9 @@
+[package]
+name = "bmb-conv"
+version = "0.1.0"
+description = "Integer conversion utilities: hex, binary, octal formatting and digit parsing"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

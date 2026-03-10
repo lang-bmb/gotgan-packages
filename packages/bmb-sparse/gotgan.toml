@@ -1,0 +1,9 @@
+[package]
+name = "bmb-sparse"
+version = "0.1.0"
+description = "Sparse array backed by an integer hashmap with O(1) average access"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

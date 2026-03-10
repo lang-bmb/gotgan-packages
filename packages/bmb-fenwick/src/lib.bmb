@@ -1,0 +1,224 @@
+// bmb-fenwick: Fenwick tree (Binary Indexed Tree)
+// Supports O(log n) prefix sum queries and point updates
+// Uses 1-based indexing internally; user-facing API is 0-based
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Create a Fenwick tree with n elements (all zeros)
+// Returns a vec of size n+1 (index 0 unused)
+fn fenwick_new(n: i64) -> i64
+  pre n > 0
+  post ret != 0
+= {
+    let tree = vec_new();
+    let mut i = 0;
+    while i <= n {
+        let _p = vec_push(tree, 0);
+        i = i + 1;
+        0
+    };
+    tree
+};
+
+// Get the size of the Fenwick tree (number of elements)
+fn fenwick_size(tree: i64) -> i64
+  pre tree != 0
+= vec_len(tree) - 1;
+
+// Point update: add delta to element at index idx (0-based)
+fn fenwick_update(tree: i64, idx: i64, delta: i64) -> i64
+  pre tree != 0 and idx >= 0
+= {
+    let n = vec_len(tree) - 1;
+    let mut i = idx + 1;
+    while i <= n {
+        let cur = vec_get(tree, i);
+        let _s = vec_set(tree, i, cur + delta);
+        // i += lowbit(i) where lowbit(i) = i & (-i)
+        i = i + (i band (0 - i));
+        0
+    };
+    0
+};
+
+// Prefix sum: sum of elements from index 0 to idx (inclusive, 0-based)
+fn fenwick_prefix_sum(tree: i64, idx: i64) -> i64
+  pre tree != 0 and idx >= 0
+= {
+    let mut sum = 0;
+    let mut i = idx + 1;
+    while i > 0 {
+        sum = sum + vec_get(tree, i);
+        // i -= lowbit(i)
+        i = i - (i band (0 - i));
+        0
+    };
+    sum
+};
+
+// Range sum: sum of elements from lo to hi (inclusive, 0-based)
+fn fenwick_range_sum(tree: i64, lo: i64, hi: i64) -> i64
+  pre tree != 0 and lo >= 0 and hi >= lo
+= {
+    let sum_hi = fenwick_prefix_sum(tree, hi);
+    if lo == 0 { sum_hi }
+    else { sum_hi - fenwick_prefix_sum(tree, lo - 1) }
+};
+
+// Point set: set element at index idx to value (requires knowing current value)
+fn fenwick_set(tree: i64, idx: i64, old_val: i64, new_val: i64) -> i64
+  pre tree != 0 and idx >= 0
+= fenwick_update(tree, idx, new_val - old_val);
+
+// Build Fenwick tree from an array of values (0-based vec)
+fn fenwick_from_vec(arr: i64) -> i64
+  pre arr != 0
+  post ret != 0
+= {
+    let n = vec_len(arr);
+    let tree = fenwick_new(n);
+    let mut i = 0;
+    while i < n {
+        let _u = fenwick_update(tree, i, vec_get(arr, i));
+        i = i + 1;
+        0
+    };
+    tree
+};
+
+// Free Fenwick tree memory
+fn fenwick_free(tree: i64) -> i64
+  pre tree != 0
+= { let _f = vec_free(tree); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic_update_query() -> i64 = {
+    // Array: [1, 2, 3, 4, 5]
+    let tree = fenwick_new(5);
+    let _u0 = fenwick_update(tree, 0, 1);
+    let _u1 = fenwick_update(tree, 1, 2);
+    let _u2 = fenwick_update(tree, 2, 3);
+    let _u3 = fenwick_update(tree, 3, 4);
+    let _u4 = fenwick_update(tree, 4, 5);
+    // prefix_sum(0) = 1, prefix_sum(2) = 6, prefix_sum(4) = 15
+    let s0 = fenwick_prefix_sum(tree, 0);
+    let s2 = fenwick_prefix_sum(tree, 2);
+    let s4 = fenwick_prefix_sum(tree, 4);
+    let _ft = fenwick_free(tree);
+    if s0 != 1 { 0 }
+    else if s2 != 6 { 0 }
+    else if s4 != 15 { 0 }
+    else { 1 }
+};
+
+fn test_range_sum() -> i64 = {
+    // Array: [3, 1, 4, 1, 5, 9]
+    let tree = fenwick_new(6);
+    let _u0 = fenwick_update(tree, 0, 3);
+    let _u1 = fenwick_update(tree, 1, 1);
+    let _u2 = fenwick_update(tree, 2, 4);
+    let _u3 = fenwick_update(tree, 3, 1);
+    let _u4 = fenwick_update(tree, 4, 5);
+    let _u5 = fenwick_update(tree, 5, 9);
+    // range_sum(1, 3) = 1 + 4 + 1 = 6
+    let r1 = fenwick_range_sum(tree, 1, 3);
+    // range_sum(0, 5) = 3 + 1 + 4 + 1 + 5 + 9 = 23
+    let r2 = fenwick_range_sum(tree, 0, 5);
+    // range_sum(2, 2) = 4
+    let r3 = fenwick_range_sum(tree, 2, 2);
+    let _ft = fenwick_free(tree);
+    if r1 != 6 { 0 }
+    else if r2 != 23 { 0 }
+    else if r3 != 4 { 0 }
+    else { 1 }
+};
+
+fn test_point_update() -> i64 = {
+    // Start: [10, 20, 30]
+    let tree = fenwick_new(3);
+    let _u0 = fenwick_update(tree, 0, 10);
+    let _u1 = fenwick_update(tree, 1, 20);
+    let _u2 = fenwick_update(tree, 2, 30);
+    // Update index 1: add 5 => [10, 25, 30]
+    let _uu = fenwick_update(tree, 1, 5);
+    let s = fenwick_prefix_sum(tree, 2);
+    let _ft = fenwick_free(tree);
+    // 10 + 25 + 30 = 65
+    if s != 65 { 0 } else { 1 }
+};
+
+fn test_from_vec() -> i64 = {
+    let arr = vec_new();
+    let _p0 = vec_push(arr, 2);
+    let _p1 = vec_push(arr, 4);
+    let _p2 = vec_push(arr, 6);
+    let _p3 = vec_push(arr, 8);
+    let tree = fenwick_from_vec(arr);
+    let s0 = fenwick_prefix_sum(tree, 0);
+    let s1 = fenwick_prefix_sum(tree, 1);
+    let s2 = fenwick_prefix_sum(tree, 2);
+    let s3 = fenwick_prefix_sum(tree, 3);
+    let _fa = vec_free(arr);
+    let _ft = fenwick_free(tree);
+    if s0 != 2 { 0 }
+    else if s1 != 6 { 0 }
+    else if s2 != 12 { 0 }
+    else if s3 != 20 { 0 }
+    else { 1 }
+};
+
+fn test_size() -> i64 = {
+    let tree = fenwick_new(10);
+    let sz = fenwick_size(tree);
+    let _ft = fenwick_free(tree);
+    if sz == 10 { 1 } else { 0 }
+};
+
+fn test_single_element() -> i64 = {
+    let tree = fenwick_new(1);
+    let _u = fenwick_update(tree, 0, 42);
+    let s = fenwick_prefix_sum(tree, 0);
+    let _ft = fenwick_free(tree);
+    if s != 42 { 0 } else { 1 }
+};
+
+fn test_negative_values() -> i64 = {
+    let tree = fenwick_new(3);
+    let _u0 = fenwick_update(tree, 0, 0 - 5);
+    let _u1 = fenwick_update(tree, 1, 10);
+    let _u2 = fenwick_update(tree, 2, 0 - 3);
+    let s = fenwick_prefix_sum(tree, 2);
+    let _ft = fenwick_free(tree);
+    // -5 + 10 + (-3) = 2
+    if s != 2 { 0 } else { 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_update_query", test_basic_update_query());
+    let t2 = report("range_sum", test_range_sum());
+    let t3 = report("point_update", test_point_update());
+    let t4 = report("from_vec", test_from_vec());
+    let t5 = report("size", test_size());
+    let t6 = report("single_element", test_single_element());
+    let t7 = report("negative_values", test_negative_values());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = 7;
+    let _p1 = print_str("bmb-fenwick: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

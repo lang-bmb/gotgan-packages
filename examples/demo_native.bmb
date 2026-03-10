@@ -1,0 +1,185 @@
+// demo_native.bmb: Demonstrates BMB native compilation
+// Tests multiple language features in a single compiled binary
+
+fn fibonacci(n: i64) -> i64 = {
+    let mut a = 0;
+    let mut b = 1;
+    let mut i = 0;
+    while i < n {
+        let next = a + b;
+        a = b;
+        b = next;
+        i = i + 1;
+        0
+    };
+    a
+};
+
+fn is_prime(n: i64) -> bool = {
+    if n < 2 { false }
+    else {
+        let mut i = 2;
+        let mut found_divisor = false;
+        while i * i <= n {
+            if n % i == 0 {
+                found_divisor = true;
+                i = n;
+                ()
+            } else {
+                i = i + 1;
+                ()
+            }
+        };
+        found_divisor == false
+    }
+};
+
+fn count_primes(limit: i64) -> i64 = {
+    let mut count = 0;
+    let mut n = 2;
+    while n <= limit {
+        if is_prime(n) { count = count + 1; false } else { false };
+        n = n + 1;
+        0
+    };
+    count
+};
+
+fn gcd(a: i64, b: i64) -> i64 = {
+    let mut x = a;
+    let mut y = b;
+    while y != 0 {
+        let temp = y;
+        y = x % y;
+        x = temp;
+        0
+    };
+    x
+};
+
+fn collatz_steps(n: i64) -> i64 = {
+    let mut val = n;
+    let mut steps = 0;
+    while val != 1 {
+        if val % 2 == 0 {
+            val = val / 2
+        } else {
+            val = val * 3 + 1
+        };
+        steps = steps + 1;
+        0
+    };
+    steps
+};
+
+fn test_fibonacci() -> i64 = {
+    let f10 = fibonacci(10);
+    let f20 = fibonacci(20);
+    if f10 == 55 {
+        if f20 == 6765 {
+            let _p = print_str("PASS fibonacci\n");
+            0
+        } else {
+            let _p = print_str("FAIL fibonacci f20\n");
+            1
+        }
+    } else {
+        let _p = print_str("FAIL fibonacci f10\n");
+        1
+    }
+};
+
+fn test_primes() -> i64 = {
+    let count = count_primes(100);
+    if count == 25 {
+        let _p = print_str("PASS primes (25 primes under 100)\n");
+        0
+    } else {
+        let _p = print_str("FAIL primes: ");
+        let _p2 = print(count);
+        let _p3 = print_str("\n");
+        1
+    }
+};
+
+fn test_gcd() -> i64 = {
+    if gcd(48, 18) == 6 {
+        if gcd(100, 75) == 25 {
+            let _p = print_str("PASS gcd\n");
+            0
+        } else {
+            let _p = print_str("FAIL gcd(100,75)\n");
+            1
+        }
+    } else {
+        let _p = print_str("FAIL gcd(48,18)\n");
+        1
+    }
+};
+
+fn test_collatz() -> i64 = {
+    let steps = collatz_steps(27);
+    if steps == 111 {
+        let _p = print_str("PASS collatz (27 -> 111 steps)\n");
+        0
+    } else {
+        let _p = print_str("FAIL collatz: ");
+        let _p2 = print(steps);
+        let _p3 = print_str("\n");
+        1
+    }
+};
+
+fn test_string_ops() -> i64 = {
+    let greeting = "hello" + " " + "world";
+    if greeting == "hello world" {
+        let path = "src" + "/" + "main.bmb";
+        if path.len() == 12 {
+            let _p = print_str("PASS string operations\n");
+            0
+        } else {
+            let _p = print_str("FAIL string len\n");
+            1
+        }
+    } else {
+        let _p = print_str("FAIL string concat\n");
+        1
+    }
+};
+
+fn test_file_io() -> i64 = {
+    let _w = write_file("_demo_test.tmp", "BMB native compilation works!");
+    let content = read_file("_demo_test.tmp");
+    let _r = remove_file("_demo_test.tmp");
+    if content == "BMB native compilation works!" {
+        let _p = print_str("PASS file I/O\n");
+        0
+    } else {
+        let _p = print_str("FAIL file I/O\n");
+        1
+    }
+};
+
+fn run_test(result: i64) -> i64 = if result == 0 { 1 } else { 0 };
+
+fn main() -> i64 = {
+    let _h = print_str("BMB Native Compilation Demo\n");
+    let _h2 = print_str("==========================\n\n");
+
+    let total = 6;
+    let mut passed = 0;
+    passed = passed + run_test(test_fibonacci());
+    passed = passed + run_test(test_primes());
+    passed = passed + run_test(test_gcd());
+    passed = passed + run_test(test_collatz());
+    passed = passed + run_test(test_string_ops());
+    passed = passed + run_test(test_file_io());
+
+    let _n = print_str("\n");
+    let _r1 = print_str("Results: ");
+    let _r2 = print(passed);
+    let _r3 = print_str("/");
+    let _r4 = print(total);
+    let _r5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

@@ -1,0 +1,284 @@
+// bmb-prefix-sum: Prefix sum (cumulative sum) computations on vecs
+// v0.1.0
+//
+// Functions:
+//   prefix_sum(v, len)           -> i64  new vec of cumulative sums
+//   prefix_sum_inplace(v, len)   -> i64  modify vec in-place to cumulative sums
+//   range_sum(prefix, l, r)      -> i64  sum of original arr[l..r] using prefix array
+//   suffix_sum(v, len)           -> i64  new vec of suffix sums
+//   prefix_xor(v, len)           -> i64  new vec of cumulative XOR
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// prefix_sum: returns a new vec where out[i] = sum(v[0..=i])
+// Caller must free the returned vec.
+// ============================================================================
+
+fn prefix_sum(v: i64, len: i64) -> i64
+  pre len >= 0
+= {
+    let out = vec_new();
+    if len == 0 { out }
+    else {
+        let mut running = 0;
+        let mut i = 0;
+        while i < len {
+            { running = running + vec_get(v, i); 0 };
+            let _p = vec_push(out, running);
+            { i = i + 1; 0 }
+        };
+        out
+    }
+};
+
+// ============================================================================
+// prefix_sum_inplace: transform v in-place so v[i] = sum(original v[0..=i])
+// ============================================================================
+
+fn prefix_sum_inplace(v: i64, len: i64) -> i64
+  pre len >= 0
+= {
+    if len <= 1 { 0 }
+    else {
+        let mut i = 1;
+        while i < len {
+            let prev = vec_get(v, i - 1);
+            let cur = vec_get(v, i);
+            let _s = vec_set(v, i, prev + cur);
+            { i = i + 1; 0 }
+        };
+        0
+    }
+};
+
+// ============================================================================
+// range_sum: using prefix sum array, compute sum of original arr[l..=r]
+// prefix[i] = sum(arr[0..=i])
+// range_sum = prefix[r] - (l > 0 ? prefix[l-1] : 0)
+// ============================================================================
+
+fn range_sum(prefix: i64, l: i64, r: i64) -> i64
+  pre l >= 0 and r >= l
+= {
+    let right = vec_get(prefix, r);
+    if l == 0 { right }
+    else { right - vec_get(prefix, l - 1) }
+};
+
+// ============================================================================
+// suffix_sum: returns a new vec where out[i] = sum(v[i..len-1])
+// Caller must free the returned vec.
+// ============================================================================
+
+fn suffix_sum(v: i64, len: i64) -> i64
+  pre len >= 0
+= {
+    let out = vec_new();
+    if len == 0 { out }
+    else {
+        // First fill out with zeros
+        let mut k = 0;
+        while k < len {
+            let _p = vec_push(out, 0);
+            { k = k + 1; 0 }
+        };
+        // Compute suffix sums from right to left
+        let mut running = 0;
+        let mut i = len - 1;
+        let mut done = false;
+        while not done {
+            { running = running + vec_get(v, i); 0 };
+            let _s = vec_set(out, i, running);
+            if i == 0 { { done = true; 0 } }
+            else { { i = i - 1; 0 } };
+            0
+        };
+        out
+    }
+};
+
+// ============================================================================
+// prefix_xor: returns a new vec where out[i] = v[0] XOR v[1] XOR ... XOR v[i]
+// Caller must free the returned vec.
+// ============================================================================
+
+fn prefix_xor(v: i64, len: i64) -> i64
+  pre len >= 0
+= {
+    let out = vec_new();
+    if len == 0 { out }
+    else {
+        let mut running = 0;
+        let mut i = 0;
+        while i < len {
+            { running = running bxor vec_get(v, i); 0 };
+            let _p = vec_push(out, running);
+            { i = i + 1; 0 }
+        };
+        out
+    }
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+// Helper: build vec [1, 2, 3, 4, 5]
+fn make_test_vec() -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, 1);
+    let _p2 = vec_push(v, 2);
+    let _p3 = vec_push(v, 3);
+    let _p4 = vec_push(v, 4);
+    let _p5 = vec_push(v, 5);
+    v
+};
+
+fn test_prefix_sum_basic() -> i64 = {
+    let v = make_test_vec();
+    let ps = prefix_sum(v, 5);
+    // prefix_sum([1,2,3,4,5]) = [1, 3, 6, 10, 15]
+    let ok = vec_get(ps, 0) == 1
+             and vec_get(ps, 1) == 3
+             and vec_get(ps, 2) == 6
+             and vec_get(ps, 3) == 10
+             and vec_get(ps, 4) == 15;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ps);
+    b2i(ok)
+};
+
+fn test_prefix_sum_empty() -> i64 = {
+    let v = vec_new();
+    let ps = prefix_sum(v, 0);
+    let ok = vec_len(ps) == 0;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ps);
+    b2i(ok)
+};
+
+fn test_prefix_sum_single() -> i64 = {
+    let v = vec_new();
+    let _p = vec_push(v, 42);
+    let ps = prefix_sum(v, 1);
+    let ok = vec_len(ps) == 1 and vec_get(ps, 0) == 42;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ps);
+    b2i(ok)
+};
+
+fn test_prefix_sum_inplace() -> i64 = {
+    let v = make_test_vec();
+    let _r = prefix_sum_inplace(v, 5);
+    // [1, 2, 3, 4, 5] -> [1, 3, 6, 10, 15]
+    let ok = vec_get(v, 0) == 1
+             and vec_get(v, 1) == 3
+             and vec_get(v, 2) == 6
+             and vec_get(v, 3) == 10
+             and vec_get(v, 4) == 15;
+    let _f = vec_free(v);
+    b2i(ok)
+};
+
+fn test_range_sum_full() -> i64 = {
+    let v = make_test_vec();
+    let ps = prefix_sum(v, 5);
+    // range_sum(0, 4) = sum of all = 15
+    let r = range_sum(ps, 0, 4);
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ps);
+    b2i(r == 15)
+};
+
+fn test_range_sum_partial() -> i64 = {
+    let v = make_test_vec();
+    let ps = prefix_sum(v, 5);
+    // range_sum(1, 3) = v[1]+v[2]+v[3] = 2+3+4 = 9
+    let r = range_sum(ps, 1, 3);
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ps);
+    b2i(r == 9)
+};
+
+fn test_range_sum_single_element() -> i64 = {
+    let v = make_test_vec();
+    let ps = prefix_sum(v, 5);
+    // range_sum(2, 2) = v[2] = 3
+    let r = range_sum(ps, 2, 2);
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ps);
+    b2i(r == 3)
+};
+
+fn test_suffix_sum() -> i64 = {
+    let v = make_test_vec();
+    let ss = suffix_sum(v, 5);
+    // suffix_sum([1,2,3,4,5]) = [15, 14, 12, 9, 5]
+    let ok = vec_get(ss, 0) == 15
+             and vec_get(ss, 1) == 14
+             and vec_get(ss, 2) == 12
+             and vec_get(ss, 3) == 9
+             and vec_get(ss, 4) == 5;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ss);
+    b2i(ok)
+};
+
+fn test_prefix_xor() -> i64 = {
+    // [3, 5, 7] -> XOR prefix: [3, 3^5=6, 6^7=1]
+    let v = vec_new();
+    let _p1 = vec_push(v, 3);
+    let _p2 = vec_push(v, 5);
+    let _p3 = vec_push(v, 7);
+    let px = prefix_xor(v, 3);
+    let ok = vec_get(px, 0) == 3
+             and vec_get(px, 1) == 6
+             and vec_get(px, 2) == 1;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(px);
+    b2i(ok)
+};
+
+fn test_suffix_sum_empty() -> i64 = {
+    let v = vec_new();
+    let ss = suffix_sum(v, 0);
+    let ok = vec_len(ss) == 0;
+    let _f1 = vec_free(v);
+    let _f2 = vec_free(ss);
+    b2i(ok)
+};
+
+// ============================================================================
+// Report and main
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("prefix_sum_basic", test_prefix_sum_basic());
+    let t2 = report("prefix_sum_empty", test_prefix_sum_empty());
+    let t3 = report("prefix_sum_single", test_prefix_sum_single());
+    let t4 = report("prefix_sum_inplace", test_prefix_sum_inplace());
+    let t5 = report("range_sum_full", test_range_sum_full());
+    let t6 = report("range_sum_partial", test_range_sum_partial());
+    let t7 = report("range_sum_single_element", test_range_sum_single_element());
+    let t8 = report("suffix_sum", test_suffix_sum());
+    let t9 = report("prefix_xor", test_prefix_xor());
+    let t10 = report("suffix_sum_empty", test_suffix_sum_empty());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let total = 10;
+    let _p1 = print_str("bmb-prefix-sum: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

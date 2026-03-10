@@ -1,0 +1,209 @@
+// bmb-powmod: Modular arithmetic for BMB
+// Modular exponentiation, modular inverse, modular multiply
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Modular exponentiation: (base^exp) mod m using binary method
+// Uses repeated squaring for O(log exp) performance
+fn powmod(base: i64, exp: i64, m: i64) -> i64
+  pre m > 0 and exp >= 0
+  post ret >= 0 and ret < m
+= {
+    let mut result = 1;
+    let mut b = base % m;
+    let mut e = exp;
+    // Ensure b is non-negative
+    let _adj = if b < 0 { { b = b + m; 0 } } else { 0 };
+    while e > 0 {
+        let _r = if (e % 2) == 1 {
+            { result = (result * b) % m; 0 }
+        } else { 0 };
+        e = e / 2;
+        b = (b * b) % m;
+        0
+    };
+    result
+};
+
+// Modular multiply: (a * b) mod m
+// Handles potential overflow by reducing before multiply
+fn mulmod(a: i64, b: i64, m: i64) -> i64
+  pre m > 0
+  post ret >= 0 and ret < m
+= {
+    let aa = ((a % m) + m) % m;
+    let bb = ((b % m) + m) % m;
+    (aa * bb) % m
+};
+
+// Extended GCD: returns gcd, but also computes x such that a*x + b*y = gcd(a,b)
+// We use iterative approach. Returns gcd in first call, x via helper.
+fn gcd_ext_gcd(a: i64, b: i64) -> i64
+  pre a >= 0 and b >= 0
+  post ret >= 0
+= if b == 0 { a } else { gcd_ext_gcd(b, a % b) };
+
+// Extended GCD iterative: returns x coefficient for a*x + b*y = gcd(a,b)
+fn ext_gcd_x(a: i64, b: i64) -> i64 = {
+    let mut old_r = a;
+    let mut r = b;
+    let mut old_s = 1;
+    let mut s = 0;
+    while r > 0 {
+        let q = old_r / r;
+        let temp_r = r;
+        r = old_r - q * r;
+        old_r = temp_r;
+        let temp_s = s;
+        s = old_s - q * s;
+        old_s = temp_s;
+        0
+    };
+    old_s
+};
+
+// Modular inverse: find x such that (a * x) mod m == 1
+// Returns -1 if no inverse exists (gcd(a, m) != 1)
+fn modinv(a: i64, m: i64) -> i64
+  pre m > 1
+= {
+    let aa = ((a % m) + m) % m;
+    let g = gcd_ext_gcd(aa, m);
+    if g == 1 {
+        let x = ext_gcd_x(aa, m);
+        ((x % m) + m) % m
+    } else {
+        0 - 1
+    }
+};
+
+// Modular addition: (a + b) mod m
+fn addmod(a: i64, b: i64, m: i64) -> i64
+  pre m > 0
+  post ret >= 0 and ret < m
+= {
+    let aa = ((a % m) + m) % m;
+    let bb = ((b % m) + m) % m;
+    (aa + bb) % m
+};
+
+// Modular subtraction: (a - b) mod m
+fn submod(a: i64, b: i64, m: i64) -> i64
+  pre m > 0
+  post ret >= 0 and ret < m
+= {
+    let aa = ((a % m) + m) % m;
+    let bb = ((b % m) + m) % m;
+    ((aa - bb) + m) % m
+};
+
+// Check if a is a quadratic residue mod p (Euler's criterion)
+// Returns true if a^((p-1)/2) == 1 (mod p)
+fn is_quadratic_residue(a: i64, p: i64) -> bool
+  pre p > 2
+= {
+    let r = powmod(a, (p - 1) / 2, p);
+    r == 1
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn test_powmod_basic() -> i64 = {
+    // 2^10 mod 1000 = 1024 mod 1000 = 24
+    let r1 = powmod(2, 10, 1000);
+    // 3^5 mod 7 = 243 mod 7 = 5
+    let r2 = powmod(3, 5, 7);
+    // 2^0 mod 5 = 1
+    let r3 = powmod(2, 0, 5);
+    if r1 == 24 and r2 == 5 and r3 == 1 { 1 } else { 0 }
+};
+
+fn test_powmod_large() -> i64 = {
+    // 7^256 mod 13: by Fermat's little theorem 7^12 == 1 mod 13
+    // 256 = 21*12 + 4, so 7^256 == 7^4 == 2401 mod 13 == 9
+    let r = powmod(7, 256, 13);
+    if r == 9 { 1 } else { 0 }
+};
+
+fn test_mulmod() -> i64 = {
+    let r1 = mulmod(123456, 789012, 1000000007);
+    // 123456 * 789012 = 97408265472
+    // 97408265472 mod 1000000007 = 97408265472 - 97*1000000007 = 97408265472 - 97000000679 = 408264793
+    let expected = (123456 * 789012) % 1000000007;
+    let r2 = mulmod(0, 999, 7);
+    let r3 = mulmod(5, 1, 13);
+    if r1 == expected and r2 == 0 and r3 == 5 { 1 } else { 0 }
+};
+
+fn test_modinv() -> i64 = {
+    // 3 * x == 1 mod 7 => x = 5 (3*5=15, 15 mod 7 = 1)
+    let r1 = modinv(3, 7);
+    // 2 * x == 1 mod 5 => x = 3 (2*3=6, 6 mod 5 = 1)
+    let r2 = modinv(2, 5);
+    // No inverse: gcd(4, 8) = 4 != 1
+    let r3 = modinv(4, 8);
+    if r1 == 5 and r2 == 3 and r3 == (0 - 1) { 1 } else { 0 }
+};
+
+fn test_modinv_verify() -> i64 = {
+    // Verify: a * modinv(a, m) mod m == 1
+    let m = 97;
+    let a = 42;
+    let inv = modinv(a, m);
+    let check = mulmod(a, inv, m);
+    if check == 1 { 1 } else { 0 }
+};
+
+fn test_addmod() -> i64 = {
+    let r1 = addmod(7, 8, 10);  // 15 mod 10 = 5
+    let r2 = addmod(0, 0, 3);   // 0
+    let r3 = addmod(999999, 1, 1000000);  // 0
+    if r1 == 5 and r2 == 0 and r3 == 0 { 1 } else { 0 }
+};
+
+fn test_submod() -> i64 = {
+    let r1 = submod(3, 8, 10);  // (3-8+10) mod 10 = 5
+    let r2 = submod(8, 3, 10);  // 5
+    let r3 = submod(0, 0, 7);   // 0
+    if r1 == 5 and r2 == 5 and r3 == 0 { 1 } else { 0 }
+};
+
+fn test_quadratic_residue() -> i64 = {
+    // 1 is always a QR
+    let r1 = b2i(is_quadratic_residue(1, 7));
+    // 2 is a QR mod 7: 3^2 = 9 == 2 mod 7
+    let r2 = b2i(is_quadratic_residue(2, 7));
+    // 3 is not a QR mod 7
+    let r3 = b2i(is_quadratic_residue(3, 7));
+    if r1 == 1 and r2 == 1 and r3 == 0 { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("powmod_basic", test_powmod_basic());
+    let t2 = report("powmod_large", test_powmod_large());
+    let t3 = report("mulmod", test_mulmod());
+    let t4 = report("modinv", test_modinv());
+    let t5 = report("modinv_verify", test_modinv_verify());
+    let t6 = report("addmod", test_addmod());
+    let t7 = report("submod", test_submod());
+    let t8 = report("quadratic_residue", test_quadratic_residue());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-powmod: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

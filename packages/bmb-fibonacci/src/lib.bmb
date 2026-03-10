@@ -1,0 +1,234 @@
+// bmb-fibonacci: Fibonacci number computation for BMB
+// Iterative and fast doubling (matrix exponentiation) methods
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Iterative Fibonacci: F(n) in O(n) time
+fn fib(n: i64) -> i64
+  pre n >= 0
+  post ret >= 0
+= {
+    let mut a = 0;
+    let mut b = 1;
+    let mut i = 0;
+    while i < n {
+        let next = a + b;
+        a = b;
+        b = next;
+        i = i + 1;
+        0
+    };
+    a
+};
+
+// Fast doubling: F(n) in O(log n) time
+// Uses the identities:
+//   F(2k)   = F(k) * [2*F(k+1) - F(k)]
+//   F(2k+1) = F(k)^2 + F(k+1)^2
+// Returns F(n) via a helper that computes both F(n) and F(n+1)
+// Since BMB has no tuples, we use two separate recursive functions
+// that share the same recurrence.
+
+// Helper: find highest bit position of n (0-indexed)
+fn highest_bit(n: i64) -> i64
+  pre n > 0
+= {
+    let mut pos = 0;
+    let mut v = n;
+    while v > 1 {
+        v = v >> 1;
+        pos = pos + 1;
+        0
+    };
+    pos
+};
+
+// Fast doubling iterative implementation
+// Computes F(n) using bit decomposition of n
+fn fib_fast(n: i64) -> i64
+  pre n >= 0
+  post ret >= 0
+= if n == 0 { 0 } else {
+    {
+        let mut a = 0;  // F(k)
+        let mut b = 1;  // F(k+1)
+        let hb = highest_bit(n);
+        let mut bit = hb;
+        while bit >= 0 {
+            // Doubling step: compute F(2k) and F(2k+1)
+            let c = a * (2 * b - a);       // F(2k)
+            let d = a * a + b * b;          // F(2k+1)
+            let _r = if ((n >> bit) band 1) == 1 {
+                // bit is set: k = 2k+1, so F(k)=F(2k+1), F(k+1)=F(2k+2)=F(2k)+F(2k+1)
+                { a = d; b = c + d; 0 }
+            } else {
+                // bit is not set: k = 2k
+                { a = c; b = d; 0 }
+            };
+            bit = bit - 1;
+            0
+        };
+        a
+    }
+};
+
+// Modular Fibonacci: F(n) mod m using fast doubling
+fn fib_mod(n: i64, m: i64) -> i64
+  pre n >= 0 and m > 0
+  post ret >= 0 and ret < m
+= if n == 0 { 0 } else {
+    {
+        let mut a = 0;  // F(k) mod m
+        let mut b = 1;  // F(k+1) mod m
+        let hb = highest_bit(n);
+        let mut bit = hb;
+        while bit >= 0 {
+            let c = ((a % m) * ((2 * b - a + m) % m)) % m;
+            let d = ((a % m) * (a % m) + (b % m) * (b % m)) % m;
+            let _r = if ((n >> bit) band 1) == 1 {
+                { a = d % m; b = (c + d) % m; 0 }
+            } else {
+                { a = c % m; b = d % m; 0 }
+            };
+            bit = bit - 1;
+            0
+        };
+        ((a % m) + m) % m
+    }
+};
+
+// Check if n is a Fibonacci number
+// A positive integer n is Fibonacci iff one of (5*n^2 + 4) or (5*n^2 - 4) is a perfect square
+fn is_perfect_square(n: i64) -> bool
+  pre n >= 0
+= {
+    let mut s = 0;
+    let mut done = false;
+    while not done {
+        let _r = if s * s == n {
+            { done = true; 0 }
+        } else if s * s > n {
+            { done = true; 0 }
+        } else {
+            { s = s + 1; 0 }
+        };
+        0
+    };
+    s * s == n
+};
+
+fn is_fibonacci(n: i64) -> bool
+  pre n >= 0
+= {
+    let x = 5 * n * n;
+    is_perfect_square(x + 4) or is_perfect_square(x - 4)
+};
+
+// Fibonacci sum: F(0) + F(1) + ... + F(n) = F(n+2) - 1
+fn fib_sum(n: i64) -> i64
+  pre n >= 0
+= fib(n + 2) - 1;
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn test_fib_basic() -> i64 = {
+    let ok = fib(0) == 0 and fib(1) == 1 and fib(2) == 1
+        and fib(5) == 5 and fib(10) == 55 and fib(20) == 6765;
+    b2i(ok)
+};
+
+fn test_fib_fast_basic() -> i64 = {
+    let ok = fib_fast(0) == 0 and fib_fast(1) == 1 and fib_fast(2) == 1
+        and fib_fast(5) == 5 and fib_fast(10) == 55 and fib_fast(20) == 6765;
+    b2i(ok)
+};
+
+fn test_fib_fast_large() -> i64 = {
+    // F(30) = 832040, F(40) = 102334155
+    let ok = fib_fast(30) == 832040 and fib_fast(40) == 102334155;
+    b2i(ok)
+};
+
+fn test_fib_consistency() -> i64 = {
+    // Verify fib and fib_fast produce the same results
+    let mut ok = true;
+    let mut i = 0;
+    while i <= 25 {
+        let _r = if fib(i) == fib_fast(i) { 0 } else {
+            { ok = false; 0 }
+        };
+        i = i + 1;
+        0
+    };
+    b2i(ok)
+};
+
+fn test_fib_mod() -> i64 = {
+    // F(10) = 55, 55 mod 7 = 6
+    let r1 = fib_mod(10, 7);
+    // F(20) = 6765, 6765 mod 100 = 65
+    let r2 = fib_mod(20, 100);
+    // F(0) mod anything = 0
+    let r3 = fib_mod(0, 13);
+    if r1 == 6 and r2 == 65 and r3 == 0 { 1 } else { 0 }
+};
+
+fn test_is_fibonacci() -> i64 = {
+    let r1 = b2i(is_fibonacci(0));
+    let r2 = b2i(is_fibonacci(1));
+    let r3 = b2i(is_fibonacci(8));
+    let r4 = b2i(is_fibonacci(13));
+    let r5 = b2i(is_fibonacci(4));   // not fib
+    let r6 = b2i(is_fibonacci(10));  // not fib
+    if r1 == 1 and r2 == 1 and r3 == 1 and r4 == 1
+       and r5 == 0 and r6 == 0 { 1 } else { 0 }
+};
+
+fn test_fib_sum() -> i64 = {
+    // F(0)+...+F(5) = 0+1+1+2+3+5 = 12
+    let s1 = fib_sum(5);
+    // F(0)+...+F(0) = 0
+    let s2 = fib_sum(0);
+    // F(0)+...+F(10) = 0+1+1+2+3+5+8+13+21+34+55 = 143
+    let s3 = fib_sum(10);
+    if s1 == 12 and s2 == 0 and s3 == 143 { 1 } else { 0 }
+};
+
+fn test_highest_bit() -> i64 = {
+    let h1 = highest_bit(1);   // 0
+    let h2 = highest_bit(2);   // 1
+    let h3 = highest_bit(8);   // 3
+    let h4 = highest_bit(15);  // 3
+    let h5 = highest_bit(16);  // 4
+    if h1 == 0 and h2 == 1 and h3 == 3 and h4 == 3 and h5 == 4 { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("fib_basic", test_fib_basic());
+    let t2 = report("fib_fast_basic", test_fib_fast_basic());
+    let t3 = report("fib_fast_large", test_fib_fast_large());
+    let t4 = report("fib_consistency", test_fib_consistency());
+    let t5 = report("fib_mod", test_fib_mod());
+    let t6 = report("is_fibonacci", test_is_fibonacci());
+    let t7 = report("fib_sum", test_fib_sum());
+    let t8 = report("highest_bit", test_highest_bit());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-fibonacci: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

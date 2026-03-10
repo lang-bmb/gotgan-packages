@@ -1,0 +1,207 @@
+// bmb-zigzag: Zigzag encoding/decoding for signed integers
+// Used in Protocol Buffers and varint encoding.
+// Maps signed integers to unsigned: 0->0, -1->1, 1->2, -2->3, 2->4, ...
+// Formula: encode(n) = (n << 1) ^ (n >> 63)
+// Formula: decode(n) = (n >>> 1) ^ -(n & 1)
+// Since BMB uses i64, we use arithmetic shift right (>> is arithmetic in BMB).
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Zigzag encode a signed i64 to an unsigned-mapped i64.
+// Positive values map to even numbers, negative values map to odd numbers.
+fn zigzag_encode(n: i64) -> i64 =
+    (n << 1) bxor (n >> 63);
+
+// Zigzag decode an unsigned-mapped i64 back to signed.
+// We need logical right shift: (n >> 1) but >> is arithmetic in BMB.
+// For logical right shift of 1: mask off the sign bit after shift.
+fn zigzag_decode(n: i64) -> i64 = {
+    // Logical right shift by 1: shift then mask off sign bit
+    let shifted = (n >> 1) band 9223372036854775807;
+    let sign = 0 - (n band 1);
+    shifted bxor sign
+};
+
+// Encode a vec of signed i64 values to zigzag-encoded values.
+fn zigzag_encode_vec(data: i64, len: i64) -> i64
+  pre len >= 0
+  post ret != 0
+= {
+    let out = vec_new();
+    let mut i = 0;
+    while i < len {
+        let _p = vec_push(out, zigzag_encode(vec_get(data, i)));
+        i = i + 1;
+        0
+    };
+    out
+};
+
+// Decode a vec of zigzag-encoded values back to signed i64.
+fn zigzag_decode_vec(data: i64, len: i64) -> i64
+  pre len >= 0
+  post ret != 0
+= {
+    let out = vec_new();
+    let mut i = 0;
+    while i < len {
+        let _p = vec_push(out, zigzag_decode(vec_get(data, i)));
+        i = i + 1;
+        0
+    };
+    out
+};
+
+// Compute the varint byte size needed for a zigzag-encoded value.
+// Varint uses 7 bits per byte, with MSB as continuation bit.
+fn varint_size(zz_val: i64) -> i64
+  post ret >= 1 and ret <= 10
+= {
+    if zz_val == 0 { 1 }
+    else {
+        let mut v = zz_val;
+        let mut bytes = 0;
+        let mut done = false;
+        while not done {
+            if v == 0 { done = true; 0 }
+            else {
+                // Logical right shift by 7
+                v = (v >> 7) band 144115188075855871;
+                bytes = bytes + 1;
+                0
+            }
+        };
+        bytes
+    }
+};
+
+// Total varint bytes needed for a vec of signed values (after zigzag encoding).
+fn varint_total_size(data: i64, len: i64) -> i64
+  pre len >= 0
+  post ret >= 0
+= {
+    let mut total = 0;
+    let mut i = 0;
+    while i < len {
+        total = total + varint_size(zigzag_encode(vec_get(data, i)));
+        i = i + 1;
+        0
+    };
+    total
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_encode_zero() -> i64 = {
+    // 0 -> 0
+    if zigzag_encode(0) == 0 { 1 } else { 0 }
+};
+
+fn test_encode_positive() -> i64 = {
+    // 1->2, 2->4, 3->6, 100->200
+    if zigzag_encode(1) != 2 { 0 }
+    else if zigzag_encode(2) != 4 { 0 }
+    else if zigzag_encode(3) != 6 { 0 }
+    else if zigzag_encode(100) != 200 { 0 }
+    else { 1 }
+};
+
+fn test_encode_negative() -> i64 = {
+    // -1->1, -2->3, -3->5, -100->199
+    if zigzag_encode(0 - 1) != 1 { 0 }
+    else if zigzag_encode(0 - 2) != 3 { 0 }
+    else if zigzag_encode(0 - 3) != 5 { 0 }
+    else if zigzag_encode(0 - 100) != 199 { 0 }
+    else { 1 }
+};
+
+fn test_decode_roundtrip() -> i64 = {
+    // encode then decode should return original value
+    let mut ok = 1;
+    if zigzag_decode(zigzag_encode(0)) != 0 { ok = 0; 0 } else { 0 };
+    if zigzag_decode(zigzag_encode(1)) != 1 { ok = 0; 0 } else { 0 };
+    if zigzag_decode(zigzag_encode(0 - 1)) != 0 - 1 { ok = 0; 0 } else { 0 };
+    if zigzag_decode(zigzag_encode(127)) != 127 { ok = 0; 0 } else { 0 };
+    if zigzag_decode(zigzag_encode(0 - 128)) != 0 - 128 { ok = 0; 0 } else { 0 };
+    if zigzag_decode(zigzag_encode(12345)) != 12345 { ok = 0; 0 } else { 0 };
+    if zigzag_decode(zigzag_encode(0 - 12345)) != 0 - 12345 { ok = 0; 0 } else { 0 };
+    ok
+};
+
+fn test_ordering() -> i64 = {
+    // Zigzag encoding interleaves positive and negative:
+    // encoded(0) < encoded(-1) < encoded(1) < encoded(-2) < encoded(2) ...
+    let z0 = zigzag_encode(0);       // 0
+    let zn1 = zigzag_encode(0 - 1);  // 1
+    let z1 = zigzag_encode(1);       // 2
+    let zn2 = zigzag_encode(0 - 2);  // 3
+    let z2 = zigzag_encode(2);       // 4
+    if z0 >= zn1 { 0 }
+    else if zn1 >= z1 { 0 }
+    else if z1 >= zn2 { 0 }
+    else if zn2 >= z2 { 0 }
+    else { 1 }
+};
+
+fn test_vec_roundtrip() -> i64 = {
+    let data = vec_new();
+    let _p0 = vec_push(data, 0 - 5);
+    let _p1 = vec_push(data, 0);
+    let _p2 = vec_push(data, 10);
+    let _p3 = vec_push(data, 0 - 1);
+    let enc = zigzag_encode_vec(data, 4);
+    let dec = zigzag_decode_vec(enc, 4);
+    let ok = vec_get(dec, 0) == 0 - 5 and
+             vec_get(dec, 1) == 0 and
+             vec_get(dec, 2) == 10 and
+             vec_get(dec, 3) == 0 - 1;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    let _f3 = vec_free(dec);
+    if ok { 1 } else { 0 }
+};
+
+fn test_varint_size() -> i64 = {
+    // zigzag(0) = 0 -> 1 byte
+    // zigzag(1) = 2 -> 1 byte (fits in 7 bits)
+    // zigzag(63) = 126 -> 1 byte (126 < 128)
+    // zigzag(64) = 128 -> 2 bytes (needs 8 bits)
+    let s1 = varint_size(zigzag_encode(0));
+    let s2 = varint_size(zigzag_encode(63));
+    let s3 = varint_size(zigzag_encode(64));
+    let s4 = varint_size(zigzag_encode(0 - 1));  // zz=1 -> 1 byte
+    if s1 != 1 { 0 }
+    else if s2 != 1 { 0 }
+    else if s3 != 2 { 0 }
+    else if s4 != 1 { 0 }
+    else { 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("encode_zero", test_encode_zero());
+    let t2 = report("encode_positive", test_encode_positive());
+    let t3 = report("encode_negative", test_encode_negative());
+    let t4 = report("decode_roundtrip", test_decode_roundtrip());
+    let t5 = report("ordering", test_ordering());
+    let t6 = report("vec_roundtrip", test_vec_roundtrip());
+    let t7 = report("varint_size", test_varint_size());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = 7;
+    let _p1 = print_str("bmb-zigzag: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

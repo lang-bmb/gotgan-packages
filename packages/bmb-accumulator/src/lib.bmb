@@ -1,0 +1,248 @@
+// bmb-accumulator: Online running statistics accumulator
+// v0.1.0
+//
+// Maintains running statistics for a stream of i64 values without
+// storing the full dataset. Uses Welford-inspired online approach.
+//
+// State layout (vec with 5 slots):
+//   [0] count    - number of values added
+//   [1] sum      - running sum
+//   [2] sum_sq   - running sum of squares (for variance, scaled by 1)
+//   [3] min_val  - minimum value seen (i64 MAX before first value)
+//   [4] max_val  - maximum value seen (i64 MIN before first value)
+//
+// All arithmetic is i64 (no floating point).
+// mean_scaled returns mean * 1000 (3 decimal places, integer division).
+
+// ============================================================================
+// Sentinel values for uninitialised min/max
+// ============================================================================
+
+fn ACC_I64_MAX() -> i64 = 9223372036854775807;
+fn ACC_I64_MIN() -> i64 = 0 - 9223372036854775807 - 1;
+
+// ============================================================================
+// Public API
+// ============================================================================
+
+// Create a new accumulator
+fn acc_new() -> i64
+  post ret != 0
+= {
+    let a = vec_new();
+    let _p0 = vec_push(a, 0);               // count
+    let _p1 = vec_push(a, 0);               // sum
+    let _p2 = vec_push(a, 0);               // sum_sq
+    let _p3 = vec_push(a, ACC_I64_MAX());   // min_val (sentinel)
+    let _p4 = vec_push(a, ACC_I64_MIN());   // max_val (sentinel)
+    a
+};
+
+// Add a value to the accumulator
+fn acc_add(a: i64, val: i64) -> i64
+  pre a != 0
+= {
+    let cnt = vec_get(a, 0);
+    let sm  = vec_get(a, 1);
+    let sq  = vec_get(a, 2);
+    let mn  = vec_get(a, 3);
+    let mx  = vec_get(a, 4);
+    let _sc = vec_set(a, 0, cnt + 1);
+    let _ss = vec_set(a, 1, sm + val);
+    let _sq = vec_set(a, 2, sq + val * val);
+    if val < mn { let _s = vec_set(a, 3, val); 0 } else { 0 };
+    if val > mx { let _s = vec_set(a, 4, val); 0 } else { 0 };
+    0
+};
+
+// Return the number of values added
+fn acc_count(a: i64) -> i64
+  pre a != 0
+  post ret >= 0
+= vec_get(a, 0);
+
+// Return the running sum
+fn acc_sum(a: i64) -> i64
+  pre a != 0
+= vec_get(a, 1);
+
+// Return mean * 1000 (i.e. 3 decimal places of precision via integer division)
+// Returns 0 if no values have been added yet.
+fn acc_mean_scaled(a: i64) -> i64
+  pre a != 0
+= {
+    let cnt = vec_get(a, 0);
+    if cnt == 0 { 0 }
+    else { (vec_get(a, 1) * 1000) / cnt }
+};
+
+// Return the minimum value seen (ACC_I64_MAX if empty)
+fn acc_min(a: i64) -> i64
+  pre a != 0
+= vec_get(a, 3);
+
+// Return the maximum value seen (ACC_I64_MIN if empty)
+fn acc_max(a: i64) -> i64
+  pre a != 0
+= vec_get(a, 4);
+
+// Return range = max - min (0 if fewer than 2 values)
+fn acc_range(a: i64) -> i64
+  pre a != 0
+= {
+    let cnt = vec_get(a, 0);
+    if cnt < 2 { 0 }
+    else { vec_get(a, 4) - vec_get(a, 3) }
+};
+
+// Free the accumulator
+fn acc_free(a: i64) -> i64
+  pre a != 0
+= { let _f = vec_free(a); 0 };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_empty() -> i64 = {
+    let a = acc_new();
+    let cnt = acc_count(a);
+    let sm  = acc_sum(a);
+    let ms  = acc_mean_scaled(a);
+    let rng = acc_range(a);
+    let _f  = acc_free(a);
+    if cnt == 0 and sm == 0 and ms == 0 and rng == 0 { 1 } else { 0 }
+};
+
+fn test_single_value() -> i64 = {
+    let a = acc_new();
+    let _add = acc_add(a, 42);
+    let cnt = acc_count(a);
+    let sm  = acc_sum(a);
+    let ms  = acc_mean_scaled(a);
+    let mn  = acc_min(a);
+    let mx  = acc_max(a);
+    let rng = acc_range(a);
+    let _f  = acc_free(a);
+    if cnt == 1 and sm == 42 and ms == 42000 and mn == 42 and mx == 42 and rng == 0 { 1 } else { 0 }
+};
+
+fn test_multiple_values() -> i64 = {
+    // [1, 2, 3, 4, 5]: sum=15, mean=3.0 (3000 scaled), min=1, max=5, range=4
+    let a = acc_new();
+    let _a1 = acc_add(a, 1);
+    let _a2 = acc_add(a, 2);
+    let _a3 = acc_add(a, 3);
+    let _a4 = acc_add(a, 4);
+    let _a5 = acc_add(a, 5);
+    let cnt = acc_count(a);
+    let sm  = acc_sum(a);
+    let ms  = acc_mean_scaled(a);
+    let mn  = acc_min(a);
+    let mx  = acc_max(a);
+    let rng = acc_range(a);
+    let _f  = acc_free(a);
+    if cnt == 5 and sm == 15 and ms == 3000 and mn == 1 and mx == 5 and rng == 4 { 1 } else { 0 }
+};
+
+fn test_negative_values() -> i64 = {
+    // [-3, -1, 0, 1, 3]: sum=0, mean=0, min=-3, max=3, range=6
+    let a = acc_new();
+    let _a1 = acc_add(a, 0 - 3);
+    let _a2 = acc_add(a, 0 - 1);
+    let _a3 = acc_add(a, 0);
+    let _a4 = acc_add(a, 1);
+    let _a5 = acc_add(a, 3);
+    let cnt = acc_count(a);
+    let sm  = acc_sum(a);
+    let ms  = acc_mean_scaled(a);
+    let mn  = acc_min(a);
+    let mx  = acc_max(a);
+    let rng = acc_range(a);
+    let _f  = acc_free(a);
+    if cnt == 5 and sm == 0 and ms == 0 and mn == 0 - 3 and mx == 3 and rng == 6 { 1 } else { 0 }
+};
+
+fn test_mean_fractional() -> i64 = {
+    // [1, 2]: sum=3, mean=1.5 -> 1500 scaled
+    let a = acc_new();
+    let _a1 = acc_add(a, 1);
+    let _a2 = acc_add(a, 2);
+    let ms  = acc_mean_scaled(a);
+    let _f  = acc_free(a);
+    if ms == 1500 { 1 } else { 0 }
+};
+
+fn test_large_values() -> i64 = {
+    // [1000000, 2000000, 3000000]: sum=6000000, mean=2000000
+    let a = acc_new();
+    let _a1 = acc_add(a, 1000000);
+    let _a2 = acc_add(a, 2000000);
+    let _a3 = acc_add(a, 3000000);
+    let sm  = acc_sum(a);
+    let ms  = acc_mean_scaled(a);
+    let mn  = acc_min(a);
+    let mx  = acc_max(a);
+    let _f  = acc_free(a);
+    if sm == 6000000 and ms == 2000000000 and mn == 1000000 and mx == 3000000 { 1 } else { 0 }
+};
+
+fn test_incremental_min_max() -> i64 = {
+    let a = acc_new();
+    let _a1 = acc_add(a, 10);
+    let mn1 = acc_min(a);
+    let mx1 = acc_max(a);
+    let _a2 = acc_add(a, 5);
+    let mn2 = acc_min(a);
+    let _a3 = acc_add(a, 20);
+    let mx3 = acc_max(a);
+    let _f  = acc_free(a);
+    if mn1 == 10 and mx1 == 10 and mn2 == 5 and mx3 == 20 { 1 } else { 0 }
+};
+
+fn test_many_values() -> i64 = {
+    // sum of 1..100 = 5050, count=100, mean=50.5 -> 50500 scaled
+    let a = acc_new();
+    let mut i = 1;
+    while i <= 100 {
+        let _add = acc_add(a, i);
+        i = i + 1;
+        0
+    };
+    let cnt = acc_count(a);
+    let sm  = acc_sum(a);
+    let ms  = acc_mean_scaled(a);
+    let mn  = acc_min(a);
+    let mx  = acc_max(a);
+    let rng = acc_range(a);
+    let _f  = acc_free(a);
+    if cnt == 100 and sm == 5050 and ms == 50500 and mn == 1 and mx == 100 and rng == 99 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("empty",              test_empty());
+    let t2 = report("single_value",       test_single_value());
+    let t3 = report("multiple_values",    test_multiple_values());
+    let t4 = report("negative_values",    test_negative_values());
+    let t5 = report("mean_fractional",    test_mean_fractional());
+    let t6 = report("large_values",       test_large_values());
+    let t7 = report("incremental_minmax", test_incremental_min_max());
+    let t8 = report("many_values",        test_many_values());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-accumulator: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

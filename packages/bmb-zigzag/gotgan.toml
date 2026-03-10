@@ -1,0 +1,9 @@
+[package]
+name = "bmb-zigzag"
+version = "0.1.0"
+description = "Zigzag encoding/decoding for signed integers (used in protobuf/varint)"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

@@ -1,0 +1,9 @@
+[package]
+name = "bmb-base32"
+version = "0.1.0"
+description = "RFC 4648 Base32 encoding and decoding (standard A-Z/2-7 alphabet)"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

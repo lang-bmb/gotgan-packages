@@ -1,0 +1,199 @@
+// bmb-tokenizer: Simple string tokenizer
+// Splits a string by a delimiter byte into a vec of substrings.
+// Each token is stored as a pair (start_index, length) in a flat vec.
+// Token i: start = vec_get(tokens, i*2), length = vec_get(tokens, i*2+1)
+//
+// Since BMB has no generics, we store token boundaries as pairs of i64
+// in a flat vec: [start0, len0, start1, len1, ...]
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Tokenize a string by delimiter byte.
+// Returns a vec of (start, len) pairs stored flat.
+// Caller must free the returned vec.
+fn tokenize(s: String, delim: i64) -> i64
+  post ret != 0
+= {
+    let tokens = vec_new();
+    let slen = s.len();
+    let mut pos = 0;
+    let mut tok_start = 0;
+    let mut done = false;
+    while not done {
+        let _r = if pos >= slen {
+            {
+                // emit final token (possibly empty)
+                let _ps = vec_push(tokens, tok_start);
+                let _pl = vec_push(tokens, pos - tok_start);
+                done = true;
+                0
+            }
+        } else if s.byte_at(pos) == delim {
+            {
+                // emit token [tok_start .. pos)
+                let _ps = vec_push(tokens, tok_start);
+                let _pl = vec_push(tokens, pos - tok_start);
+                tok_start = pos + 1;
+                pos = pos + 1;
+                0
+            }
+        } else {
+            { pos = pos + 1; 0 }
+        };
+        0
+    };
+    tokens
+};
+
+// Get number of tokens
+fn token_count(tokens: i64) -> i64
+  pre tokens != 0
+  post ret >= 0
+= vec_len(tokens) / 2;
+
+// Get start index of token i
+fn token_start(tokens: i64, i: i64) -> i64
+  pre tokens != 0 and i >= 0
+= vec_get(tokens, i * 2);
+
+// Get length of token i
+fn token_len(tokens: i64, i: i64) -> i64
+  pre tokens != 0 and i >= 0
+= vec_get(tokens, i * 2 + 1);
+
+// Check if token i matches a given string exactly.
+// Compares byte-by-byte.
+fn token_equals(tokens: i64, i: i64, s: String, expected: String) -> bool
+  pre tokens != 0 and i >= 0
+= {
+    let tstart = token_start(tokens, i);
+    let tlen = token_len(tokens, i);
+    if tlen != expected.len() { false }
+    else {
+        let mut j = 0;
+        let mut matched = true;
+        while j < tlen {
+            let _r = if s.byte_at(tstart + j) != expected.byte_at(j) {
+                { matched = false; 0 }
+            } else { 0 };
+            j = j + 1;
+            0
+        };
+        matched
+    }
+};
+
+// Extract token bytes into a vec of i64 byte values
+fn token_bytes(tokens: i64, i: i64, s: String) -> i64
+  pre tokens != 0 and i >= 0
+  post ret != 0
+= {
+    let tstart = token_start(tokens, i);
+    let tlen = token_len(tokens, i);
+    let out = vec_new();
+    let mut j = 0;
+    while j < tlen {
+        let _p = vec_push(out, s.byte_at(tstart + j));
+        j = j + 1;
+        0
+    };
+    out
+};
+
+// Free token vec
+fn token_free(tokens: i64) -> i64
+  pre tokens != 0
+= { let _f = vec_free(tokens); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic_split() -> i64 = {
+    // "a,b,c" split by ',' (44)
+    let s = "a,b,c";
+    let toks = tokenize(s, 44);
+    if token_count(toks) != 3 { let _f = token_free(toks); 0 }
+    else if b2i(token_equals(toks, 0, s, "a")) != 1 { let _f = token_free(toks); 0 }
+    else if b2i(token_equals(toks, 1, s, "b")) != 1 { let _f = token_free(toks); 0 }
+    else if b2i(token_equals(toks, 2, s, "c")) != 1 { let _f = token_free(toks); 0 }
+    else { let _f = token_free(toks); 1 }
+};
+
+fn test_space_delim() -> i64 = {
+    // "hello world foo" split by ' ' (32)
+    let s = "hello world foo";
+    let toks = tokenize(s, 32);
+    if token_count(toks) != 3 { let _f = token_free(toks); 0 }
+    else if b2i(token_equals(toks, 0, s, "hello")) != 1 { let _f = token_free(toks); 0 }
+    else if b2i(token_equals(toks, 1, s, "world")) != 1 { let _f = token_free(toks); 0 }
+    else if b2i(token_equals(toks, 2, s, "foo")) != 1 { let _f = token_free(toks); 0 }
+    else { let _f = token_free(toks); 1 }
+};
+
+fn test_no_delimiter() -> i64 = {
+    // "hello" split by ',' -> 1 token = "hello"
+    let s = "hello";
+    let toks = tokenize(s, 44);
+    if token_count(toks) != 1 { let _f = token_free(toks); 0 }
+    else if token_len(toks, 0) != 5 { let _f = token_free(toks); 0 }
+    else if b2i(token_equals(toks, 0, s, "hello")) != 1 { let _f = token_free(toks); 0 }
+    else { let _f = token_free(toks); 1 }
+};
+
+fn test_empty_tokens() -> i64 = {
+    // ",," split by ',' -> 3 tokens, all empty
+    let s = ",,";
+    let toks = tokenize(s, 44);
+    if token_count(toks) != 3 { let _f = token_free(toks); 0 }
+    else if token_len(toks, 0) != 0 { let _f = token_free(toks); 0 }
+    else if token_len(toks, 1) != 0 { let _f = token_free(toks); 0 }
+    else if token_len(toks, 2) != 0 { let _f = token_free(toks); 0 }
+    else { let _f = token_free(toks); 1 }
+};
+
+fn test_empty_string() -> i64 = {
+    // "" split by ',' -> 1 token of length 0
+    let s = "";
+    let toks = tokenize(s, 44);
+    if token_count(toks) != 1 { let _f = token_free(toks); 0 }
+    else if token_len(toks, 0) != 0 { let _f = token_free(toks); 0 }
+    else { let _f = token_free(toks); 1 }
+};
+
+fn test_token_bytes() -> i64 = {
+    // "ab:cd" split by ':' (58) -> token 0 = "ab" bytes [97,98]
+    let s = "ab:cd";
+    let toks = tokenize(s, 58);
+    let bytes0 = token_bytes(toks, 0, s);
+    if vec_len(bytes0) != 2 { let _fb = vec_free(bytes0); let _f = token_free(toks); 0 }
+    else if vec_get(bytes0, 0) != 97 { let _fb = vec_free(bytes0); let _f = token_free(toks); 0 }
+    else if vec_get(bytes0, 1) != 98 { let _fb = vec_free(bytes0); let _f = token_free(toks); 0 }
+    else { let _fb = vec_free(bytes0); let _f = token_free(toks); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_split", test_basic_split());
+    let t2 = report("space_delim", test_space_delim());
+    let t3 = report("no_delimiter", test_no_delimiter());
+    let t4 = report("empty_tokens", test_empty_tokens());
+    let t5 = report("empty_string", test_empty_string());
+    let t6 = report("token_bytes", test_token_bytes());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-tokenizer: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

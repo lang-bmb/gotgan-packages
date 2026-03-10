@@ -1,0 +1,479 @@
+// bmb-matrix: Integer matrix operations for BMB
+// Flat Vec storage, row-major order: element (row, col) is at index row*cols + col
+// All matrices are represented as i64 Vec handles.
+
+// ============================================================================
+// Core matrix creation and access
+// ============================================================================
+
+// Create a new rows x cols matrix filled with zeros.
+// Returns the Vec handle (i64).
+fn mat_new(rows: i64, cols: i64) -> i64
+  pre rows > 0 and cols > 0
+  post ret != 0
+= {
+    let size = rows * cols;
+    let v = vec_new();
+    let mut i = 0;
+    while i < size {
+        let _p = vec_push(v, 0);
+        i = i + 1;
+        0
+    };
+    v
+};
+
+// Get element at (row, col) from a matrix with given number of columns.
+fn mat_get(mat: i64, cols: i64, row: i64, col: i64) -> i64
+  pre mat != 0 and cols > 0 and row >= 0 and col >= 0
+= vec_get(mat, row * cols + col);
+
+// Set element at (row, col) in a matrix with given number of columns.
+// Returns the mat handle (unchanged, for chaining).
+fn mat_set(mat: i64, cols: i64, row: i64, col: i64, value: i64) -> i64
+  pre mat != 0 and cols > 0 and row >= 0 and col >= 0
+= {
+    let _s = vec_set(mat, row * cols + col, value);
+    mat
+};
+
+// ============================================================================
+// Matrix arithmetic
+// ============================================================================
+
+// Add two matrices element-wise: C = A + B.
+// Both matrices must be rows x cols. Returns a new Vec handle.
+fn mat_add(a: i64, b: i64, rows: i64, cols: i64) -> i64
+  pre a != 0 and b != 0 and rows > 0 and cols > 0
+  post ret != 0
+= {
+    let size = rows * cols;
+    let v = vec_new();
+    let mut i = 0;
+    while i < size {
+        let val = vec_get(a, i) + vec_get(b, i);
+        let _p = vec_push(v, val);
+        i = i + 1;
+        0
+    };
+    v
+};
+
+// Scale a matrix by a scalar: B[i] = A[i] * scalar.
+// Returns a new Vec handle.
+fn mat_scale(mat: i64, rows: i64, cols: i64, scalar: i64) -> i64
+  pre mat != 0 and rows > 0 and cols > 0
+  post ret != 0
+= {
+    let size = rows * cols;
+    let v = vec_new();
+    let mut i = 0;
+    while i < size {
+        let val = vec_get(mat, i) * scalar;
+        let _p = vec_push(v, val);
+        i = i + 1;
+        0
+    };
+    v
+};
+
+// Helper: compute one element (r, c) of C = A * B
+// A is m x n, B is n x p.
+fn mat_mul_elem(a: i64, b: i64, n: i64, p: i64, r: i64, c: i64) -> i64 = {
+    let mut sum = 0;
+    let mut k = 0;
+    while k < n {
+        sum = sum + vec_get(a, r * n + k) * vec_get(b, k * p + c);
+        k = k + 1;
+        0
+    };
+    sum
+};
+
+// Multiply matrices: C = A * B where A is m x n and B is n x p.
+// Returns a new m x p Vec handle.
+fn mat_multiply(a: i64, b: i64, m: i64, n: i64, p: i64) -> i64
+  pre a != 0 and b != 0 and m > 0 and n > 0 and p > 0
+  post ret != 0
+= {
+    let v = vec_new();
+    let mut r = 0;
+    while r < m {
+        let mut c = 0;
+        while c < p {
+            let val = mat_mul_elem(a, b, n, p, r, c);
+            let _p = vec_push(v, val);
+            c = c + 1;
+            0
+        };
+        r = r + 1;
+        0
+    };
+    v
+};
+
+// Transpose a rows x cols matrix.
+// Returns a new cols x rows Vec handle.
+fn mat_transpose(mat: i64, rows: i64, cols: i64) -> i64
+  pre mat != 0 and rows > 0 and cols > 0
+  post ret != 0
+= {
+    let v = vec_new();
+    let mut c = 0;
+    while c < cols {
+        let mut r = 0;
+        while r < rows {
+            let val = vec_get(mat, r * cols + c);
+            let _p = vec_push(v, val);
+            r = r + 1;
+            0
+        };
+        c = c + 1;
+        0
+    };
+    v
+};
+
+// ============================================================================
+// Matrix properties
+// ============================================================================
+
+// Compute the trace of an n x n matrix (sum of diagonal elements).
+fn mat_trace(mat: i64, n: i64) -> i64
+  pre mat != 0 and n > 0
+= {
+    let mut sum = 0;
+    let mut i = 0;
+    while i < n {
+        sum = sum + vec_get(mat, i * n + i);
+        i = i + 1;
+        0
+    };
+    sum
+};
+
+// Create an n x n identity matrix.
+// Returns a new Vec handle.
+fn mat_identity(n: i64) -> i64
+  pre n > 0
+  post ret != 0
+= {
+    let size = n * n;
+    let v = vec_new();
+    let mut i = 0;
+    while i < n {
+        let mut j = 0;
+        while j < n {
+            let val = if i == j { 1 } else { 0 };
+            let _p = vec_push(v, val);
+            j = j + 1;
+            0
+        };
+        i = i + 1;
+        0
+    };
+    v
+};
+
+// Check if an n x n matrix is symmetric: mat[i][j] == mat[j][i] for all i, j.
+fn mat_is_symmetric(mat: i64, n: i64) -> bool
+  pre mat != 0 and n > 0
+= {
+    let mut symmetric = true;
+    let mut i = 0;
+    while i < n {
+        let mut j = i + 1;
+        while j < n {
+            if vec_get(mat, i * n + j) != vec_get(mat, j * n + i) {
+                symmetric = false;
+                0
+            } else { 0 };
+            j = j + 1;
+            0
+        };
+        i = i + 1;
+        0
+    };
+    symmetric
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_mat_new() -> i64 = {
+    let m = mat_new(2, 3);
+    if vec_len(m) != 6 { let _f = vec_free(m); 0 }
+    else if vec_get(m, 0) != 0 { let _f = vec_free(m); 0 }
+    else if vec_get(m, 5) != 0 { let _f = vec_free(m); 0 }
+    else { let _f = vec_free(m); 1 }
+};
+
+fn test_mat_get_set() -> i64 = {
+    let m = mat_new(3, 3);
+    let _s1 = mat_set(m, 3, 0, 0, 10);
+    let _s2 = mat_set(m, 3, 1, 2, 42);
+    let _s3 = mat_set(m, 3, 2, 1, 7);
+    if mat_get(m, 3, 0, 0) != 10 { let _f = vec_free(m); 0 }
+    else if mat_get(m, 3, 1, 2) != 42 { let _f = vec_free(m); 0 }
+    else if mat_get(m, 3, 2, 1) != 7 { let _f = vec_free(m); 0 }
+    else if mat_get(m, 3, 0, 1) != 0 { let _f = vec_free(m); 0 }
+    else { let _f = vec_free(m); 1 }
+};
+
+fn test_mat_add() -> i64 = {
+    let a = mat_new(2, 2);
+    let _s1 = mat_set(a, 2, 0, 0, 1);
+    let _s2 = mat_set(a, 2, 0, 1, 2);
+    let _s3 = mat_set(a, 2, 1, 0, 3);
+    let _s4 = mat_set(a, 2, 1, 1, 4);
+    let b = mat_new(2, 2);
+    let _s5 = mat_set(b, 2, 0, 0, 10);
+    let _s6 = mat_set(b, 2, 0, 1, 20);
+    let _s7 = mat_set(b, 2, 1, 0, 30);
+    let _s8 = mat_set(b, 2, 1, 1, 40);
+    let c = mat_add(a, b, 2, 2);
+    if mat_get(c, 2, 0, 0) != 11 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 0, 1) != 22 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 1, 0) != 33 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 1, 1) != 44 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else {
+        let _fa = vec_free(a);
+        let _fb = vec_free(b);
+        let _fc = vec_free(c);
+        1
+    }
+};
+
+fn test_mat_scale() -> i64 = {
+    let m = mat_new(2, 2);
+    let _s1 = mat_set(m, 2, 0, 0, 1);
+    let _s2 = mat_set(m, 2, 0, 1, 2);
+    let _s3 = mat_set(m, 2, 1, 0, 3);
+    let _s4 = mat_set(m, 2, 1, 1, 4);
+    let s = mat_scale(m, 2, 2, 3);
+    if mat_get(s, 2, 0, 0) != 3 { let _fm = vec_free(m); let _fs = vec_free(s); 0 }
+    else if mat_get(s, 2, 0, 1) != 6 { let _fm = vec_free(m); let _fs = vec_free(s); 0 }
+    else if mat_get(s, 2, 1, 0) != 9 { let _fm = vec_free(m); let _fs = vec_free(s); 0 }
+    else if mat_get(s, 2, 1, 1) != 12 { let _fm = vec_free(m); let _fs = vec_free(s); 0 }
+    else {
+        let _fm = vec_free(m);
+        let _fs = vec_free(s);
+        1
+    }
+};
+
+fn test_mat_multiply() -> i64 = {
+    // A = [[1,2],[3,4]], B = [[5,6],[7,8]]
+    // C = A*B = [[1*5+2*7, 1*6+2*8],[3*5+4*7, 3*6+4*8]] = [[19,22],[43,50]]
+    let a = mat_new(2, 2);
+    let _s1 = mat_set(a, 2, 0, 0, 1);
+    let _s2 = mat_set(a, 2, 0, 1, 2);
+    let _s3 = mat_set(a, 2, 1, 0, 3);
+    let _s4 = mat_set(a, 2, 1, 1, 4);
+    let b = mat_new(2, 2);
+    let _s5 = mat_set(b, 2, 0, 0, 5);
+    let _s6 = mat_set(b, 2, 0, 1, 6);
+    let _s7 = mat_set(b, 2, 1, 0, 7);
+    let _s8 = mat_set(b, 2, 1, 1, 8);
+    let c = mat_multiply(a, b, 2, 2, 2);
+    if mat_get(c, 2, 0, 0) != 19 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 0, 1) != 22 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 1, 0) != 43 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 1, 1) != 50 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else {
+        let _fa = vec_free(a);
+        let _fb = vec_free(b);
+        let _fc = vec_free(c);
+        1
+    }
+};
+
+fn test_mat_multiply_rect() -> i64 = {
+    // A = [[1,2,3],[4,5,6]] (2x3), B = [[7,8],[9,10],[11,12]] (3x2)
+    // C = A*B (2x2)
+    // C[0][0] = 1*7+2*9+3*11 = 7+18+33 = 58
+    // C[0][1] = 1*8+2*10+3*12 = 8+20+36 = 64
+    // C[1][0] = 4*7+5*9+6*11 = 28+45+66 = 139
+    // C[1][1] = 4*8+5*10+6*12 = 32+50+72 = 154
+    let a = mat_new(2, 3);
+    let _s1 = mat_set(a, 3, 0, 0, 1);
+    let _s2 = mat_set(a, 3, 0, 1, 2);
+    let _s3 = mat_set(a, 3, 0, 2, 3);
+    let _s4 = mat_set(a, 3, 1, 0, 4);
+    let _s5 = mat_set(a, 3, 1, 1, 5);
+    let _s6 = mat_set(a, 3, 1, 2, 6);
+    let b = mat_new(3, 2);
+    let _s7  = mat_set(b, 2, 0, 0, 7);
+    let _s8  = mat_set(b, 2, 0, 1, 8);
+    let _s9  = mat_set(b, 2, 1, 0, 9);
+    let _s10 = mat_set(b, 2, 1, 1, 10);
+    let _s11 = mat_set(b, 2, 2, 0, 11);
+    let _s12 = mat_set(b, 2, 2, 1, 12);
+    let c = mat_multiply(a, b, 2, 3, 2);
+    if mat_get(c, 2, 0, 0) != 58 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 0, 1) != 64 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 1, 0) != 139 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 2, 1, 1) != 154 { let _fa = vec_free(a); let _fb = vec_free(b); let _fc = vec_free(c); 0 }
+    else {
+        let _fa = vec_free(a);
+        let _fb = vec_free(b);
+        let _fc = vec_free(c);
+        1
+    }
+};
+
+fn test_mat_transpose() -> i64 = {
+    // A = [[1,2,3],[4,5,6]] (2x3) -> A^T = [[1,4],[2,5],[3,6]] (3x2)
+    let a = mat_new(2, 3);
+    let _s1 = mat_set(a, 3, 0, 0, 1);
+    let _s2 = mat_set(a, 3, 0, 1, 2);
+    let _s3 = mat_set(a, 3, 0, 2, 3);
+    let _s4 = mat_set(a, 3, 1, 0, 4);
+    let _s5 = mat_set(a, 3, 1, 1, 5);
+    let _s6 = mat_set(a, 3, 1, 2, 6);
+    let t = mat_transpose(a, 2, 3);
+    // t is 3x2: t[0][0]=1, t[0][1]=4, t[1][0]=2, t[1][1]=5, t[2][0]=3, t[2][1]=6
+    if mat_get(t, 2, 0, 0) != 1 { let _fa = vec_free(a); let _ft = vec_free(t); 0 }
+    else if mat_get(t, 2, 0, 1) != 4 { let _fa = vec_free(a); let _ft = vec_free(t); 0 }
+    else if mat_get(t, 2, 1, 0) != 2 { let _fa = vec_free(a); let _ft = vec_free(t); 0 }
+    else if mat_get(t, 2, 1, 1) != 5 { let _fa = vec_free(a); let _ft = vec_free(t); 0 }
+    else if mat_get(t, 2, 2, 0) != 3 { let _fa = vec_free(a); let _ft = vec_free(t); 0 }
+    else if mat_get(t, 2, 2, 1) != 6 { let _fa = vec_free(a); let _ft = vec_free(t); 0 }
+    else {
+        let _fa = vec_free(a);
+        let _ft = vec_free(t);
+        1
+    }
+};
+
+fn test_mat_trace() -> i64 = {
+    // 3x3 identity: trace = 3
+    let id = mat_identity(3);
+    let tr_id = mat_trace(id, 3);
+    let _fi = vec_free(id);
+    // 3x3 matrix with diagonal 1,5,9
+    let m = mat_new(3, 3);
+    let _s1 = mat_set(m, 3, 0, 0, 1);
+    let _s2 = mat_set(m, 3, 0, 1, 2);
+    let _s3 = mat_set(m, 3, 0, 2, 3);
+    let _s4 = mat_set(m, 3, 1, 0, 4);
+    let _s5 = mat_set(m, 3, 1, 1, 5);
+    let _s6 = mat_set(m, 3, 1, 2, 6);
+    let _s7 = mat_set(m, 3, 2, 0, 7);
+    let _s8 = mat_set(m, 3, 2, 1, 8);
+    let _s9 = mat_set(m, 3, 2, 2, 9);
+    let tr_m = mat_trace(m, 3);
+    let _fm = vec_free(m);
+    if tr_id != 3 { 0 }
+    else if tr_m != 15 { 0 }
+    else { 1 }
+};
+
+fn test_mat_identity() -> i64 = {
+    let id = mat_identity(3);
+    // Diagonal should be 1, off-diagonal 0
+    if mat_get(id, 3, 0, 0) != 1 { let _f = vec_free(id); 0 }
+    else if mat_get(id, 3, 1, 1) != 1 { let _f = vec_free(id); 0 }
+    else if mat_get(id, 3, 2, 2) != 1 { let _f = vec_free(id); 0 }
+    else if mat_get(id, 3, 0, 1) != 0 { let _f = vec_free(id); 0 }
+    else if mat_get(id, 3, 1, 2) != 0 { let _f = vec_free(id); 0 }
+    else if mat_get(id, 3, 2, 0) != 0 { let _f = vec_free(id); 0 }
+    else { let _f = vec_free(id); 1 }
+};
+
+fn test_mat_is_symmetric() -> i64 = {
+    // Symmetric: [[1,2,3],[2,4,5],[3,5,6]]
+    let sym = mat_new(3, 3);
+    let _s1 = mat_set(sym, 3, 0, 0, 1);
+    let _s2 = mat_set(sym, 3, 0, 1, 2);
+    let _s3 = mat_set(sym, 3, 0, 2, 3);
+    let _s4 = mat_set(sym, 3, 1, 0, 2);
+    let _s5 = mat_set(sym, 3, 1, 1, 4);
+    let _s6 = mat_set(sym, 3, 1, 2, 5);
+    let _s7 = mat_set(sym, 3, 2, 0, 3);
+    let _s8 = mat_set(sym, 3, 2, 1, 5);
+    let _s9 = mat_set(sym, 3, 2, 2, 6);
+    let sym_ok = b2i(mat_is_symmetric(sym, 3));
+    let _fsym = vec_free(sym);
+    // Non-symmetric: [[1,2,3],[4,5,6],[7,8,9]]
+    let asym = mat_new(3, 3);
+    let _t1 = mat_set(asym, 3, 0, 0, 1);
+    let _t2 = mat_set(asym, 3, 0, 1, 2);
+    let _t3 = mat_set(asym, 3, 0, 2, 3);
+    let _t4 = mat_set(asym, 3, 1, 0, 4);
+    let _t5 = mat_set(asym, 3, 1, 1, 5);
+    let _t6 = mat_set(asym, 3, 1, 2, 6);
+    let _t7 = mat_set(asym, 3, 2, 0, 7);
+    let _t8 = mat_set(asym, 3, 2, 1, 8);
+    let _t9 = mat_set(asym, 3, 2, 2, 9);
+    let asym_ok = b2i(mat_is_symmetric(asym, 3));
+    let _fasym = vec_free(asym);
+    // Identity is always symmetric
+    let id = mat_identity(4);
+    let id_ok = b2i(mat_is_symmetric(id, 4));
+    let _fid = vec_free(id);
+    if sym_ok != 1 { 0 }
+    else if asym_ok != 0 { 0 }
+    else if id_ok != 1 { 0 }
+    else { 1 }
+};
+
+fn test_identity_multiply() -> i64 = {
+    // I * A == A for 3x3
+    let id = mat_identity(3);
+    let a = mat_new(3, 3);
+    let _s1 = mat_set(a, 3, 0, 0, 2);
+    let _s2 = mat_set(a, 3, 0, 1, 1);
+    let _s3 = mat_set(a, 3, 0, 2, 0);
+    let _s4 = mat_set(a, 3, 1, 0, 1);
+    let _s5 = mat_set(a, 3, 1, 1, 3);
+    let _s6 = mat_set(a, 3, 1, 2, 1);
+    let _s7 = mat_set(a, 3, 2, 0, 0);
+    let _s8 = mat_set(a, 3, 2, 1, 1);
+    let _s9 = mat_set(a, 3, 2, 2, 2);
+    let c = mat_multiply(id, a, 3, 3, 3);
+    if mat_get(c, 3, 0, 0) != 2 { let _fi = vec_free(id); let _fa = vec_free(a); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 3, 1, 1) != 3 { let _fi = vec_free(id); let _fa = vec_free(a); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 3, 2, 2) != 2 { let _fi = vec_free(id); let _fa = vec_free(a); let _fc = vec_free(c); 0 }
+    else if mat_get(c, 3, 0, 1) != 1 { let _fi = vec_free(id); let _fa = vec_free(a); let _fc = vec_free(c); 0 }
+    else {
+        let _fi = vec_free(id);
+        let _fa = vec_free(a);
+        let _fc = vec_free(c);
+        1
+    }
+};
+
+fn main() -> i64 = {
+    let t1  = report("mat_new",             test_mat_new());
+    let t2  = report("mat_get_set",         test_mat_get_set());
+    let t3  = report("mat_add",             test_mat_add());
+    let t4  = report("mat_scale",           test_mat_scale());
+    let t5  = report("mat_multiply",        test_mat_multiply());
+    let t6  = report("mat_multiply_rect",   test_mat_multiply_rect());
+    let t7  = report("mat_transpose",       test_mat_transpose());
+    let t8  = report("mat_trace",           test_mat_trace());
+    let t9  = report("mat_identity",        test_mat_identity());
+    let t10 = report("mat_is_symmetric",    test_mat_is_symmetric());
+    let t11 = report("identity_multiply",   test_identity_multiply());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11;
+    let total = 11;
+    let _p1 = print_str("bmb-matrix: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

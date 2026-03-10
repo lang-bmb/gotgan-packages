@@ -1,0 +1,9 @@
+[package]
+name = "bmb-md5"
+version = "0.1.0"
+description = "Simplified MD5 hash implementation using 4-register mixing operations"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

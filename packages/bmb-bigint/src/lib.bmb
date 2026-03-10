@@ -1,0 +1,397 @@
+// bmb-bigint: Arbitrary-precision big integer arithmetic
+// v0.1.0
+//
+// Represents non-negative integers as a vec of i64 digits in base 10^9.
+// Digits are stored least-significant first (index 0 = least significant).
+// Each digit is in [0, BASE-1].
+//
+// The vec pointer itself serves as the "bigint handle" (type i64).
+// bigint_from_i64, bigint_add, bigint_mul_scalar return new vec pointers.
+// Caller is responsible for calling bigint_free when done.
+
+// ============================================================
+// Constants
+// ============================================================
+
+fn BI_BASE() -> i64 = 1000000000;  // 10^9
+
+// ============================================================
+// Internal helpers
+// ============================================================
+
+// Remove trailing zero digits, keeping at least one digit
+fn bigint_trim(a: i64) -> i64 = {
+    let mut len = vec_len(a);
+    let mut done = false;
+    while not done {
+        if len > 1 and vec_get(a, len - 1) == 0 {
+            let _pop = vec_pop(a);
+            len = len - 1;
+            0
+        } else {
+            done = true;
+            0
+        }
+    };
+    0
+};
+
+// ============================================================
+// Public API
+// ============================================================
+
+// Create a bigint from a non-negative i64 value.
+// Returns a vec pointer (the bigint handle).
+fn bigint_from_i64(n: i64) -> i64
+  pre n >= 0
+= {
+    let v = vec_new();
+    if n == 0 {
+        let _p = vec_push(v, 0);
+        v
+    } else {
+        let mut remaining = n;
+        let mut done = false;
+        while not done {
+            let digit = remaining - (remaining / BI_BASE()) * BI_BASE();
+            let _p = vec_push(v, digit);
+            remaining = remaining / BI_BASE();
+            if remaining == 0 {
+                done = true;
+                0
+            } else { 0 }
+        };
+        v
+    }
+};
+
+// Add two bigints; returns a new bigint (caller must free).
+fn bigint_add(a: i64, b: i64) -> i64
+  pre a != 0 and b != 0
+= {
+    let la = vec_len(a);
+    let lb = vec_len(b);
+    let max_len = if la > lb { la } else { lb };
+    let result = vec_new();
+    let mut carry = 0;
+    let mut i = 0;
+    while i < max_len {
+        let da = if i < la { vec_get(a, i) } else { 0 };
+        let db = if i < lb { vec_get(b, i) } else { 0 };
+        let sum = da + db + carry;
+        let digit = sum - (sum / BI_BASE()) * BI_BASE();
+        carry = sum / BI_BASE();
+        let _p = vec_push(result, digit);
+        i = i + 1;
+        0
+    };
+    if carry > 0 {
+        let _p = vec_push(result, carry);
+        0
+    } else { 0 };
+    result
+};
+
+// Multiply a bigint by a small scalar (non-negative i64).
+// Returns a new bigint (caller must free).
+fn bigint_mul_scalar(a: i64, scalar: i64) -> i64
+  pre a != 0 and scalar >= 0
+= {
+    let result = vec_new();
+    if scalar == 0 {
+        let _p = vec_push(result, 0);
+        result
+    } else {
+        let la = vec_len(a);
+        let mut carry = 0;
+        let mut i = 0;
+        while i < la {
+            let prod = vec_get(a, i) * scalar + carry;
+            let digit = prod - (prod / BI_BASE()) * BI_BASE();
+            carry = prod / BI_BASE();
+            let _p = vec_push(result, digit);
+            i = i + 1;
+            0
+        };
+        let mut done = false;
+        while not done {
+            if carry > 0 {
+                let digit = carry - (carry / BI_BASE()) * BI_BASE();
+                carry = carry / BI_BASE();
+                let _p = vec_push(result, digit);
+                0
+            } else {
+                done = true;
+                0
+            }
+        };
+        result
+    }
+};
+
+// Compare two bigints.
+// Returns: -1 if a < b, 0 if a == b, 1 if a > b.
+fn bigint_compare(a: i64, b: i64) -> i64
+  pre a != 0 and b != 0
+  post ret >= -1 and ret <= 1
+= {
+    let la = vec_len(a);
+    let lb = vec_len(b);
+    if la != lb {
+        if la > lb { 1 } else { 0 - 1 }
+    } else {
+        // Same number of digits: compare from most significant downward
+        let mut result = 0;
+        let mut i = la - 1;
+        let mut done = false;
+        while not done {
+            let da = vec_get(a, i);
+            let db = vec_get(b, i);
+            if da != db {
+                result = if da > db { 1 } else { 0 - 1 };
+                done = true;
+                0
+            } else {
+                if i == 0 {
+                    done = true;
+                    0
+                } else {
+                    i = i - 1;
+                    0
+                }
+            }
+        };
+        result
+    }
+};
+
+// Return true if bigint is zero.
+fn bigint_is_zero(a: i64) -> bool
+  pre a != 0
+= vec_len(a) == 1 and vec_get(a, 0) == 0;
+
+// Count the total number of decimal digits in the bigint.
+// For zero, returns 1.
+fn bigint_digit_count(a: i64) -> i64
+  pre a != 0
+  post ret >= 1
+= {
+    let len = vec_len(a);
+    // All limbs except the most-significant contribute exactly 9 digits each.
+    // The most-significant limb contributes however many digits it has.
+    let lower_digits = (len - 1) * 9;
+    let top = vec_get(a, len - 1);
+    // Count digits of top limb
+    let top_digits =
+        if top == 0 { 1 }
+        else if top < 10 { 1 }
+        else if top < 100 { 2 }
+        else if top < 1000 { 3 }
+        else if top < 10000 { 4 }
+        else if top < 100000 { 5 }
+        else if top < 1000000 { 6 }
+        else if top < 10000000 { 7 }
+        else if top < 100000000 { 8 }
+        else { 9 };
+    lower_digits + top_digits
+};
+
+// Free the bigint (free the underlying vec). Returns 0.
+fn bigint_free(a: i64) -> i64
+  pre a != 0
+= { let _f = vec_free(a); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_from_zero() -> i64 = {
+    let a = bigint_from_i64(0);
+    let ok = b2i(bigint_is_zero(a));
+    let _f = bigint_free(a);
+    ok
+};
+
+fn test_from_small() -> i64 = {
+    let a = bigint_from_i64(42);
+    let ok = vec_len(a) == 1 and vec_get(a, 0) == 42;
+    let _f = bigint_free(a);
+    if ok { 1 } else { 0 }
+};
+
+fn test_from_large() -> i64 = {
+    // 2000000001 = 2 * 10^9 + 1 -> digits: [1, 2]
+    let a = bigint_from_i64(2000000001);
+    let ok = vec_len(a) == 2 and vec_get(a, 0) == 1 and vec_get(a, 1) == 2;
+    let _f = bigint_free(a);
+    if ok { 1 } else { 0 }
+};
+
+fn test_add_basic() -> i64 = {
+    let a = bigint_from_i64(100);
+    let b = bigint_from_i64(200);
+    let c = bigint_add(a, b);
+    let ok = vec_len(c) == 1 and vec_get(c, 0) == 300;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(b);
+    let _f3 = bigint_free(c);
+    if ok { 1 } else { 0 }
+};
+
+fn test_add_carry() -> i64 = {
+    // 999999999 + 1 should carry into new limb
+    let a = bigint_from_i64(999999999);
+    let b = bigint_from_i64(1);
+    let c = bigint_add(a, b);
+    // 1000000000 = 1 * BASE + 0 -> digits: [0, 1]
+    let ok = vec_len(c) == 2 and vec_get(c, 0) == 0 and vec_get(c, 1) == 1;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(b);
+    let _f3 = bigint_free(c);
+    if ok { 1 } else { 0 }
+};
+
+fn test_add_zero() -> i64 = {
+    let a = bigint_from_i64(12345);
+    let z = bigint_from_i64(0);
+    let c = bigint_add(a, z);
+    let ok = vec_len(c) == 1 and vec_get(c, 0) == 12345;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(z);
+    let _f3 = bigint_free(c);
+    if ok { 1 } else { 0 }
+};
+
+fn test_mul_scalar_basic() -> i64 = {
+    let a = bigint_from_i64(12345);
+    let r = bigint_mul_scalar(a, 3);
+    let ok = vec_len(r) == 1 and vec_get(r, 0) == 37035;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(r);
+    if ok { 1 } else { 0 }
+};
+
+fn test_mul_scalar_zero() -> i64 = {
+    let a = bigint_from_i64(99999);
+    let r = bigint_mul_scalar(a, 0);
+    let ok = b2i(bigint_is_zero(r));
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(r);
+    ok
+};
+
+fn test_mul_scalar_carry() -> i64 = {
+    // 500000000 * 3 = 1500000000 = 1 * BASE + 500000000 -> [500000000, 1]
+    let a = bigint_from_i64(500000000);
+    let r = bigint_mul_scalar(a, 3);
+    let ok = vec_len(r) == 2 and vec_get(r, 0) == 500000000 and vec_get(r, 1) == 1;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(r);
+    if ok { 1 } else { 0 }
+};
+
+fn test_compare_equal() -> i64 = {
+    let a = bigint_from_i64(999);
+    let b = bigint_from_i64(999);
+    let ok = bigint_compare(a, b) == 0;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(b);
+    if ok { 1 } else { 0 }
+};
+
+fn test_compare_less() -> i64 = {
+    let a = bigint_from_i64(100);
+    let b = bigint_from_i64(200);
+    let ok = bigint_compare(a, b) == -1;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(b);
+    if ok { 1 } else { 0 }
+};
+
+fn test_compare_greater() -> i64 = {
+    let a = bigint_from_i64(2000000000);
+    let b = bigint_from_i64(1);
+    let ok = bigint_compare(a, b) == 1;
+    let _f1 = bigint_free(a);
+    let _f2 = bigint_free(b);
+    if ok { 1 } else { 0 }
+};
+
+fn test_digit_count_small() -> i64 = {
+    let a = bigint_from_i64(12345);
+    let ok = bigint_digit_count(a) == 5;
+    let _f = bigint_free(a);
+    if ok { 1 } else { 0 }
+};
+
+fn test_digit_count_zero() -> i64 = {
+    let a = bigint_from_i64(0);
+    let ok = bigint_digit_count(a) == 1;
+    let _f = bigint_free(a);
+    if ok { 1 } else { 0 }
+};
+
+fn test_digit_count_large() -> i64 = {
+    // 1000000001 has 10 decimal digits
+    let a = bigint_from_i64(1000000001);
+    let ok = bigint_digit_count(a) == 10;
+    let _f = bigint_free(a);
+    if ok { 1 } else { 0 }
+};
+
+fn test_is_zero_true() -> i64 = {
+    let a = bigint_from_i64(0);
+    let ok = b2i(bigint_is_zero(a));
+    let _f = bigint_free(a);
+    ok
+};
+
+fn test_is_zero_false() -> i64 = {
+    let a = bigint_from_i64(1);
+    let ok = b2i(not bigint_is_zero(a));
+    let _f = bigint_free(a);
+    ok
+};
+
+fn main() -> i64 = {
+    let t1  = report("from_zero",          test_from_zero());
+    let t2  = report("from_small",         test_from_small());
+    let t3  = report("from_large",         test_from_large());
+    let t4  = report("add_basic",          test_add_basic());
+    let t5  = report("add_carry",          test_add_carry());
+    let t6  = report("add_zero",           test_add_zero());
+    let t7  = report("mul_scalar_basic",   test_mul_scalar_basic());
+    let t8  = report("mul_scalar_zero",    test_mul_scalar_zero());
+    let t9  = report("mul_scalar_carry",   test_mul_scalar_carry());
+    let t10 = report("compare_equal",      test_compare_equal());
+    let t11 = report("compare_less",       test_compare_less());
+    let t12 = report("compare_greater",    test_compare_greater());
+    let t13 = report("digit_count_small",  test_digit_count_small());
+    let t14 = report("digit_count_zero",   test_digit_count_zero());
+    let t15 = report("digit_count_large",  test_digit_count_large());
+    let t16 = report("is_zero_true",       test_is_zero_true());
+    let t17 = report("is_zero_false",      test_is_zero_false());
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10
+               + t11 + t12 + t13 + t14 + t15 + t16 + t17;
+    let total = 17;
+
+    let _p1 = print_str("bmb-bigint: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+
+    if passed == total { 0 } else { 1 }
+};

@@ -1,0 +1,9 @@
+[package]
+name = "bmb-encode"
+version = "0.1.0"
+description = "Integer encoding/decoding: zigzag, varint, and run-length encoding"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

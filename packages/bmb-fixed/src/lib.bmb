@@ -1,0 +1,165 @@
+// bmb-fixed: Q16.16 fixed-point arithmetic.
+// Scale factor = 65536 (1 << 16).
+// Representation: integer n represents the real value n / 65536.
+// Range: approximately -32768 to +32767 with 1/65536 precision.
+//
+// Examples:
+//   fixed_from_int(1)   = 65536   (represents 1.0)
+//   fixed_from_int(2)   = 131072  (represents 2.0)
+//   fixed_mul(65536, 131072) = 131072  (1.0 * 2.0 = 2.0)
+
+// The scale factor Q16.16
+fn fixed_scale() -> i64 = 65536;
+
+// Convert integer to fixed-point
+fn fixed_from_int(n: i64) -> i64 = n * 65536;
+
+// Convert fixed-point back to integer (truncates toward zero)
+fn fixed_to_int(f: i64) -> i64 = f / 65536;
+
+// Add two fixed-point numbers
+fn fixed_add(a: i64, b: i64) -> i64 = a + b;
+
+// Subtract two fixed-point numbers
+fn fixed_sub(a: i64, b: i64) -> i64 = a - b;
+
+// Multiply two fixed-point numbers.
+// (a/65536) * (b/65536) = (a*b)/65536/65536 -> scale back by dividing by 65536.
+fn fixed_mul(a: i64, b: i64) -> i64 = (a * b) / 65536;
+
+// Divide two fixed-point numbers.
+// (a/65536) / (b/65536) = a/b -> scale up numerator first.
+fn fixed_div(a: i64, b: i64) -> i64
+  pre b != 0
+= (a * 65536) / b;
+
+// Absolute value of a fixed-point number
+fn fixed_abs(f: i64) -> i64 =
+    if f < 0 { 0 - f } else { f };
+
+// Floor: round toward negative infinity to integer boundary
+// f >> 16 is arithmetic shift right, which rounds toward negative infinity.
+fn fixed_floor(f: i64) -> i64 = f >> 16;
+
+// Ceiling: round toward positive infinity to integer boundary
+// floor(f) + 1 when there is a fractional part, floor(f) otherwise.
+fn fixed_ceil(f: i64) -> i64 = {
+    let floor_val = f >> 16;
+    let frac = f band 65535;
+    if frac != 0 { floor_val + 1 } else { floor_val }
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_from_to_int() -> i64 = {
+    let f1 = fixed_from_int(5);
+    let f2 = fixed_from_int(0 - 3);
+    if fixed_to_int(f1) == 5 and fixed_to_int(f2) == 0 - 3 { 1 } else { 0 }
+};
+
+fn test_add() -> i64 = {
+    // 1.0 + 2.0 = 3.0
+    let a = fixed_from_int(1);
+    let b = fixed_from_int(2);
+    let c = fixed_add(a, b);
+    if fixed_to_int(c) == 3 { 1 } else { 0 }
+};
+
+fn test_sub() -> i64 = {
+    // 5.0 - 3.0 = 2.0
+    let a = fixed_from_int(5);
+    let b = fixed_from_int(3);
+    let c = fixed_sub(a, b);
+    if fixed_to_int(c) == 2 { 1 } else { 0 }
+};
+
+fn test_mul() -> i64 = {
+    // 3.0 * 4.0 = 12.0
+    let a = fixed_from_int(3);
+    let b = fixed_from_int(4);
+    let c = fixed_mul(a, b);
+    if fixed_to_int(c) == 12 { 1 } else { 0 }
+};
+
+fn test_mul_fraction() -> i64 = {
+    // 65536 = 1.0, 32768 = 0.5
+    // 1.0 * 0.5 = 0.5 -> fixed result = 32768
+    let half = 32768;
+    let one = fixed_from_int(1);
+    let result = fixed_mul(one, half);
+    if result == 32768 { 1 } else { 0 }
+};
+
+fn test_div() -> i64 = {
+    // 10.0 / 2.0 = 5.0
+    let a = fixed_from_int(10);
+    let b = fixed_from_int(2);
+    let c = fixed_div(a, b);
+    if fixed_to_int(c) == 5 { 1 } else { 0 }
+};
+
+fn test_div_fraction() -> i64 = {
+    // 1.0 / 2.0 = 0.5 -> 32768
+    let one = fixed_from_int(1);
+    let two = fixed_from_int(2);
+    let result = fixed_div(one, two);
+    if result == 32768 { 1 } else { 0 }
+};
+
+fn test_abs() -> i64 = {
+    let pos = fixed_from_int(7);
+    let neg = fixed_from_int(0 - 7);
+    if fixed_abs(pos) == pos and fixed_abs(neg) == pos { 1 } else { 0 }
+};
+
+fn test_floor() -> i64 = {
+    // floor(3.0) = 3, floor(3.5) = 3, floor(-2.0) = -2, floor(-2.5) = -3
+    let f30 = fixed_from_int(3);
+    let f35 = fixed_from_int(3) + 32768;   // 3.5
+    let fn20 = fixed_from_int(0 - 2);
+    let fn25 = fixed_from_int(0 - 2) - 32768;  // -2.5
+    if fixed_floor(f30) == 3 and fixed_floor(f35) == 3
+        and fixed_floor(fn20) == 0 - 2 and fixed_floor(fn25) == 0 - 3 { 1 } else { 0 }
+};
+
+fn test_ceil() -> i64 = {
+    // ceil(3.0) = 3, ceil(3.5) = 4, ceil(-2.0) = -2, ceil(-2.5) = -2
+    let f30 = fixed_from_int(3);
+    let f35 = fixed_from_int(3) + 32768;   // 3.5
+    let fn20 = fixed_from_int(0 - 2);
+    let fn25 = fixed_from_int(0 - 2) - 32768;  // -2.5
+    if fixed_ceil(f30) == 3 and fixed_ceil(f35) == 4
+        and fixed_ceil(fn20) == 0 - 2 and fixed_ceil(fn25) == 0 - 2 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("from_to_int", test_from_to_int());
+    let t2 = report("add", test_add());
+    let t3 = report("sub", test_sub());
+    let t4 = report("mul", test_mul());
+    let t5 = report("mul_fraction", test_mul_fraction());
+    let t6 = report("div", test_div());
+    let t7 = report("div_fraction", test_div_fraction());
+    let t8 = report("abs", test_abs());
+    let t9 = report("floor", test_floor());
+    let t10 = report("ceil", test_ceil());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let total = 10;
+    let _p1 = print_str("bmb-fixed: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

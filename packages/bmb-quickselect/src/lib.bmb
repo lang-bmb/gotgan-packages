@@ -1,0 +1,320 @@
+// bmb-quickselect: Quickselect algorithm for finding k-th smallest element
+// v0.1.0
+//
+// Implements the Quickselect (Hoare's selection) algorithm.
+// Average time: O(n), worst case: O(n^2).
+// Operates in-place using typed pointers (*i64).
+//
+// Usage:
+//   let arr = malloc(100 * 8) as *i64;
+//   // ... fill array ...
+//   let kth = quickselect(arr, 100, 0);  // Find minimum (0-indexed)
+
+// ============================================================================
+// Utility
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+@inline
+fn swap(arr: *i64, i: i64, j: i64) -> i64 = {
+    let tmp = arr[i];
+    set arr[i] = arr[j];
+    set arr[j] = tmp;
+    0
+};
+
+// ============================================================================
+// Quickselect
+// ============================================================================
+
+// Partition arr[lo..hi] around pivot at arr[hi].
+// Returns the final index of the pivot.
+fn partition(arr: *i64, lo: i64, hi: i64) -> i64 = {
+    let pivot = arr[hi];
+    let mut i = lo - 1;
+    let mut j = lo;
+    while j < hi {
+        let _s = if arr[j] <= pivot {
+            { i = i + 1; swap(arr, i, j) }
+        } else { 0 };
+        { j = j + 1; 0 }
+    };
+    let _s = swap(arr, i + 1, hi);
+    i + 1
+};
+
+// Median-of-three pivot selection: moves median of arr[lo], arr[mid], arr[hi]
+// to arr[hi] position for use as pivot.
+fn median_of_three(arr: *i64, lo: i64, hi: i64) -> i64 = {
+    let mid = lo + (hi - lo) / 2;
+    // Sort lo, mid, hi so that arr[lo] <= arr[mid] <= arr[hi]
+    let _s1 = if arr[lo] > arr[mid] { swap(arr, lo, mid) } else { 0 };
+    let _s2 = if arr[lo] > arr[hi] { swap(arr, lo, hi) } else { 0 };
+    let _s3 = if arr[mid] > arr[hi] { swap(arr, mid, hi) } else { 0 };
+    // Move median (arr[mid]) to arr[hi] position as pivot
+    let _s4 = swap(arr, mid, hi);
+    0
+};
+
+// Find the k-th smallest element (0-indexed) in arr[0..n).
+// Modifies arr in-place (partial sorting).
+// k=0 returns the minimum, k=n-1 returns the maximum.
+fn quickselect(arr: *i64, n: i64, k: i64) -> i64
+  pre n > 0 and k >= 0 and k < n
+= quickselect_rec(arr, 0, n - 1, k);
+
+// Recursive helper: find k-th smallest in arr[lo..hi].
+fn quickselect_rec(arr: *i64, lo: i64, hi: i64, k: i64) -> i64 = {
+    let mut low = lo;
+    let mut high = hi;
+    let mut result = 0;
+    let mut done = false;
+    while not done {
+        let _r = if low == high {
+            { result = arr[low]; done = true; 0 }
+        } else {
+            {
+                // Use median-of-three when range is large enough
+                let _m = if high - low >= 2 {
+                    median_of_three(arr, low, high)
+                } else { 0 };
+                let pi = partition(arr, low, high);
+                let _c = if pi == k {
+                    { result = arr[pi]; done = true; 0 }
+                } else if k < pi {
+                    { high = pi - 1; 0 }
+                } else {
+                    { low = pi + 1; 0 }
+                };
+                0
+            }
+        };
+        0
+    };
+    result
+};
+
+// ============================================================================
+// Convenience functions
+// ============================================================================
+
+// Find the minimum element.
+fn find_min(arr: *i64, n: i64) -> i64
+  pre n > 0
+= {
+    // Use simple scan (O(n)) rather than quickselect to avoid modifying arr
+    let mut mn = arr[0];
+    let mut i = 1;
+    while i < n {
+        let _u = if arr[i] < mn { { mn = arr[i]; 0 } } else { 0 };
+        { i = i + 1; 0 }
+    };
+    mn
+};
+
+// Find the maximum element.
+fn find_max(arr: *i64, n: i64) -> i64
+  pre n > 0
+= {
+    let mut mx = arr[0];
+    let mut i = 1;
+    while i < n {
+        let _u = if arr[i] > mx { { mx = arr[i]; 0 } } else { 0 };
+        { i = i + 1; 0 }
+    };
+    mx
+};
+
+// Find the median element. For even n, returns the lower median.
+// WARNING: modifies arr in-place.
+fn find_median(arr: *i64, n: i64) -> i64
+  pre n > 0
+= quickselect(arr, n, (n - 1) / 2);
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn test_basic_min() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 30;
+    set arr[1] = 10;
+    set arr[2] = 50;
+    set arr[3] = 20;
+    set arr[4] = 40;
+    let result = quickselect(arr, 5, 0);
+    let _f = free(arr as i64);
+    if result == 10 { 1 } else { 0 }
+};
+
+fn test_basic_max() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 30;
+    set arr[1] = 10;
+    set arr[2] = 50;
+    set arr[3] = 20;
+    set arr[4] = 40;
+    let result = quickselect(arr, 5, 4);
+    let _f = free(arr as i64);
+    if result == 50 { 1 } else { 0 }
+};
+
+fn test_basic_median() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 30;
+    set arr[1] = 10;
+    set arr[2] = 50;
+    set arr[3] = 20;
+    set arr[4] = 40;
+    let result = quickselect(arr, 5, 2);
+    let _f = free(arr as i64);
+    if result == 30 { 1 } else { 0 }
+};
+
+fn test_single() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    set arr[0] = 42;
+    let result = quickselect(arr, 1, 0);
+    let _f = free(arr as i64);
+    if result == 42 { 1 } else { 0 }
+};
+
+fn test_two_elements() -> i64 = {
+    let arr = malloc(2 * 8) as *i64;
+    set arr[0] = 7;
+    set arr[1] = 3;
+    let r0 = quickselect(arr, 2, 0);
+    // Reset array since quickselect modifies it
+    set arr[0] = 7;
+    set arr[1] = 3;
+    let r1 = quickselect(arr, 2, 1);
+    let _f = free(arr as i64);
+    if r0 == 3 and r1 == 7 { 1 } else { 0 }
+};
+
+fn test_duplicates() -> i64 = {
+    let arr = malloc(6 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 1;
+    set arr[2] = 3;
+    set arr[3] = 1;
+    set arr[4] = 2;
+    set arr[5] = 2;
+    // Sorted: [1,1,2,2,3,3], k=2 should give 2
+    let result = quickselect(arr, 6, 2);
+    let _f = free(arr as i64);
+    if result == 2 { 1 } else { 0 }
+};
+
+fn test_negatives() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 0 - 1;
+    set arr[2] = 4;
+    set arr[3] = 0 - 5;
+    set arr[4] = 2;
+    // Sorted: [-5,-1,2,3,4], k=0 should give -5
+    let result = quickselect(arr, 5, 0);
+    let _f = free(arr as i64);
+    if result == (0 - 5) { 1 } else { 0 }
+};
+
+fn test_find_min_fn() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 30;
+    set arr[1] = 10;
+    set arr[2] = 50;
+    set arr[3] = 20;
+    set arr[4] = 40;
+    let result = find_min(arr, 5);
+    let _f = free(arr as i64);
+    if result == 10 { 1 } else { 0 }
+};
+
+fn test_find_max_fn() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 30;
+    set arr[1] = 10;
+    set arr[2] = 50;
+    set arr[3] = 20;
+    set arr[4] = 40;
+    let result = find_max(arr, 5);
+    let _f = free(arr as i64);
+    if result == 50 { 1 } else { 0 }
+};
+
+fn test_find_median_fn() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 30;
+    set arr[1] = 10;
+    set arr[2] = 50;
+    set arr[3] = 20;
+    set arr[4] = 40;
+    let result = find_median(arr, 5);
+    let _f = free(arr as i64);
+    if result == 30 { 1 } else { 0 }
+};
+
+fn test_kth_all_positions() -> i64 = {
+    // Verify quickselect returns correct k-th element for all k
+    let arr = malloc(4 * 8) as *i64;
+    // sorted: [10, 20, 30, 40]
+    set arr[0] = 40;
+    set arr[1] = 20;
+    set arr[2] = 30;
+    set arr[3] = 10;
+    let r0 = quickselect(arr, 4, 0);
+
+    set arr[0] = 40;
+    set arr[1] = 20;
+    set arr[2] = 30;
+    set arr[3] = 10;
+    let r1 = quickselect(arr, 4, 1);
+
+    set arr[0] = 40;
+    set arr[1] = 20;
+    set arr[2] = 30;
+    set arr[3] = 10;
+    let r2 = quickselect(arr, 4, 2);
+
+    set arr[0] = 40;
+    set arr[1] = 20;
+    set arr[2] = 30;
+    set arr[3] = 10;
+    let r3 = quickselect(arr, 4, 3);
+
+    let _f = free(arr as i64);
+    if r0 == 10 and r1 == 20 and r2 == 30 and r3 == 40 { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_min", test_basic_min());
+    let t2 = report("basic_max", test_basic_max());
+    let t3 = report("basic_median", test_basic_median());
+    let t4 = report("single", test_single());
+    let t5 = report("two_elements", test_two_elements());
+    let t6 = report("duplicates", test_duplicates());
+    let t7 = report("negatives", test_negatives());
+    let t8 = report("find_min", test_find_min_fn());
+    let t9 = report("find_max", test_find_max_fn());
+    let t10 = report("find_median", test_find_median_fn());
+    let t11 = report("kth_all_positions", test_kth_all_positions());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11;
+    let total = 11;
+    let _p1 = print_str("bmb-quickselect: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

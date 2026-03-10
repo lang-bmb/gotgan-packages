@@ -1,0 +1,344 @@
+// bmb-statistics: Statistical functions for BMB
+// All functions operate on integer (i64) data.
+// Scaled results:
+//   mean_scaled     -> mean * 1000         (3 decimal places)
+//   variance_scaled -> variance * 1000000  (6 decimal places, using (mean * 1000) internally)
+
+// ============================================================
+// Core Statistical Functions
+// ============================================================
+
+// Sum of all elements
+fn sum(vec: i64, len: i64) -> i64
+  pre len > 0
+= {
+    let mut total = 0;
+    let mut i = 0;
+    while i < len {
+        total = total + vec_get(vec, i);
+        i = i + 1;
+        0
+    };
+    total
+};
+
+// Mean * 1000 (scaled to preserve 3 decimal places)
+fn mean_scaled(vec: i64, len: i64) -> i64
+  pre len > 0
+= (sum(vec, len) * 1000) / len;
+
+// Minimum value in vec
+fn min_val(vec: i64, len: i64) -> i64
+  pre len > 0
+= {
+    let mut m = vec_get(vec, 0);
+    let mut i = 1;
+    while i < len {
+        let v = vec_get(vec, i);
+        let _r = if v < m { m = v; 0 } else { 0 };
+        i = i + 1;
+        0
+    };
+    m
+};
+
+// Maximum value in vec
+fn max_val(vec: i64, len: i64) -> i64
+  pre len > 0
+= {
+    let mut m = vec_get(vec, 0);
+    let mut i = 1;
+    while i < len {
+        let v = vec_get(vec, i);
+        let _r = if v > m { m = v; 0 } else { 0 };
+        i = i + 1;
+        0
+    };
+    m
+};
+
+// Range (max - min)
+fn range_val(vec: i64, len: i64) -> i64
+  pre len > 0
+  post ret >= 0
+= max_val(vec, len) - min_val(vec, len);
+
+// Absolute value helper
+@inline
+fn stat_abs(x: i64) -> i64 = if x < 0 { 0 - x } else { x };
+
+// Variance * 1000000
+// Uses the formula: variance = sum((x_i - mean)^2) / n
+// To avoid floating point, mean_scaled = mean * 1000.
+// deviation_scaled = x_i * 1000 - mean_scaled  (units: 1/1000)
+// deviation_scaled^2 is in units of 1/1000000
+// sum(deviation_scaled^2) / n gives variance * 1000000
+fn variance_scaled(vec: i64, len: i64) -> i64
+  pre len > 0
+  post ret >= 0
+= {
+    let ms = mean_scaled(vec, len);
+    let mut sq_sum = 0;
+    let mut i = 0;
+    while i < len {
+        let dev = vec_get(vec, i) * 1000 - ms;
+        sq_sum = sq_sum + dev * dev;
+        i = i + 1;
+        0
+    };
+    sq_sum / len
+};
+
+// Sort a copy of the vec into a fresh malloc'd array, return pointer.
+// Caller must free the returned pointer.
+// Uses insertion sort on the raw array.
+fn sorted_copy(vec: i64, len: i64) -> *i64 = {
+    let arr = malloc(len * 8) as *i64;
+    // Copy elements
+    let mut i = 0;
+    while i < len {
+        set arr[i] = vec_get(vec, i);
+        i = i + 1;
+        0
+    };
+    // Insertion sort on arr
+    let mut j = 1;
+    while j < len {
+        let key = arr[j];
+        let mut k = j - 1;
+        while k >= 0 and arr[k] > key {
+            set arr[k + 1] = arr[k];
+            k = k - 1;
+            0
+        };
+        set arr[k + 1] = key;
+        j = j + 1;
+        0
+    };
+    arr
+};
+
+// Median: middle value of sorted copy.
+// For even length, returns the lower-middle element (index len/2 - 1).
+fn median(vec: i64, len: i64) -> i64
+  pre len > 0
+= {
+    let arr = sorted_copy(vec, len);
+    let mid = (len - 1) / 2;
+    let result = arr[mid];
+    let _f = free(arr as i64);
+    result
+};
+
+// Mode: most frequent value (O(n^2)).
+// Returns the first value with the highest frequency.
+fn mode(vec: i64, len: i64) -> i64
+  pre len > 0
+= {
+    let mut best_val = vec_get(vec, 0);
+    let mut best_count = 0;
+    let mut i = 0;
+    while i < len {
+        let candidate = vec_get(vec, i);
+        // Count occurrences of candidate
+        let mut cnt = 0;
+        let mut j = 0;
+        while j < len {
+            let _r = if vec_get(vec, j) == candidate { cnt = cnt + 1; 0 } else { 0 };
+            j = j + 1;
+            0
+        };
+        let _r = if cnt > best_count {
+            best_count = cnt;
+            best_val = candidate;
+            0
+        } else { 0 };
+        i = i + 1;
+        0
+    };
+    best_val
+};
+
+// ============================================================
+// Bool-to-int helper
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================
+// Report helper
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+// Test data: [3, 1, 4, 1, 5, 9, 2, 6, 5, 3]
+// sum = 39, len = 10
+// mean = 3.9 -> mean_scaled = 3900
+// min = 1, max = 9, range = 8
+// sorted: [1, 1, 2, 3, 3, 4, 5, 5, 6, 9], median (lower-mid at idx 4) = 3
+// mode = 3 (first element with max frequency 2, encountered at i=0)
+
+fn make_test_vec() -> i64 = {
+    let v = vec_new();
+    vec_push(v, 3);
+    vec_push(v, 1);
+    vec_push(v, 4);
+    vec_push(v, 1);
+    vec_push(v, 5);
+    vec_push(v, 9);
+    vec_push(v, 2);
+    vec_push(v, 6);
+    vec_push(v, 5);
+    vec_push(v, 3);
+    v
+};
+
+fn test_sum() -> i64 = {
+    let v = make_test_vec();
+    let s = sum(v, 10);
+    let _f = vec_free(v);
+    if s == 39 { 1 } else { 0 }
+};
+
+fn test_mean_scaled() -> i64 = {
+    let v = make_test_vec();
+    let ms = mean_scaled(v, 10);
+    let _f = vec_free(v);
+    // 39 * 1000 / 10 = 3900
+    if ms == 3900 { 1 } else { 0 }
+};
+
+fn test_min_val() -> i64 = {
+    let v = make_test_vec();
+    let m = min_val(v, 10);
+    let _f = vec_free(v);
+    if m == 1 { 1 } else { 0 }
+};
+
+fn test_max_val() -> i64 = {
+    let v = make_test_vec();
+    let m = max_val(v, 10);
+    let _f = vec_free(v);
+    if m == 9 { 1 } else { 0 }
+};
+
+fn test_range_val() -> i64 = {
+    let v = make_test_vec();
+    let r = range_val(v, 10);
+    let _f = vec_free(v);
+    if r == 8 { 1 } else { 0 }
+};
+
+// Variance test with a simpler dataset: [2, 4, 4, 4, 5, 5, 7, 9]
+// sum=40, len=8, mean=5, mean_scaled=5000
+// deviations (scaled): -3000, -1000, -1000, -1000, 0, 0, 2000, 4000
+// sq: 9000000, 1000000, 1000000, 1000000, 0, 0, 4000000, 16000000 = 32000000
+// variance_scaled = 32000000 / 8 = 4000000
+fn test_variance_scaled() -> i64 = {
+    let v = vec_new();
+    vec_push(v, 2);
+    vec_push(v, 4);
+    vec_push(v, 4);
+    vec_push(v, 4);
+    vec_push(v, 5);
+    vec_push(v, 5);
+    vec_push(v, 7);
+    vec_push(v, 9);
+    let vs = variance_scaled(v, 8);
+    let _f = vec_free(v);
+    if vs == 4000000 { 1 } else { 0 }
+};
+
+// Median test: sorted [1,1,2,3,3,4,5,5,6,9], len=10
+// (len-1)/2 = 4, index 4 in sorted array = 3
+fn test_median() -> i64 = {
+    let v = make_test_vec();
+    let med = median(v, 10);
+    let _f = vec_free(v);
+    if med == 3 { 1 } else { 0 }
+};
+
+// Median with odd length: [1, 3, 5], sorted same, (3-1)/2=1, arr[1]=3
+fn test_median_odd() -> i64 = {
+    let v = vec_new();
+    vec_push(v, 5);
+    vec_push(v, 1);
+    vec_push(v, 3);
+    let med = median(v, 3);
+    let _f = vec_free(v);
+    if med == 3 { 1 } else { 0 }
+};
+
+// Mode test: [3,1,4,1,5,9,2,6,5,3]
+// 3 appears 2 times (first element with max freq, encountered at i=0)
+// 1 appears 2 times, 5 appears 2 times — but 3 is found first
+// mode = 3
+fn test_mode() -> i64 = {
+    let v = make_test_vec();
+    let m = mode(v, 10);
+    let _f = vec_free(v);
+    if m == 3 { 1 } else { 0 }
+};
+
+// Mode with clear winner: [7, 2, 7, 7, 3]
+fn test_mode_clear() -> i64 = {
+    let v = vec_new();
+    vec_push(v, 7);
+    vec_push(v, 2);
+    vec_push(v, 7);
+    vec_push(v, 7);
+    vec_push(v, 3);
+    let m = mode(v, 5);
+    let _f = vec_free(v);
+    if m == 7 { 1 } else { 0 }
+};
+
+// Single element tests
+fn test_single_element() -> i64 = {
+    let v = vec_new();
+    vec_push(v, 42);
+    let s = sum(v, 1);
+    let ms = mean_scaled(v, 1);
+    let mn = min_val(v, 1);
+    let mx = max_val(v, 1);
+    let r = range_val(v, 1);
+    let vs = variance_scaled(v, 1);
+    let med = median(v, 1);
+    let mo = mode(v, 1);
+    let _f = vec_free(v);
+    if s == 42 and ms == 42000 and mn == 42 and mx == 42
+       and r == 0 and vs == 0 and med == 42 and mo == 42 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("sum", test_sum());
+    let t2 = report("mean_scaled", test_mean_scaled());
+    let t3 = report("min_val", test_min_val());
+    let t4 = report("max_val", test_max_val());
+    let t5 = report("range_val", test_range_val());
+    let t6 = report("variance_scaled", test_variance_scaled());
+    let t7 = report("median", test_median());
+    let t8 = report("median_odd", test_median_odd());
+    let t9 = report("mode", test_mode());
+    let t10 = report("mode_clear", test_mode_clear());
+    let t11 = report("single_element", test_single_element());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11;
+    let total = 11;
+    let _p1 = print_str("bmb-statistics: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

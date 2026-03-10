@@ -1,0 +1,313 @@
+// bmb-monotonic-stack: Monotonic stack algorithms
+// - Next greater element for each position in an array
+// - Largest rectangle area in a histogram
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================
+// Stack helpers (using vec as stack)
+// ============================================================
+
+fn stack_new() -> i64 = vec_new();
+
+fn stack_push(stk: i64, val: i64) -> i64 = {
+    let _p = vec_push(stk, val);
+    0
+};
+
+fn stack_pop(stk: i64) -> i64 = vec_pop(stk);
+
+fn stack_top(stk: i64) -> i64
+  pre vec_len(stk) > 0
+= vec_get(stk, vec_len(stk) - 1);
+
+fn stack_empty(stk: i64) -> bool = vec_len(stk) == 0;
+
+fn stack_size(stk: i64) -> i64 = vec_len(stk);
+
+// ============================================================
+// Next Greater Element
+// ============================================================
+
+// For each element in arr, find the next element to the right that is
+// strictly greater. If none exists, store -1. Result stored in out vec.
+// arr and out must have the same length n.
+fn next_greater_element(arr: i64, n: i64, out: i64) -> i64
+  pre n >= 0
+= {
+    // Initialize output to -1
+    let mut i = 0;
+    while i < n {
+        let _s = vec_set(out, i, 0 - 1);
+        i = i + 1;
+        0
+    };
+    // Monotonic decreasing stack (stores indices)
+    let stk = stack_new();
+    let mut j = 0;
+    while j < n {
+        let cur = vec_get(arr, j);
+        // Pop while current is greater than stack top
+        let mut cont = true;
+        while cont {
+            if stack_empty(stk) { cont = false; 0 }
+            else {
+                let top_idx = stack_top(stk);
+                let top_val = vec_get(arr, top_idx);
+                if cur > top_val {
+                    let _pop = stack_pop(stk);
+                    let _s = vec_set(out, top_idx, cur);
+                    0
+                } else { cont = false; 0 }
+            }
+        };
+        let _push = stack_push(stk, j);
+        j = j + 1;
+        0
+    };
+    let _f = vec_free(stk);
+    0
+};
+
+// ============================================================
+// Next Smaller Element
+// ============================================================
+
+// For each element, find the next element to the right that is
+// strictly smaller. If none exists, store -1.
+fn next_smaller_element(arr: i64, n: i64, out: i64) -> i64
+  pre n >= 0
+= {
+    let mut i = 0;
+    while i < n {
+        let _s = vec_set(out, i, 0 - 1);
+        i = i + 1;
+        0
+    };
+    // Monotonic increasing stack (stores indices)
+    let stk = stack_new();
+    let mut j = 0;
+    while j < n {
+        let cur = vec_get(arr, j);
+        let mut cont = true;
+        while cont {
+            if stack_empty(stk) { cont = false; 0 }
+            else {
+                let top_idx = stack_top(stk);
+                let top_val = vec_get(arr, top_idx);
+                if cur < top_val {
+                    let _pop = stack_pop(stk);
+                    let _s = vec_set(out, top_idx, cur);
+                    0
+                } else { cont = false; 0 }
+            }
+        };
+        let _push = stack_push(stk, j);
+        j = j + 1;
+        0
+    };
+    let _f = vec_free(stk);
+    0
+};
+
+// ============================================================
+// Largest Rectangle in Histogram
+// ============================================================
+
+// Given a histogram of bar heights (all >= 0), find the area of
+// the largest rectangle that fits under the histogram.
+fn largest_rectangle_area(heights: i64, n: i64) -> i64
+  pre n >= 0
+  post ret >= 0
+= {
+    if n == 0 { 0 }
+    else {
+        let stk = stack_new();
+        let mut max_area = 0;
+        let mut i = 0;
+        while i <= n {
+            // Use 0 as sentinel height at position n
+            let cur_h = if i < n { vec_get(heights, i) } else { 0 };
+            let mut cont = true;
+            while cont {
+                if stack_empty(stk) { cont = false; 0 }
+                else {
+                    let top_idx = stack_top(stk);
+                    let top_h = vec_get(heights, top_idx);
+                    if cur_h < top_h {
+                        let _pop = stack_pop(stk);
+                        let width = if stack_empty(stk) { i }
+                                    else { i - stack_top(stk) - 1 };
+                        let area = top_h * width;
+                        if area > max_area { max_area = area; 0 } else { 0 };
+                        0
+                    } else { cont = false; 0 }
+                }
+            };
+            let _push = stack_push(stk, i);
+            i = i + 1;
+            0
+        };
+        let _f = vec_free(stk);
+        max_area
+    }
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+// Helper: create vec from known values
+fn make_vec5(a: i64, b: i64, c: i64, d: i64, e: i64) -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, a);
+    let _p2 = vec_push(v, b);
+    let _p3 = vec_push(v, c);
+    let _p4 = vec_push(v, d);
+    let _p5 = vec_push(v, e);
+    v
+};
+
+fn make_vec6(a: i64, b: i64, c: i64, d: i64, e: i64, f: i64) -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, a);
+    let _p2 = vec_push(v, b);
+    let _p3 = vec_push(v, c);
+    let _p4 = vec_push(v, d);
+    let _p5 = vec_push(v, e);
+    let _p6 = vec_push(v, f);
+    v
+};
+
+fn test_next_greater_basic() -> i64 = {
+    // arr = [4, 5, 2, 10, 8]
+    // NGE = [5, 10, 10, -1, -1]
+    let arr = make_vec5(4, 5, 2, 10, 8);
+    let out = make_vec5(0, 0, 0, 0, 0);
+    let _r = next_greater_element(arr, 5, out);
+    let ok = if vec_get(out, 0) != 5 { false }
+             else if vec_get(out, 1) != 10 { false }
+             else if vec_get(out, 2) != 10 { false }
+             else if vec_get(out, 3) != (0 - 1) { false }
+             else if vec_get(out, 4) != (0 - 1) { false }
+             else { true };
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(out);
+    b2i(ok)
+};
+
+fn test_next_greater_sorted() -> i64 = {
+    // arr = [1, 2, 3, 4, 5]
+    // NGE = [2, 3, 4, 5, -1]
+    let arr = make_vec5(1, 2, 3, 4, 5);
+    let out = make_vec5(0, 0, 0, 0, 0);
+    let _r = next_greater_element(arr, 5, out);
+    let ok = if vec_get(out, 0) != 2 { false }
+             else if vec_get(out, 1) != 3 { false }
+             else if vec_get(out, 2) != 4 { false }
+             else if vec_get(out, 3) != 5 { false }
+             else if vec_get(out, 4) != (0 - 1) { false }
+             else { true };
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(out);
+    b2i(ok)
+};
+
+fn test_next_greater_desc() -> i64 = {
+    // arr = [5, 4, 3, 2, 1]
+    // NGE = [-1, -1, -1, -1, -1]
+    let arr = make_vec5(5, 4, 3, 2, 1);
+    let out = make_vec5(0, 0, 0, 0, 0);
+    let _r = next_greater_element(arr, 5, out);
+    let ok = if vec_get(out, 0) != (0 - 1) { false }
+             else if vec_get(out, 1) != (0 - 1) { false }
+             else if vec_get(out, 2) != (0 - 1) { false }
+             else if vec_get(out, 3) != (0 - 1) { false }
+             else if vec_get(out, 4) != (0 - 1) { false }
+             else { true };
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(out);
+    b2i(ok)
+};
+
+fn test_next_smaller() -> i64 = {
+    // arr = [4, 5, 2, 10, 8]
+    // NSE = [2, 2, -1, 8, -1]
+    let arr = make_vec5(4, 5, 2, 10, 8);
+    let out = make_vec5(0, 0, 0, 0, 0);
+    let _r = next_smaller_element(arr, 5, out);
+    let ok = if vec_get(out, 0) != 2 { false }
+             else if vec_get(out, 1) != 2 { false }
+             else if vec_get(out, 2) != (0 - 1) { false }
+             else if vec_get(out, 3) != 8 { false }
+             else if vec_get(out, 4) != (0 - 1) { false }
+             else { true };
+    let _f1 = vec_free(arr);
+    let _f2 = vec_free(out);
+    b2i(ok)
+};
+
+fn test_histogram_basic() -> i64 = {
+    // heights = [2, 1, 5, 6, 2, 3]
+    // Largest rectangle = 10 (height 5, width 2 at indices 2-3)
+    // Actually: height 2 x width 4 = 8? No.
+    // heights[2]=5, heights[3]=6 => min=5, width=2 => 10
+    let h = make_vec6(2, 1, 5, 6, 2, 3);
+    let area = largest_rectangle_area(h, 6);
+    let _f = vec_free(h);
+    b2i(area == 10)
+};
+
+fn test_histogram_uniform() -> i64 = {
+    // heights = [3, 3, 3, 3, 3]
+    // Largest rectangle = 3 * 5 = 15
+    let h = make_vec5(3, 3, 3, 3, 3);
+    let area = largest_rectangle_area(h, 5);
+    let _f = vec_free(h);
+    b2i(area == 15)
+};
+
+fn test_histogram_single() -> i64 = {
+    let h = vec_new();
+    let _p = vec_push(h, 7);
+    let area = largest_rectangle_area(h, 1);
+    let _f = vec_free(h);
+    b2i(area == 7)
+};
+
+fn test_histogram_ascending() -> i64 = {
+    // heights = [1, 2, 3, 4, 5]
+    // Best: height 3, width 3 (indices 2-4) = 9
+    let h = make_vec5(1, 2, 3, 4, 5);
+    let area = largest_rectangle_area(h, 5);
+    let _f = vec_free(h);
+    b2i(area == 9)
+};
+
+fn main() -> i64 = {
+    let t1 = report("next_greater_basic", test_next_greater_basic());
+    let t2 = report("next_greater_sorted", test_next_greater_sorted());
+    let t3 = report("next_greater_desc", test_next_greater_desc());
+    let t4 = report("next_smaller", test_next_smaller());
+    let t5 = report("histogram_basic", test_histogram_basic());
+    let t6 = report("histogram_uniform", test_histogram_uniform());
+    let t7 = report("histogram_single", test_histogram_single());
+    let t8 = report("histogram_ascending", test_histogram_ascending());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8;
+    let total = 8;
+    let _p1 = print_str("bmb-monotonic-stack: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

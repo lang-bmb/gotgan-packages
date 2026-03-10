@@ -1,0 +1,264 @@
+// bmb-rope: Rope data structure for concatenation-friendly sequences
+// Stores sequences of i64 "char codes" (or any integer values) as vecs.
+// All rope operations work on vec handles (i64).
+
+// ============================================================
+// Core API
+// ============================================================
+
+// rope_new: create an empty rope (empty vec of i64 codes).
+fn rope_new() -> i64
+  post ret != 0
+= vec_new();
+
+// rope_from_codes: create a rope from a vec of i64 codes.
+// Copies each element from vals_vec into a new rope vec.
+// Caller must free the returned rope when done.
+fn rope_from_codes(vals_vec: i64, len: i64) -> i64
+  pre len >= 0
+  post ret != 0
+= {
+    let out = vec_new();
+    let mut i = 0;
+    while i < len {
+        let _p = vec_push(out, vec_get(vals_vec, i));
+        i = i + 1;
+        0
+    };
+    out
+};
+
+// rope_concat: return a new rope that is the concatenation of r1 and r2.
+// r1 and r2 are NOT consumed. Caller must free the returned rope.
+fn rope_concat(r1: i64, r2: i64) -> i64
+  post ret != 0
+= {
+    let len1 = vec_len(r1);
+    let len2 = vec_len(r2);
+    let out = vec_new();
+    let mut i = 0;
+    while i < len1 {
+        let _p = vec_push(out, vec_get(r1, i));
+        i = i + 1;
+        0
+    };
+    let mut j = 0;
+    while j < len2 {
+        let _p = vec_push(out, vec_get(r2, j));
+        j = j + 1;
+        0
+    };
+    out
+};
+
+// rope_length: number of codes in the rope.
+fn rope_length(r: i64) -> i64
+  post ret >= 0
+= vec_len(r);
+
+// rope_char_at: return the code at position idx (0-based).
+// Returns 0 if idx is out of range.
+fn rope_char_at(r: i64, idx: i64) -> i64 = {
+    let len = vec_len(r);
+    if idx < 0 or idx >= len { 0 }
+    else { vec_get(r, idx) }
+};
+
+// rope_slice: return a new rope containing codes in [start, end_val).
+// Clamped to valid indices. Caller must free the returned rope.
+fn rope_slice(r: i64, start: i64, end_val: i64) -> i64
+  post ret != 0
+= {
+    let len = vec_len(r);
+    let lo = if start < 0 { 0 } else { start };
+    let hi = if end_val > len { len } else { end_val };
+    let out = vec_new();
+    let mut i = lo;
+    while i < hi {
+        let _p = vec_push(out, vec_get(r, i));
+        i = i + 1;
+        0
+    };
+    out
+};
+
+// rope_reverse: return a new rope with elements in reverse order.
+// Caller must free the returned rope.
+fn rope_reverse(r: i64) -> i64
+  post ret != 0
+= {
+    let len = vec_len(r);
+    let out = vec_new();
+    let mut i = len - 1;
+    let mut done = false;
+    while not done {
+        if i < 0 { done = true; 0 }
+        else {
+            let _p = vec_push(out, vec_get(r, i));
+            i = i - 1;
+            0
+        }
+    };
+    out
+};
+
+// rope_free: free the rope vec.
+fn rope_free(r: i64) -> i64 = { let _f = vec_free(r); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn test_rope_new() -> i64 = {
+    let r = rope_new();
+    let ok = rope_length(r) == 0;
+    let _f = rope_free(r);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_from_codes() -> i64 = {
+    let src = vec_new();
+    let _p1 = vec_push(src, 72);
+    let _p2 = vec_push(src, 101);
+    let _p3 = vec_push(src, 108);
+    let r = rope_from_codes(src, 3);
+    let ok = rope_length(r) == 3
+             and rope_char_at(r, 0) == 72
+             and rope_char_at(r, 1) == 101
+             and rope_char_at(r, 2) == 108;
+    let _f1 = vec_free(src);
+    let _f2 = rope_free(r);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_concat() -> i64 = {
+    let r1 = rope_new();
+    let _p1 = vec_push(r1, 1);
+    let _p2 = vec_push(r1, 2);
+    let r2 = rope_new();
+    let _p3 = vec_push(r2, 3);
+    let _p4 = vec_push(r2, 4);
+    let r3 = rope_concat(r1, r2);
+    let ok = rope_length(r3) == 4
+             and rope_char_at(r3, 0) == 1
+             and rope_char_at(r3, 1) == 2
+             and rope_char_at(r3, 2) == 3
+             and rope_char_at(r3, 3) == 4;
+    let _f1 = rope_free(r1);
+    let _f2 = rope_free(r2);
+    let _f3 = rope_free(r3);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_concat_empty() -> i64 = {
+    let r1 = rope_new();
+    let _p1 = vec_push(r1, 99);
+    let r2 = rope_new();
+    let r3 = rope_concat(r1, r2);
+    let ok = rope_length(r3) == 1 and rope_char_at(r3, 0) == 99;
+    let _f1 = rope_free(r1);
+    let _f2 = rope_free(r2);
+    let _f3 = rope_free(r3);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_char_at() -> i64 = {
+    let r = rope_new();
+    let _p1 = vec_push(r, 10);
+    let _p2 = vec_push(r, 20);
+    let _p3 = vec_push(r, 30);
+    // Out of bounds returns 0
+    let ok = rope_char_at(r, 0) == 10
+             and rope_char_at(r, 2) == 30
+             and rope_char_at(r, 5) == 0;
+    let _f = rope_free(r);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_slice() -> i64 = {
+    let r = rope_new();
+    let _p1 = vec_push(r, 10);
+    let _p2 = vec_push(r, 20);
+    let _p3 = vec_push(r, 30);
+    let _p4 = vec_push(r, 40);
+    let _p5 = vec_push(r, 50);
+    let s = rope_slice(r, 1, 4);
+    // Expected: [20, 30, 40]
+    let ok = rope_length(s) == 3
+             and rope_char_at(s, 0) == 20
+             and rope_char_at(s, 1) == 30
+             and rope_char_at(s, 2) == 40;
+    let _f1 = rope_free(r);
+    let _f2 = rope_free(s);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_slice_clamp() -> i64 = {
+    let r = rope_new();
+    let _p1 = vec_push(r, 1);
+    let _p2 = vec_push(r, 2);
+    let _p3 = vec_push(r, 3);
+    // slice beyond end
+    let s = rope_slice(r, 1, 100);
+    let ok = rope_length(s) == 2
+             and rope_char_at(s, 0) == 2
+             and rope_char_at(s, 1) == 3;
+    let _f1 = rope_free(r);
+    let _f2 = rope_free(s);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_reverse() -> i64 = {
+    let r = rope_new();
+    let _p1 = vec_push(r, 1);
+    let _p2 = vec_push(r, 2);
+    let _p3 = vec_push(r, 3);
+    let rev = rope_reverse(r);
+    let ok = rope_length(rev) == 3
+             and rope_char_at(rev, 0) == 3
+             and rope_char_at(rev, 1) == 2
+             and rope_char_at(rev, 2) == 1;
+    let _f1 = rope_free(r);
+    let _f2 = rope_free(rev);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rope_reverse_empty() -> i64 = {
+    let r = rope_new();
+    let rev = rope_reverse(r);
+    let ok = rope_length(rev) == 0;
+    let _f1 = rope_free(r);
+    let _f2 = rope_free(rev);
+    if ok { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("rope_new", test_rope_new());
+    let t2 = report("rope_from_codes", test_rope_from_codes());
+    let t3 = report("rope_concat", test_rope_concat());
+    let t4 = report("rope_concat_empty", test_rope_concat_empty());
+    let t5 = report("rope_char_at", test_rope_char_at());
+    let t6 = report("rope_slice", test_rope_slice());
+    let t7 = report("rope_slice_clamp", test_rope_slice_clamp());
+    let t8 = report("rope_reverse", test_rope_reverse());
+    let t9 = report("rope_reverse_empty", test_rope_reverse_empty());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+    let total = 9;
+    let _p1 = print_str("bmb-rope: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

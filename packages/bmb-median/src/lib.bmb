@@ -1,0 +1,304 @@
+// bmb-median: Running median computation using two heaps (vec-based)
+// Uses a max-heap for the lower half and a min-heap for the upper half.
+// The max-heap is simulated by negating values on insert/extract.
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================
+// Min-heap operations (used for upper half)
+// ============================================================
+
+fn heap_swap(heap: i64, i: i64, j: i64) -> i64 = {
+    let a = vec_get(heap, i);
+    let b = vec_get(heap, j);
+    let _s1 = vec_set(heap, i, b);
+    let _s2 = vec_set(heap, j, a);
+    0
+};
+
+fn heap_sift_up(heap: i64, idx: i64) -> i64 = {
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        if i == 0 { done = true; 0 }
+        else {
+            let parent = (i - 1) / 2;
+            if vec_get(heap, i) < vec_get(heap, parent) {
+                let _sw = heap_swap(heap, i, parent);
+                i = parent;
+                0
+            } else { done = true; 0 }
+        }
+    };
+    0
+};
+
+fn heap_sift_down(heap: i64, idx: i64) -> i64 = {
+    let len = vec_len(heap);
+    let mut i = idx;
+    let mut done = false;
+    while not done {
+        let left = 2 * i + 1;
+        let right = 2 * i + 2;
+        let mut smallest = i;
+        if left < len {
+            if vec_get(heap, left) < vec_get(heap, smallest) {
+                smallest = left;
+                0
+            } else { 0 }
+        } else { 0 };
+        if right < len {
+            if vec_get(heap, right) < vec_get(heap, smallest) {
+                smallest = right;
+                0
+            } else { 0 }
+        } else { 0 };
+        if smallest != i {
+            let _sw = heap_swap(heap, i, smallest);
+            i = smallest;
+            0
+        } else { done = true; 0 }
+    };
+    0
+};
+
+fn heap_push(heap: i64, value: i64) -> i64 = {
+    let _p = vec_push(heap, value);
+    let idx = vec_len(heap) - 1;
+    heap_sift_up(heap, idx)
+};
+
+fn heap_pop(heap: i64) -> i64 = {
+    let len = vec_len(heap);
+    if len == 0 { 0 }
+    else if len == 1 { vec_pop(heap) }
+    else {
+        let top = vec_get(heap, 0);
+        let last = vec_pop(heap);
+        let _s = vec_set(heap, 0, last);
+        let _d = heap_sift_down(heap, 0);
+        top
+    }
+};
+
+fn heap_peek(heap: i64) -> i64 =
+    if vec_len(heap) == 0 { 0 } else { vec_get(heap, 0) };
+
+// ============================================================
+// Running median using two heaps
+// max_heap (lower half): stored as negated values in a min-heap
+// min_heap (upper half): stored normally
+// ============================================================
+
+// Create a new median tracker. Returns a vec of 2 elements: [max_heap_ptr, min_heap_ptr]
+fn median_new() -> i64
+  post ret != 0
+= {
+    let state = vec_new();
+    let max_h = vec_new();
+    let min_h = vec_new();
+    let _p1 = vec_push(state, max_h);
+    let _p2 = vec_push(state, min_h);
+    state
+};
+
+// Add a value to the median tracker.
+fn median_add(state: i64, val: i64) -> i64
+  pre state != 0
+= {
+    let max_h = vec_get(state, 0);
+    let min_h = vec_get(state, 1);
+    let max_len = vec_len(max_h);
+    let min_len = vec_len(min_h);
+    // If max-heap is empty or val <= max-heap top (negated), add to max-heap
+    if max_len == 0 {
+        let _hp = heap_push(max_h, 0 - val);
+        0
+    } else {
+        let max_top = 0 - heap_peek(max_h);
+        if val <= max_top {
+            let _hp = heap_push(max_h, 0 - val);
+            0
+        } else {
+            let _hp = heap_push(min_h, val);
+            0
+        };
+        // Rebalance: max_heap size should be >= min_heap size and <= min_heap size + 1
+        let ml = vec_len(max_h);
+        let nl = vec_len(min_h);
+        if ml > nl + 1 {
+            // Move top from max_h to min_h
+            let moved = 0 - heap_pop(max_h);
+            let _hp2 = heap_push(min_h, moved);
+            0
+        } else if nl > ml {
+            // Move top from min_h to max_h
+            let moved = heap_pop(min_h);
+            let _hp2 = heap_push(max_h, 0 - moved);
+            0
+        } else { 0 }
+    }
+};
+
+// Get the current median value.
+// If even count, returns the lower of the two middle values (integer median).
+fn median_get(state: i64) -> i64
+  pre state != 0
+= {
+    let max_h = vec_get(state, 0);
+    let min_h = vec_get(state, 1);
+    let max_len = vec_len(max_h);
+    let min_len = vec_len(min_h);
+    if max_len == 0 and min_len == 0 { 0 }
+    else if max_len > min_len {
+        0 - heap_peek(max_h)
+    } else if min_len > max_len {
+        heap_peek(min_h)
+    } else {
+        // Even count: average of two middles (integer division)
+        let lo = 0 - heap_peek(max_h);
+        let hi = heap_peek(min_h);
+        (lo + hi) / 2
+    }
+};
+
+// Get total number of elements tracked
+fn median_count(state: i64) -> i64
+  pre state != 0
+= {
+    let max_h = vec_get(state, 0);
+    let min_h = vec_get(state, 1);
+    vec_len(max_h) + vec_len(min_h)
+};
+
+// Free the median tracker
+fn median_free(state: i64) -> i64
+  pre state != 0
+= {
+    let max_h = vec_get(state, 0);
+    let min_h = vec_get(state, 1);
+    let _f1 = vec_free(max_h);
+    let _f2 = vec_free(min_h);
+    let _f3 = vec_free(state);
+    0
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_single_element() -> i64 = {
+    let m = median_new();
+    let _a = median_add(m, 5);
+    let med = median_get(m);
+    let _f = median_free(m);
+    if med == 5 { 1 } else { 0 }
+};
+
+fn test_two_elements() -> i64 = {
+    let m = median_new();
+    let _a1 = median_add(m, 10);
+    let _a2 = median_add(m, 20);
+    let med = median_get(m);
+    let _f = median_free(m);
+    // (10+20)/2 = 15
+    if med == 15 { 1 } else { 0 }
+};
+
+fn test_three_elements() -> i64 = {
+    let m = median_new();
+    let _a1 = median_add(m, 3);
+    let _a2 = median_add(m, 1);
+    let _a3 = median_add(m, 2);
+    let med = median_get(m);
+    let _f = median_free(m);
+    // sorted: 1,2,3 -> median = 2
+    if med == 2 { 1 } else { 0 }
+};
+
+fn test_running_median() -> i64 = {
+    // Add values 1,5,2,8,3 and check median at each step
+    let m = median_new();
+    let _a1 = median_add(m, 1);
+    let m1 = median_get(m);     // [1] -> 1
+    let _a2 = median_add(m, 5);
+    let m2 = median_get(m);     // [1,5] -> (1+5)/2 = 3
+    let _a3 = median_add(m, 2);
+    let m3 = median_get(m);     // [1,2,5] -> 2
+    let _a4 = median_add(m, 8);
+    let m4 = median_get(m);     // [1,2,5,8] -> (2+5)/2 = 3
+    let _a5 = median_add(m, 3);
+    let m5 = median_get(m);     // [1,2,3,5,8] -> 3
+    let _f = median_free(m);
+    if m1 != 1 { 0 }
+    else if m2 != 3 { 0 }
+    else if m3 != 2 { 0 }
+    else if m4 != 3 { 0 }
+    else if m5 != 3 { 0 }
+    else { 1 }
+};
+
+fn test_descending() -> i64 = {
+    // Add 5,4,3,2,1
+    let m = median_new();
+    let _a1 = median_add(m, 5);
+    let _a2 = median_add(m, 4);
+    let _a3 = median_add(m, 3);
+    let _a4 = median_add(m, 2);
+    let _a5 = median_add(m, 1);
+    let med = median_get(m);
+    let cnt = median_count(m);
+    let _f = median_free(m);
+    // sorted: 1,2,3,4,5 -> median = 3
+    if med != 3 { 0 }
+    else if cnt != 5 { 0 }
+    else { 1 }
+};
+
+fn test_duplicates() -> i64 = {
+    let m = median_new();
+    let _a1 = median_add(m, 7);
+    let _a2 = median_add(m, 7);
+    let _a3 = median_add(m, 7);
+    let med = median_get(m);
+    let _f = median_free(m);
+    if med == 7 { 1 } else { 0 }
+};
+
+fn test_negative_values() -> i64 = {
+    let m = median_new();
+    let _a1 = median_add(m, 0 - 10);
+    let _a2 = median_add(m, 0 - 5);
+    let _a3 = median_add(m, 0 - 3);
+    let med = median_get(m);
+    let _f = median_free(m);
+    // sorted: -10,-5,-3 -> median = -5
+    if med == 0 - 5 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("single_element", test_single_element());
+    let t2 = report("two_elements", test_two_elements());
+    let t3 = report("three_elements", test_three_elements());
+    let t4 = report("running_median", test_running_median());
+    let t5 = report("descending", test_descending());
+    let t6 = report("duplicates", test_duplicates());
+    let t7 = report("negative_values", test_negative_values());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7;
+    let total = 7;
+    let _p1 = print_str("bmb-median: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

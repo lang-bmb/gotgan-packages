@@ -1,0 +1,204 @@
+// bmb-statemachine: Finite state machine
+// v0.1.0
+//
+// Stores transitions as flat triples [from, input, to] in a vec.
+// Memory layout:
+//   FSM header (16 bytes): [current_state, initial_state]
+//   transitions: vec of i64 (groups of 3: from, input, to)
+//
+// fsm_new(initial_state)                    -> i64  create FSM
+// fsm_add_transition(fsm, from, input, to)  -> i64  register transition
+// fsm_step(fsm, input)                      -> i64  new state or -1
+// fsm_current(fsm)                          -> i64  current state
+// fsm_reset(fsm)                            -> i64  return to initial state
+// fsm_free(fsm)                             -> i64  release memory
+
+fn FSM_NO_TRANSITION() -> i64 = 0 - 1;
+
+// FSM header offsets
+fn fsm_off_current() -> i64 = 0;
+fn fsm_off_initial() -> i64 = 8;
+fn fsm_off_vec() -> i64 = 16;
+
+fn fsm_new(initial_state: i64) -> i64
+  post ret != 0
+= {
+    // header: [current_state(8), initial_state(8)] + vec ptr (8) = 24 bytes
+    let fsm = malloc(24);
+    let _s1 = store_i64(fsm + fsm_off_current(), initial_state);
+    let _s2 = store_i64(fsm + fsm_off_initial(), initial_state);
+    let v = vec_new();
+    let _s3 = store_i64(fsm + fsm_off_vec(), v);
+    fsm
+};
+
+// Register a transition: from_state --input--> to_state
+fn fsm_add_transition(fsm: i64, from_state: i64, input: i64, to_state: i64) -> i64
+  pre fsm != 0
+= {
+    let v = load_i64(fsm + fsm_off_vec());
+    let _p1 = vec_push(v, from_state);
+    let _p2 = vec_push(v, input);
+    let _p3 = vec_push(v, to_state);
+    0
+};
+
+// Advance FSM by one input. Returns new state or FSM_NO_TRANSITION() if no match.
+fn fsm_step(fsm: i64, input: i64) -> i64
+  pre fsm != 0
+= {
+    let current = load_i64(fsm + fsm_off_current());
+    let v = load_i64(fsm + fsm_off_vec());
+    let n = vec_len(v);
+    let mut i = 0;
+    let mut result = FSM_NO_TRANSITION();
+    let mut done = false;
+    while i < n {
+        if not done {
+            let from_s = vec_get(v, i);
+            let in_s   = vec_get(v, i + 1);
+            let to_s   = vec_get(v, i + 2);
+            if from_s == current and in_s == input {
+                let _su = store_i64(fsm + fsm_off_current(), to_s);
+                result = to_s;
+                done = true;
+                0
+            } else {
+                i = i + 3;
+                0
+            }
+        } else {
+            i = n;
+            0
+        };
+        0
+    };
+    result
+};
+
+// Return current state
+fn fsm_current(fsm: i64) -> i64
+  pre fsm != 0
+= load_i64(fsm + fsm_off_current());
+
+// Reset to initial state
+fn fsm_reset(fsm: i64) -> i64
+  pre fsm != 0
+= {
+    let initial = load_i64(fsm + fsm_off_initial());
+    let _s = store_i64(fsm + fsm_off_current(), initial);
+    0
+};
+
+// Free the FSM
+fn fsm_free(fsm: i64) -> i64
+  pre fsm != 0
+= {
+    let v = load_i64(fsm + fsm_off_vec());
+    let _fv = vec_free(v);
+    let _fm = free(fsm);
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic_transitions() -> i64 = {
+    // Simple 3-state machine: 0 --1--> 1, 1 --2--> 2
+    let fsm = fsm_new(0);
+    let _t1 = fsm_add_transition(fsm, 0, 1, 1);
+    let _t2 = fsm_add_transition(fsm, 1, 2, 2);
+    let s0 = fsm_current(fsm);
+    let s1 = fsm_step(fsm, 1);
+    let s2 = fsm_step(fsm, 2);
+    let _f = fsm_free(fsm);
+    if s0 == 0 and s1 == 1 and s2 == 2 { 1 } else { 0 }
+};
+
+fn test_no_transition() -> i64 = {
+    let fsm = fsm_new(0);
+    let _t1 = fsm_add_transition(fsm, 0, 1, 1);
+    let r = fsm_step(fsm, 99);
+    let cur = fsm_current(fsm);
+    let _f = fsm_free(fsm);
+    // No matching transition: result is -1, state unchanged
+    if r == FSM_NO_TRANSITION() and cur == 0 { 1 } else { 0 }
+};
+
+fn test_reset() -> i64 = {
+    let fsm = fsm_new(0);
+    let _t1 = fsm_add_transition(fsm, 0, 1, 1);
+    let _t2 = fsm_add_transition(fsm, 1, 2, 2);
+    let _s1 = fsm_step(fsm, 1);
+    let _s2 = fsm_step(fsm, 2);
+    let after = fsm_current(fsm);
+    let _r = fsm_reset(fsm);
+    let after_reset = fsm_current(fsm);
+    let _f = fsm_free(fsm);
+    if after == 2 and after_reset == 0 { 1 } else { 0 }
+};
+
+fn test_multiple_transitions_from_same_state() -> i64 = {
+    // State 0: input 1 -> state 1, input 2 -> state 2
+    let fsm = fsm_new(0);
+    let _t1 = fsm_add_transition(fsm, 0, 1, 1);
+    let _t2 = fsm_add_transition(fsm, 0, 2, 2);
+    let s1 = fsm_step(fsm, 1);
+    let _r = fsm_reset(fsm);
+    let s2 = fsm_step(fsm, 2);
+    let _f = fsm_free(fsm);
+    if s1 == 1 and s2 == 2 { 1 } else { 0 }
+};
+
+fn test_chain() -> i64 = {
+    // Chain: 0->1->2->3->4 on input 0 each time
+    let fsm = fsm_new(0);
+    let _t0 = fsm_add_transition(fsm, 0, 0, 1);
+    let _t1 = fsm_add_transition(fsm, 1, 0, 2);
+    let _t2 = fsm_add_transition(fsm, 2, 0, 3);
+    let _t3 = fsm_add_transition(fsm, 3, 0, 4);
+    let _s1 = fsm_step(fsm, 0);
+    let _s2 = fsm_step(fsm, 0);
+    let _s3 = fsm_step(fsm, 0);
+    let s4 = fsm_step(fsm, 0);
+    let cur = fsm_current(fsm);
+    let _f = fsm_free(fsm);
+    if s4 == 4 and cur == 4 { 1 } else { 0 }
+};
+
+fn test_self_loop() -> i64 = {
+    // State 1 loops on input 0
+    let fsm = fsm_new(1);
+    let _t1 = fsm_add_transition(fsm, 1, 0, 1);
+    let s1 = fsm_step(fsm, 0);
+    let s2 = fsm_step(fsm, 0);
+    let _f = fsm_free(fsm);
+    if s1 == 1 and s2 == 1 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_transitions", test_basic_transitions());
+    let t2 = report("no_transition", test_no_transition());
+    let t3 = report("reset", test_reset());
+    let t4 = report("multiple_from_same", test_multiple_transitions_from_same_state());
+    let t5 = report("chain", test_chain());
+    let t6 = report("self_loop", test_self_loop());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-statemachine: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

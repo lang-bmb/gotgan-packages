@@ -1,0 +1,9 @@
+[package]
+name = "bmb-config"
+version = "0.1.0"
+description = "Simple integer key-value config store backed by a hash map"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

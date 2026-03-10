@@ -1,0 +1,262 @@
+// bmb-json: High-performance JSON parser written in BMB
+// v0.2.0
+//
+// Parses JSON text and counts values (benchmark target).
+// Supports: integers, strings, booleans, null, arrays, objects.
+//
+// Performance target: competitive with C (GCC/Clang -O2).
+//
+// v0.2.0: Use bit-shifting for return value encoding instead of
+// multiplication/division to eliminate sdiv/srem in hot path.
+
+// ============================================================================
+// Character classification
+// ============================================================================
+
+fn json_is_ws(c: i64) -> i64 =
+    if c == 32 { 1 }         // space
+    else if c == 9 { 1 }     // tab
+    else if c == 10 { 1 }    // newline
+    else if c == 13 { 1 }    // carriage return
+    else { 0 };
+
+fn json_is_digit(c: i64) -> i64 =
+    if c >= 48 and c <= 57 { 1 } else { 0 };
+
+// ============================================================================
+// Encoding constants (bit-shift based)
+// ============================================================================
+// Count/pos encoding: (count << 20) | pos — 20 bits for position (max ~1M)
+// String result encoding: (end_pos << 16) | str_len — 16 bits for length (max ~64K)
+
+// ============================================================================
+// Parser core
+// ============================================================================
+
+// Skip whitespace starting at position pos in string s
+fn json_skip_ws(s: String, pos: i64) -> i64 = {
+    let slen = s.len();
+    let mut p = pos;
+    loop {
+        if p >= slen { break } else { () };
+        if json_is_ws(s.byte_at(p)) == 1 { p = p + 1 } else { break }
+    };
+    p
+};
+
+// Parse an unsigned integer from position pos
+// Returns: (new_pos << 20) | value  [value limited to 20 bits]
+fn json_parse_uint(s: String, pos: i64) -> i64 = {
+    let slen = s.len();
+    let mut p = pos;
+    let mut val = 0;
+    loop {
+        if p >= slen { break } else { () };
+        let c = s.byte_at(p);
+        if json_is_digit(c) == 1 { val = val * 10 + (c - 48); p = p + 1 } else { break }
+    };
+    (p << 20) bor val
+};
+
+// Parse a JSON string (expects opening quote at pos)
+// Returns: (end_pos_after_quote << 16) | string_length
+fn json_parse_str(s: String, pos: i64) -> i64 = {
+    let slen = s.len();
+    let mut p = pos + 1; // skip opening quote
+    let start = p;
+
+    loop {
+        if p >= slen { break } else { () };
+        let c = s.byte_at(p);
+        if c == 34 { break }   // closing quote
+        else if c == 92 { p = p + 2 }  // backslash escape
+        else { p = p + 1 }
+    };
+    ((p + 1) << 16) bor (p - start)
+};
+
+// ============================================================================
+// JSON value counter (benchmark target)
+// ============================================================================
+
+// Count total number of JSON values in a string
+fn json_count(s: String) -> i64 = {
+    let r = json_count_at(s, 0);
+    r >> 20
+};
+
+// Inner counting function: returns (count << 20) | new_pos
+fn json_count_at(s: String, pos_in: i64) -> i64 = {
+    let slen = s.len();
+    let mut pos = json_skip_ws(s, pos_in);
+
+    if pos >= slen { pos }  // count=0, just pos
+    else {
+        let c = s.byte_at(pos);
+        if c == 34 { // '"' string
+            let sr = json_parse_str(s, pos);
+            let new_pos = sr >> 16;
+            (1 << 20) bor new_pos
+        }
+        else if json_is_digit(c) == 1 or c == 45 { // number
+            let ir = json_parse_uint(s, if c == 45 { pos + 1 } else { pos });
+            let new_pos = ir >> 20;
+            (1 << 20) bor new_pos
+        }
+        else if c == 116 { // 't' true
+            (1 << 20) bor (pos + 4)
+        }
+        else if c == 102 { // 'f' false
+            (1 << 20) bor (pos + 5)
+        }
+        else if c == 110 { // 'n' null
+            (1 << 20) bor (pos + 4)
+        }
+        else if c == 91 { // '[' array
+            json_count_array(s, pos)
+        }
+        else if c == 123 { // '{' object
+            json_count_object(s, pos)
+        }
+        else { pos }  // count=0, just pos
+    }
+};
+
+// Count values in a JSON array starting at '['
+fn json_count_array(s: String, pos_in: i64) -> i64 = {
+    let slen = s.len();
+    let mut cnt = 1; // count the array itself
+    let mut pos = json_skip_ws(s, pos_in + 1); // skip '['
+
+    if pos < slen {
+        if s.byte_at(pos) == 93 { // ']' empty array
+            (cnt << 20) bor (pos + 1)
+        } else {
+            // Parse elements
+            let mut done = 0;
+            loop {
+                if done == 1 { break } else { () };
+                let sub = json_count_at(s, pos);
+                cnt = cnt + (sub >> 20);
+                pos = sub band 1048575;
+
+                pos = json_skip_ws(s, pos);
+                if pos < slen {
+                    if s.byte_at(pos) == 44 { // ','
+                        pos = pos + 1
+                    } else {
+                        pos = pos + 1; // skip ']'
+                        done = 1
+                    }
+                } else { done = 1 }
+            };
+            (cnt << 20) bor pos
+        }
+    } else { (cnt << 20) bor pos }
+};
+
+// Count values in a JSON object starting at '{'
+fn json_count_object(s: String, pos_in: i64) -> i64 = {
+    let slen = s.len();
+    let mut cnt = 1; // count the object itself
+    let mut pos = json_skip_ws(s, pos_in + 1); // skip '{'
+
+    if pos < slen {
+        if s.byte_at(pos) == 125 { // '}' empty object
+            (cnt << 20) bor (pos + 1)
+        } else {
+            // Parse key-value pairs
+            let mut done = 0;
+            loop {
+                if done == 1 { break } else { () };
+
+                // Parse key string
+                pos = json_skip_ws(s, pos);
+                let kr = json_parse_str(s, pos);
+                pos = kr >> 16;
+
+                // Skip ':' with whitespace
+                pos = json_skip_ws(s, pos);
+                pos = pos + 1; // skip ':'
+
+                // Parse value (recursive)
+                let sub = json_count_at(s, pos);
+                cnt = cnt + (sub >> 20);
+                pos = sub band 1048575;
+
+                // Check for ',' or '}'
+                pos = json_skip_ws(s, pos);
+                if pos < slen {
+                    if s.byte_at(pos) == 44 { // ','
+                        pos = pos + 1
+                    } else {
+                        pos = pos + 1; // skip '}'
+                        done = 1
+                    }
+                } else { done = 1 }
+            };
+            (cnt << 20) bor pos
+        }
+    } else { (cnt << 20) bor pos }
+};
+
+// ============================================================================
+// Test / Benchmark entry point
+// ============================================================================
+
+fn main() -> i64 = {
+    // Test basic parsing
+    let t1 = json_count("42");
+    let t2 = json_count("[1, 2, 3]");
+    let t3 = json_count("{\"a\": 1, \"b\": 2}");
+    let t4 = json_count("[1, [2, 3], {\"x\": 4}]");
+    let t5 = json_count("null");
+    let t6 = json_count("true");
+    let t7 = json_count("\"hello\"");
+    let t8 = json_count("[]");
+    let t9 = json_count("{}");
+    let t10 = json_count("[1, 2, 3, 4, 5, 6, 7, 8, 9, 10]");
+
+    // Print test results
+    let _p1 = println(t1);   // 1
+    let _p2 = println(t2);   // 4 (array + 3 elements)
+    let _p3 = println(t3);   // 3 (object + 2 values)
+    let _p4 = println(t4);   // 7 (array + 1 + array + 2 + object + 1)
+    let _p5 = println(t5);   // 1
+    let _p6 = println(t6);   // 1
+    let _p7 = println(t7);   // 1
+    let _p8 = println(t8);   // 1
+    let _p9 = println(t9);   // 1
+    let _p10 = println(t10); // 11
+
+    // Build a large JSON string for benchmarking
+    let sb = sb_new();
+    let _w0 = sb_push(sb, "[");
+    let mut i = 0;
+    loop {
+        if i >= 10000 { break } else { () };
+        let _c = if i > 0 { sb_push(sb, ",") } else { 0 };
+        let _w1 = sb_push(sb, "{\"id\":");
+        let _w2 = sb_push_int(sb, i);
+        let _w3 = sb_push(sb, ",\"val\":");
+        let _w4 = sb_push_int(sb, i * 7 + 13);
+        let _w5 = sb_push(sb, "}");
+        i = i + 1
+    };
+    let _wn = sb_push(sb, "]");
+    let big_json = sb_build(sb);
+
+    // Parse the large JSON 100 times
+    let mut total = 0;
+    let mut iter = 0;
+    loop {
+        if iter >= 100 { break } else { () };
+        total = total + json_count(big_json);
+        iter = iter + 1
+    };
+
+    // Print benchmark result
+    let _pt = println(total); // 100 * 30001 = 3000100
+
+    0
+};

@@ -1,0 +1,318 @@
+// bmb-lcs: Longest Common Subsequence for BMB
+// Computes the LCS length and reconstructs the LCS itself.
+// Input sequences are vecs of i64 values.
+// Uses classic O(m*n) dynamic programming with a flat 2D table.
+
+// ============================================================
+// Helpers
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+@inline
+fn lcs_max(a: i64, b: i64) -> i64 = if a > b { a } else { b };
+
+// ============================================================
+// Core Functions
+// ============================================================
+
+// Compute the length of the Longest Common Subsequence of two sequences.
+// a_vec, b_vec: vec handles (i64 pointers from vec_new)
+// a_len, b_len: lengths of the respective sequences
+// Returns: length of the LCS (>= 0)
+fn lcs_length(a_vec: i64, a_len: i64, b_vec: i64, b_len: i64) -> i64
+  pre a_len >= 0 and b_len >= 0
+  post ret >= 0
+= {
+    let rows = a_len + 1;
+    let cols = b_len + 1;
+    let dp = vec_new();
+    let total = rows * cols;
+    let mut fi = 0;
+    while fi < total {
+        let _p = vec_push(dp, 0);
+        fi = fi + 1;
+        0
+    };
+
+    let mut i = 1;
+    while i <= a_len {
+        let mut j = 1;
+        while j <= b_len {
+            let ai = vec_get(a_vec, i - 1);
+            let bj = vec_get(b_vec, j - 1);
+            let val = if ai == bj {
+                vec_get(dp, (i - 1) * cols + (j - 1)) + 1
+            } else {
+                lcs_max(vec_get(dp, (i - 1) * cols + j),
+                        vec_get(dp, i * cols + (j - 1)))
+            };
+            let _s = vec_set(dp, i * cols + j, val);
+            j = j + 1;
+            0
+        };
+        i = i + 1;
+        0
+    };
+
+    let result = vec_get(dp, a_len * cols + b_len);
+    let _f = vec_free(dp);
+    result
+};
+
+// Reconstruct the actual LCS as a new vec.
+// Returns a vec handle containing the LCS elements in order.
+// Caller must vec_free the returned vec.
+fn lcs_reconstruct(a_vec: i64, a_len: i64, b_vec: i64, b_len: i64) -> i64
+  pre a_len >= 0 and b_len >= 0
+= {
+    let rows = a_len + 1;
+    let cols = b_len + 1;
+    let dp = vec_new();
+    let total = rows * cols;
+    let mut fi = 0;
+    while fi < total {
+        let _p = vec_push(dp, 0);
+        fi = fi + 1;
+        0
+    };
+
+    let mut i = 1;
+    while i <= a_len {
+        let mut j = 1;
+        while j <= b_len {
+            let ai = vec_get(a_vec, i - 1);
+            let bj = vec_get(b_vec, j - 1);
+            let val = if ai == bj {
+                vec_get(dp, (i - 1) * cols + (j - 1)) + 1
+            } else {
+                lcs_max(vec_get(dp, (i - 1) * cols + j),
+                        vec_get(dp, i * cols + (j - 1)))
+            };
+            let _s = vec_set(dp, i * cols + j, val);
+            j = j + 1;
+            0
+        };
+        i = i + 1;
+        0
+    };
+
+    // Backtrack to reconstruct the LCS
+    let lcs_len = vec_get(dp, a_len * cols + b_len);
+    // Build reversed LCS first, then reverse
+    let rev = vec_new();
+    let mut ri = a_len;
+    let mut rj = b_len;
+    let mut done = false;
+    while not done {
+        if ri == 0 or rj == 0 { done = true; 0 }
+        else {
+            let ai = vec_get(a_vec, ri - 1);
+            let bj = vec_get(b_vec, rj - 1);
+            if ai == bj {
+                let _p = vec_push(rev, ai);
+                ri = ri - 1;
+                rj = rj - 1;
+                0
+            } else if vec_get(dp, (ri - 1) * cols + rj) > vec_get(dp, ri * cols + (rj - 1)) {
+                ri = ri - 1;
+                0
+            } else {
+                rj = rj - 1;
+                0
+            }
+        }
+    };
+    let _fd = vec_free(dp);
+
+    // Reverse into result vec
+    let result = vec_new();
+    let rev_len = vec_len(rev);
+    let mut k = rev_len - 1;
+    let mut rdone = false;
+    if rev_len == 0 { rdone = true; 0 } else { 0 };
+    while not rdone {
+        let _p = vec_push(result, vec_get(rev, k));
+        if k == 0 { rdone = true; 0 }
+        else { k = k - 1; 0 }
+    };
+    let _fr = vec_free(rev);
+    result
+};
+
+// Check if sequence sub is a subsequence of seq.
+// sub_vec/sub_len: the candidate subsequence
+// seq_vec/seq_len: the full sequence
+fn is_subsequence(sub_vec: i64, sub_len: i64, seq_vec: i64, seq_len: i64) -> bool
+  pre sub_len >= 0 and seq_len >= 0
+= {
+    let mut si = 0;
+    let mut qi = 0;
+    while si < sub_len and qi < seq_len {
+        if vec_get(sub_vec, si) == vec_get(seq_vec, qi) {
+            si = si + 1;
+            0
+        } else { 0 };
+        qi = qi + 1;
+        0
+    };
+    si == sub_len
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+// Helper to build a vec from known values
+fn make_vec_7(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64, a6: i64) -> i64 = {
+    let v = vec_new();
+    let _p0 = vec_push(v, a0);
+    let _p1 = vec_push(v, a1);
+    let _p2 = vec_push(v, a2);
+    let _p3 = vec_push(v, a3);
+    let _p4 = vec_push(v, a4);
+    let _p5 = vec_push(v, a5);
+    let _p6 = vec_push(v, a6);
+    v
+};
+
+fn make_vec_6(a0: i64, a1: i64, a2: i64, a3: i64, a4: i64, a5: i64) -> i64 = {
+    let v = vec_new();
+    let _p0 = vec_push(v, a0);
+    let _p1 = vec_push(v, a1);
+    let _p2 = vec_push(v, a2);
+    let _p3 = vec_push(v, a3);
+    let _p4 = vec_push(v, a4);
+    let _p5 = vec_push(v, a5);
+    v
+};
+
+fn test_lcs_basic() -> i64 = {
+    // ABCBDAB vs BDCABA -> LCS length = 4
+    let a = make_vec_7(65, 66, 67, 66, 68, 65, 66);
+    let b = make_vec_6(66, 68, 67, 65, 66, 65);
+    let r = lcs_length(a, 7, b, 6);
+    let _fa = vec_free(a);
+    let _fb = vec_free(b);
+    if r == 4 { 1 } else { 0 }
+};
+
+fn test_lcs_identical() -> i64 = {
+    // Identical sequences -> LCS = full length
+    let a = vec_new();
+    let _p0 = vec_push(a, 1);
+    let _p1 = vec_push(a, 2);
+    let _p2 = vec_push(a, 3);
+    let r = lcs_length(a, 3, a, 3);
+    let _fa = vec_free(a);
+    if r == 3 { 1 } else { 0 }
+};
+
+fn test_lcs_no_common() -> i64 = {
+    // No common elements -> LCS = 0
+    let a = vec_new();
+    let _p0 = vec_push(a, 1);
+    let _p1 = vec_push(a, 3);
+    let _p2 = vec_push(a, 5);
+    let b = vec_new();
+    let _q0 = vec_push(b, 2);
+    let _q1 = vec_push(b, 4);
+    let _q2 = vec_push(b, 6);
+    let r = lcs_length(a, 3, b, 3);
+    let _fa = vec_free(a);
+    let _fb = vec_free(b);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_lcs_empty() -> i64 = {
+    // Empty sequence -> LCS = 0
+    let a = vec_new();
+    let _p0 = vec_push(a, 1);
+    let _p1 = vec_push(a, 2);
+    let b = vec_new();
+    let r = lcs_length(a, 2, b, 0);
+    let _fa = vec_free(a);
+    let _fb = vec_free(b);
+    if r == 0 { 1 } else { 0 }
+};
+
+fn test_lcs_reconstruct() -> i64 = {
+    // [1,3,4,5,6,7,7,8] vs [3,5,7,4,8,6,7,8,2]
+    // LCS = [3,5,6,7,8] length 5
+    let a = vec_new();
+    let _a0 = vec_push(a, 1);
+    let _a1 = vec_push(a, 3);
+    let _a2 = vec_push(a, 4);
+    let _a3 = vec_push(a, 5);
+    let _a4 = vec_push(a, 6);
+    let _a5 = vec_push(a, 7);
+    let _a6 = vec_push(a, 7);
+    let _a7 = vec_push(a, 8);
+    let b = vec_new();
+    let _b0 = vec_push(b, 3);
+    let _b1 = vec_push(b, 5);
+    let _b2 = vec_push(b, 7);
+    let _b3 = vec_push(b, 4);
+    let _b4 = vec_push(b, 8);
+    let _b5 = vec_push(b, 6);
+    let _b6 = vec_push(b, 7);
+    let _b7 = vec_push(b, 8);
+    let _b8 = vec_push(b, 2);
+    let lcs = lcs_reconstruct(a, 8, b, 9);
+    let lcs_len = vec_len(lcs);
+    // Verify it is a valid subsequence of both a and b
+    let is_sub_a = b2i(is_subsequence(lcs, lcs_len, a, 8));
+    let is_sub_b = b2i(is_subsequence(lcs, lcs_len, b, 9));
+    let _fl = vec_free(lcs);
+    let _fa = vec_free(a);
+    let _fb = vec_free(b);
+    if lcs_len == 5 and is_sub_a == 1 and is_sub_b == 1 { 1 } else { 0 }
+};
+
+fn test_is_subsequence() -> i64 = {
+    let seq = vec_new();
+    let _s0 = vec_push(seq, 1);
+    let _s1 = vec_push(seq, 2);
+    let _s2 = vec_push(seq, 3);
+    let _s3 = vec_push(seq, 4);
+    let _s4 = vec_push(seq, 5);
+    let sub1 = vec_new();
+    let _u0 = vec_push(sub1, 1);
+    let _u1 = vec_push(sub1, 3);
+    let _u2 = vec_push(sub1, 5);
+    let sub2 = vec_new();
+    let _v0 = vec_push(sub2, 3);
+    let _v1 = vec_push(sub2, 1);
+    let r1 = b2i(is_subsequence(sub1, 3, seq, 5));
+    let r2 = b2i(is_subsequence(sub2, 2, seq, 5));
+    let _fs = vec_free(seq);
+    let _f1 = vec_free(sub1);
+    let _f2 = vec_free(sub2);
+    if r1 == 1 and r2 == 0 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("lcs_basic", test_lcs_basic());
+    let t2 = report("lcs_identical", test_lcs_identical());
+    let t3 = report("lcs_no_common", test_lcs_no_common());
+    let t4 = report("lcs_empty", test_lcs_empty());
+    let t5 = report("lcs_reconstruct", test_lcs_reconstruct());
+    let t6 = report("is_subsequence", test_is_subsequence());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-lcs: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

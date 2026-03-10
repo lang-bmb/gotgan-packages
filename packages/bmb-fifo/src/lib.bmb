@@ -1,0 +1,225 @@
+// bmb-fifo: FIFO queue using two vecs (amortized O(1) enqueue/dequeue)
+// Classic two-stack queue: push to in_stack, pop from out_stack.
+// When out_stack is empty, reverse in_stack into out_stack.
+//
+// Layout: malloc block holding two vec pointers.
+//   [in_vec, out_vec]
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// Create a new FIFO queue
+fn fifo_new() -> i64
+  post ret != 0
+= {
+    let ptr = malloc(2 * 8);
+    let in_vec = vec_new();
+    let out_vec = vec_new();
+    let _s1 = store_i64(ptr, in_vec);
+    let _s2 = store_i64(ptr + 8, out_vec);
+    ptr
+};
+
+// Get in-stack
+fn fifo_in(q: i64) -> i64
+  pre q != 0
+= load_i64(q);
+
+// Get out-stack
+fn fifo_out(q: i64) -> i64
+  pre q != 0
+= load_i64(q + 8);
+
+// Total size of queue
+fn fifo_size(q: i64) -> i64
+  pre q != 0
+  post ret >= 0
+= vec_len(fifo_in(q)) + vec_len(fifo_out(q));
+
+// Check if empty
+fn fifo_is_empty(q: i64) -> bool
+  pre q != 0
+= fifo_size(q) == 0;
+
+// Enqueue a value (push to back)
+fn fifo_enqueue(q: i64, value: i64) -> i64
+  pre q != 0
+= {
+    let _p = vec_push(fifo_in(q), value);
+    0
+};
+
+// Transfer in-stack to out-stack (reverse order)
+fn fifo_transfer(q: i64) -> i64
+  pre q != 0
+= {
+    let inv = fifo_in(q);
+    let outv = fifo_out(q);
+    let mut done = false;
+    while not done {
+        let _r = if vec_len(inv) == 0 {
+            { done = true; 0 }
+        } else {
+            {
+                let val = vec_pop(inv);
+                let _p = vec_push(outv, val);
+                0
+            }
+        };
+        0
+    };
+    0
+};
+
+// Dequeue a value (pop from front). Returns 0 if empty.
+fn fifo_dequeue(q: i64) -> i64
+  pre q != 0
+= {
+    let outv = fifo_out(q);
+    if vec_len(outv) == 0 {
+        let _t = fifo_transfer(q);
+        0
+    } else { 0 };
+    let outv2 = fifo_out(q);
+    if vec_len(outv2) == 0 { 0 }
+    else { vec_pop(outv2) }
+};
+
+// Peek at front element without removing (0 if empty)
+fn fifo_peek(q: i64) -> i64
+  pre q != 0
+= {
+    let outv = fifo_out(q);
+    if vec_len(outv) == 0 {
+        let _t = fifo_transfer(q);
+        0
+    } else { 0 };
+    let outv2 = fifo_out(q);
+    let olen = vec_len(outv2);
+    if olen == 0 { 0 }
+    else { vec_get(outv2, olen - 1) }
+};
+
+// Free all memory
+fn fifo_free(q: i64) -> i64
+  pre q != 0
+= {
+    let _fi = vec_free(fifo_in(q));
+    let _fo = vec_free(fifo_out(q));
+    let _fp = free(q);
+    0
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic_fifo() -> i64 = {
+    let q = fifo_new();
+    let _e1 = fifo_enqueue(q, 10);
+    let _e2 = fifo_enqueue(q, 20);
+    let _e3 = fifo_enqueue(q, 30);
+    if fifo_size(q) != 3 { let _f = fifo_free(q); 0 }
+    else {
+        let v1 = fifo_dequeue(q);
+        let v2 = fifo_dequeue(q);
+        let v3 = fifo_dequeue(q);
+        if v1 != 10 { let _f = fifo_free(q); 0 }
+        else if v2 != 20 { let _f = fifo_free(q); 0 }
+        else if v3 != 30 { let _f = fifo_free(q); 0 }
+        else { let _f = fifo_free(q); 1 }
+    }
+};
+
+fn test_interleaved() -> i64 = {
+    // Enqueue and dequeue interleaved
+    let q = fifo_new();
+    let _e1 = fifo_enqueue(q, 1);
+    let _e2 = fifo_enqueue(q, 2);
+    let v1 = fifo_dequeue(q);  // should get 1
+    let _e3 = fifo_enqueue(q, 3);
+    let v2 = fifo_dequeue(q);  // should get 2
+    let v3 = fifo_dequeue(q);  // should get 3
+    if v1 != 1 { let _f = fifo_free(q); 0 }
+    else if v2 != 2 { let _f = fifo_free(q); 0 }
+    else if v3 != 3 { let _f = fifo_free(q); 0 }
+    else if fifo_size(q) != 0 { let _f = fifo_free(q); 0 }
+    else { let _f = fifo_free(q); 1 }
+};
+
+fn test_empty_dequeue() -> i64 = {
+    let q = fifo_new();
+    let v = fifo_dequeue(q);
+    if v != 0 { let _f = fifo_free(q); 0 }
+    else if b2i(fifo_is_empty(q)) != 1 { let _f = fifo_free(q); 0 }
+    else { let _f = fifo_free(q); 1 }
+};
+
+fn test_peek() -> i64 = {
+    let q = fifo_new();
+    let _e1 = fifo_enqueue(q, 42);
+    let _e2 = fifo_enqueue(q, 99);
+    let p = fifo_peek(q);
+    if p != 42 { let _f = fifo_free(q); 0 }
+    else if fifo_size(q) != 2 { let _f = fifo_free(q); 0 }
+    else { let _f = fifo_free(q); 1 }
+};
+
+fn test_large_sequence() -> i64 = {
+    let q = fifo_new();
+    // Enqueue 0..9
+    let mut i = 0;
+    while i < 10 {
+        let _e = fifo_enqueue(q, i);
+        i = i + 1;
+        0
+    };
+    // Dequeue all and verify order
+    let mut ok = true;
+    let mut j = 0;
+    while j < 10 {
+        let v = fifo_dequeue(q);
+        let _r = if v != j { ok = false; 0 } else { 0 };
+        j = j + 1;
+        0
+    };
+    let _f = fifo_free(q);
+    b2i(ok)
+};
+
+fn test_single() -> i64 = {
+    let q = fifo_new();
+    let _e = fifo_enqueue(q, 77);
+    if fifo_size(q) != 1 { let _f = fifo_free(q); 0 }
+    else {
+        let v = fifo_dequeue(q);
+        if v != 77 { let _f = fifo_free(q); 0 }
+        else if b2i(fifo_is_empty(q)) != 1 { let _f = fifo_free(q); 0 }
+        else { let _f = fifo_free(q); 1 }
+    }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_fifo", test_basic_fifo());
+    let t2 = report("interleaved", test_interleaved());
+    let t3 = report("empty_dequeue", test_empty_dequeue());
+    let t4 = report("peek", test_peek());
+    let t5 = report("large_sequence", test_large_sequence());
+    let t6 = report("single", test_single());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-fifo: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

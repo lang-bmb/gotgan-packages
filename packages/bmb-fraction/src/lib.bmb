@@ -1,0 +1,262 @@
+// bmb-fraction: Continued fraction representation
+// A continued fraction [a0; a1, a2, ...] represents:
+//   a0 + 1/(a1 + 1/(a2 + ...))
+//
+// cf_from_rational(p, q) -> vec of CF coefficients
+// cf_to_rational(cf_vec) -> vec [p, q] (reduced fraction)
+// cf_convergent(cf_vec, n) -> vec [p, q] of the nth convergent
+// cf_length(cf_vec) -> number of CF coefficients
+// cf_free(cf_vec) -> free the vec
+
+// GCD helper (Euclidean, non-negative inputs)
+fn cf_gcd(a: i64, b: i64) -> i64
+  pre a >= 0 and b >= 0
+  post ret >= 0
+= if b == 0 { a } else { cf_gcd(b, a - (a / b) * b) };
+
+// Absolute value
+@inline
+fn cf_abs(x: i64) -> i64 = if x < 0 { 0 - x } else { x };
+
+// Compute continued fraction coefficients for p/q.
+// Returns a vec of i64 coefficients [a0, a1, ..., an].
+// Works for positive and negative p; q must be positive.
+fn cf_from_rational(p: i64, q: i64) -> i64
+  pre q > 0
+= {
+    let v = vec_new();
+    let mut np = p;
+    let mut nq = q;
+    let mut done = false;
+    while not done {
+        // floor division: in BMB integer division truncates toward zero
+        // For correct floor div when np may be negative:
+        let quot = np / nq;
+        // Adjust: if remainder is negative, subtract 1 from quotient
+        let rem = np - quot * nq;
+        let floor_q = if rem < 0 { quot - 1 } else { quot };
+        let floor_r = np - floor_q * nq;
+        let _pp = vec_push(v, floor_q);
+        np = nq;
+        nq = floor_r;
+        if nq == 0 { done = true; 0 } else { 0 }
+    };
+    v
+};
+
+// Convert continued fraction vec back to rational [p, q] (reduced).
+// Evaluates from the last coefficient back to the first.
+fn cf_to_rational(cf_vec: i64) -> i64
+  pre cf_vec != 0
+= {
+    let n = vec_len(cf_vec);
+    if n == 0 {
+        let v = vec_new();
+        let _p1 = vec_push(v, 0);
+        let _p2 = vec_push(v, 1);
+        v
+    } else {
+        // Start from the last coefficient
+        let mut num = vec_get(cf_vec, n - 1);
+        let mut den = 1;
+        let mut i = n - 2;
+        let mut done = if n < 2 { true } else { false };
+        while not done {
+            // num/den -> a_i + den/num = (a_i * num + den) / num
+            let new_num = vec_get(cf_vec, i) * num + den;
+            let new_den = num;
+            num = new_num;
+            den = new_den;
+            if i == 0 { done = true; 0 } else { i = i - 1; 0 }
+        };
+        // Normalize
+        let g = cf_gcd(cf_abs(num), cf_abs(den));
+        let result = vec_new();
+        if g == 0 {
+            let _pp1 = vec_push(result, num);
+            let _pp2 = vec_push(result, den);
+            result
+        } else {
+            let _pp1 = vec_push(result, num / g);
+            let _pp2 = vec_push(result, den / g);
+            result
+        }
+    }
+};
+
+// Compute the nth convergent of the continued fraction.
+// Convergent 0 = a0/1, convergent 1 = (a1*a0+1)/a1, etc.
+// Uses the recurrence: h_n = a_n * h_{n-1} + h_{n-2}, k_n = a_n * k_{n-1} + k_{n-2}
+// Returns vec [p, q].
+fn cf_convergent(cf_vec: i64, n: i64) -> i64
+  pre cf_vec != 0 and n >= 0
+= {
+    let len = vec_len(cf_vec);
+    let result = vec_new();
+    if len == 0 {
+        let _pp1 = vec_push(result, 0);
+        let _pp2 = vec_push(result, 1);
+        result
+    } else {
+        let limit = if n >= len { len - 1 } else { n };
+        // h_{-1} = 1, h_0 = a_0
+        // k_{-1} = 0, k_0 = 1
+        let mut h_prev = 1;
+        let mut h_curr = vec_get(cf_vec, 0);
+        let mut k_prev = 0;
+        let mut k_curr = 1;
+        let mut i = 1;
+        let mut done = if limit < 1 { true } else { false };
+        while not done {
+            let a = vec_get(cf_vec, i);
+            let h_next = a * h_curr + h_prev;
+            let k_next = a * k_curr + k_prev;
+            h_prev = h_curr;
+            h_curr = h_next;
+            k_prev = k_curr;
+            k_curr = k_next;
+            if i >= limit { done = true; 0 } else { i = i + 1; 0 }
+        };
+        let g = cf_gcd(cf_abs(h_curr), cf_abs(k_curr));
+        if g == 0 {
+            let _pp1 = vec_push(result, h_curr);
+            let _pp2 = vec_push(result, k_curr);
+            result
+        } else {
+            let _pp1 = vec_push(result, h_curr / g);
+            let _pp2 = vec_push(result, k_curr / g);
+            result
+        }
+    }
+};
+
+// Return the number of CF coefficients
+fn cf_length(cf_vec: i64) -> i64
+  pre cf_vec != 0
+  post ret >= 0
+= vec_len(cf_vec);
+
+// Free the CF vec
+fn cf_free(cf_vec: i64) -> i64
+  pre cf_vec != 0
+= { let _f = vec_free(cf_vec); 0 };
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// 1/1 -> [1]
+fn test_cf_one() -> i64 = {
+    let cf = cf_from_rational(1, 1);
+    let ok = cf_length(cf) == 1 and vec_get(cf, 0) == 1;
+    let _f = cf_free(cf);
+    if ok { 1 } else { 0 }
+};
+
+// 3/1 -> [3]
+fn test_cf_integer() -> i64 = {
+    let cf = cf_from_rational(3, 1);
+    let ok = cf_length(cf) == 1 and vec_get(cf, 0) == 3;
+    let _f = cf_free(cf);
+    if ok { 1 } else { 0 }
+};
+
+// 7/3 -> [2; 3] because 7 = 2*3 + 1, then 3/1 = 3
+fn test_cf_7_3() -> i64 = {
+    let cf = cf_from_rational(7, 3);
+    let ok = cf_length(cf) == 2 and vec_get(cf, 0) == 2 and vec_get(cf, 1) == 3;
+    let _f = cf_free(cf);
+    if ok { 1 } else { 0 }
+};
+
+// 22/7 -> [3; 7] (pi approximation)
+fn test_cf_22_7() -> i64 = {
+    let cf = cf_from_rational(22, 7);
+    let ok = cf_length(cf) == 2 and vec_get(cf, 0) == 3 and vec_get(cf, 1) == 7;
+    let _f = cf_free(cf);
+    if ok { 1 } else { 0 }
+};
+
+// cf_to_rational([3; 7]) -> 22/7
+fn test_to_rational_22_7() -> i64 = {
+    let cf = cf_from_rational(22, 7);
+    let r = cf_to_rational(cf);
+    let ok = vec_get(r, 0) == 22 and vec_get(r, 1) == 7;
+    let _f1 = cf_free(cf);
+    let _f2 = vec_free(r);
+    if ok { 1 } else { 0 }
+};
+
+// round-trip: from_rational then to_rational
+fn test_roundtrip() -> i64 = {
+    // 355/113 (another pi approximation)
+    let cf = cf_from_rational(355, 113);
+    let r = cf_to_rational(cf);
+    let ok = vec_get(r, 0) == 355 and vec_get(r, 1) == 113;
+    let _f1 = cf_free(cf);
+    let _f2 = vec_free(r);
+    if ok { 1 } else { 0 }
+};
+
+// cf_length: [2; 3] has length 2
+fn test_length() -> i64 = {
+    let cf = cf_from_rational(7, 3);
+    let l = cf_length(cf);
+    let _f = cf_free(cf);
+    if l == 2 { 1 } else { 0 }
+};
+
+// cf_convergent for 22/7: convergent 0 = 3/1, convergent 1 = 22/7
+fn test_convergent() -> i64 = {
+    let cf = cf_from_rational(22, 7);
+    let c0 = cf_convergent(cf, 0);
+    let c1 = cf_convergent(cf, 1);
+    let ok0 = vec_get(c0, 0) == 3 and vec_get(c0, 1) == 1;
+    let ok1 = vec_get(c1, 0) == 22 and vec_get(c1, 1) == 7;
+    let _f = cf_free(cf);
+    let _f0 = vec_free(c0);
+    let _f1 = vec_free(c1);
+    if ok0 and ok1 { 1 } else { 0 }
+};
+
+// 5/3 -> [1; 1, 2]: 5 = 1*3+2, 3 = 1*2+1, 2 = 2*1+0
+fn test_cf_5_3() -> i64 = {
+    let cf = cf_from_rational(5, 3);
+    let ok = cf_length(cf) == 3
+        and vec_get(cf, 0) == 1
+        and vec_get(cf, 1) == 1
+        and vec_get(cf, 2) == 2;
+    let _f = cf_free(cf);
+    if ok { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("cf_one", test_cf_one());
+    let t2 = report("cf_integer", test_cf_integer());
+    let t3 = report("cf_7_3", test_cf_7_3());
+    let t4 = report("cf_22_7", test_cf_22_7());
+    let t5 = report("to_rational_22_7", test_to_rational_22_7());
+    let t6 = report("roundtrip", test_roundtrip());
+    let t7 = report("length", test_length());
+    let t8 = report("convergent", test_convergent());
+    let t9 = report("cf_5_3", test_cf_5_3());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+    let total = 9;
+    let _p1 = print_str("bmb-fraction: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

@@ -1,0 +1,372 @@
+// bmb-counter: Frequency counter using integer hash map
+// v0.1.0
+//
+// Counts occurrences of i64 keys using open-addressing hash map.
+// Memory layout (counter header, 32 bytes):
+//   [entries_ptr(8), count(8), capacity(8), total(8)]
+// Each entry (24 bytes): [key(8), value(8), state(8)]
+//   state: 0=empty, 1=occupied, 2=deleted
+//
+// counter_new()             -> i64  create a new counter
+// counter_add(c, key)       -> i64  increment key count by 1
+// counter_add_n(c, key, n)  -> i64  increment key count by n
+// counter_get(c, key)       -> i64  get count for key (0 if not present)
+// counter_most_common(c)    -> i64  key with highest count (-1 if empty)
+// counter_total(c)          -> i64  sum of all counts
+// counter_free(c)           -> i64  release memory
+
+fn COUNTER_EMPTY() -> i64 = 0;
+fn COUNTER_OCCUPIED() -> i64 = 1;
+fn COUNTER_DELETED() -> i64 = 2;
+fn COUNTER_DEFAULT_CAP() -> i64 = 64;
+
+// Header field offsets
+fn cnt_off_entries() -> i64 = 0;
+fn cnt_off_count()   -> i64 = 8;
+fn cnt_off_cap()     -> i64 = 16;
+fn cnt_off_total()   -> i64 = 24;
+
+// Entry field offsets (each entry = 24 bytes)
+fn cnt_entry_size() -> i64 = 24;
+fn cnt_entry_key()  -> i64 = 0;
+fn cnt_entry_val()  -> i64 = 8;
+fn cnt_entry_state() -> i64 = 16;
+
+fn cnt_entry_addr(entries: i64, idx: i64) -> i64 =
+    entries + idx * cnt_entry_size();
+
+fn cnt_hash(key: i64, cap: i64) -> i64 = {
+    let h = key * 5871781006564002453;
+    let h2 = h bxor (h >> 32);
+    let mask = cap - 1;
+    h2 band mask
+};
+
+// Internal: initialize entries array to empty
+fn cnt_init_entries(entries: i64, cap: i64) -> i64 = {
+    let mut i = 0;
+    while i < cap {
+        let e = cnt_entry_addr(entries, i);
+        let _s = store_i64(e + cnt_entry_state(), COUNTER_EMPTY());
+        i = i + 1;
+        0
+    };
+    0
+};
+
+// Internal: insert/add n to key in an entries array (no resize check)
+fn cnt_raw_add(entries: i64, cap: i64, key: i64, n: i64) -> i64 = {
+    let mask = cap - 1;
+    let mut idx = cnt_hash(key, cap);
+    let mut i = 0;
+    let mut done = false;
+    while i < cap {
+        if not done {
+            let e = cnt_entry_addr(entries, idx);
+            let state = load_i64(e + cnt_entry_state());
+            if state == COUNTER_EMPTY() or state == COUNTER_DELETED() {
+                // Insert new
+                let _s1 = store_i64(e + cnt_entry_key(), key);
+                let _s2 = store_i64(e + cnt_entry_val(), n);
+                let _s3 = store_i64(e + cnt_entry_state(), COUNTER_OCCUPIED());
+                done = true;
+                1
+            } else if load_i64(e + cnt_entry_key()) == key {
+                // Update existing
+                let old = load_i64(e + cnt_entry_val());
+                let _s = store_i64(e + cnt_entry_val(), old + n);
+                done = true;
+                0
+            } else {
+                idx = (idx + 1) band mask;
+                i = i + 1;
+                0
+            }
+        } else {
+            i = cap;
+            0
+        };
+        0
+    };
+    0
+};
+
+fn counter_new() -> i64
+  post ret != 0
+= {
+    let cap = COUNTER_DEFAULT_CAP();
+    let c = malloc(32);
+    let entries = malloc(cap * cnt_entry_size());
+    let _init = cnt_init_entries(entries, cap);
+    let _s1 = store_i64(c + cnt_off_entries(), entries);
+    let _s2 = store_i64(c + cnt_off_count(), 0);
+    let _s3 = store_i64(c + cnt_off_cap(), cap);
+    let _s4 = store_i64(c + cnt_off_total(), 0);
+    c
+};
+
+// Internal: grow counter if load factor exceeded
+fn cnt_maybe_grow(c: i64) -> i64 = {
+    let count = load_i64(c + cnt_off_count());
+    let cap = load_i64(c + cnt_off_cap());
+    if count * 10 >= cap * 7 {
+        let new_cap = cap * 2;
+        let new_entries = malloc(new_cap * cnt_entry_size());
+        let _init = cnt_init_entries(new_entries, new_cap);
+        let old_entries = load_i64(c + cnt_off_entries());
+        // Rehash all occupied entries
+        let mut i = 0;
+        while i < cap {
+            let e = cnt_entry_addr(old_entries, i);
+            let state = load_i64(e + cnt_entry_state());
+            if state == COUNTER_OCCUPIED() {
+                let k = load_i64(e + cnt_entry_key());
+                let v = load_i64(e + cnt_entry_val());
+                let _ins = cnt_raw_add(new_entries, new_cap, k, v);
+                0
+            } else { 0 };
+            i = i + 1;
+            0
+        };
+        let _fe = free(old_entries);
+        let _s1 = store_i64(c + cnt_off_entries(), new_entries);
+        let _s2 = store_i64(c + cnt_off_cap(), new_cap);
+        0
+    } else { 0 }
+};
+
+// Increment key count by n
+fn counter_add_n(c: i64, key: i64, n: i64) -> i64
+  pre c != 0 and n >= 0
+= {
+    let _grow = cnt_maybe_grow(c);
+    let entries = load_i64(c + cnt_off_entries());
+    let cap = load_i64(c + cnt_off_cap());
+    let mask = cap - 1;
+    let mut idx = cnt_hash(key, cap);
+    let mut i = 0;
+    let mut done = false;
+    while i < cap {
+        if not done {
+            let e = cnt_entry_addr(entries, idx);
+            let state = load_i64(e + cnt_entry_state());
+            if state == COUNTER_EMPTY() or state == COUNTER_DELETED() {
+                let _s1 = store_i64(e + cnt_entry_key(), key);
+                let _s2 = store_i64(e + cnt_entry_val(), n);
+                let _s3 = store_i64(e + cnt_entry_state(), COUNTER_OCCUPIED());
+                let cnt_cur = load_i64(c + cnt_off_count());
+                let _sc = store_i64(c + cnt_off_count(), cnt_cur + 1);
+                done = true;
+                0
+            } else if load_i64(e + cnt_entry_key()) == key {
+                let old = load_i64(e + cnt_entry_val());
+                let _sv = store_i64(e + cnt_entry_val(), old + n);
+                done = true;
+                0
+            } else {
+                idx = (idx + 1) band mask;
+                i = i + 1;
+                0
+            }
+        } else {
+            i = cap;
+            0
+        };
+        0
+    };
+    let tot = load_i64(c + cnt_off_total());
+    let _st = store_i64(c + cnt_off_total(), tot + n);
+    0
+};
+
+// Increment key count by 1
+fn counter_add(c: i64, key: i64) -> i64
+  pre c != 0
+= counter_add_n(c, key, 1);
+
+// Get count for a key (0 if not present)
+fn counter_get(c: i64, key: i64) -> i64
+  pre c != 0
+  post ret >= 0
+= {
+    let entries = load_i64(c + cnt_off_entries());
+    let cap = load_i64(c + cnt_off_cap());
+    let mask = cap - 1;
+    let mut idx = cnt_hash(key, cap);
+    let mut i = 0;
+    let mut result = 0;
+    let mut done = false;
+    while i < cap {
+        if not done {
+            let e = cnt_entry_addr(entries, idx);
+            let state = load_i64(e + cnt_entry_state());
+            if state == COUNTER_EMPTY() {
+                done = true;
+                0
+            } else if state == COUNTER_OCCUPIED() and load_i64(e + cnt_entry_key()) == key {
+                result = load_i64(e + cnt_entry_val());
+                done = true;
+                0
+            } else {
+                idx = (idx + 1) band mask;
+                i = i + 1;
+                0
+            }
+        } else {
+            i = cap;
+            0
+        };
+        0
+    };
+    result
+};
+
+// Key with the highest count; returns -1 if counter is empty
+fn counter_most_common(c: i64) -> i64
+  pre c != 0
+= {
+    let entries = load_i64(c + cnt_off_entries());
+    let cap = load_i64(c + cnt_off_cap());
+    let count = load_i64(c + cnt_off_count());
+    if count == 0 { 0 - 1 }
+    else {
+        let mut best_key = 0;
+        let mut best_val = 0 - 1;
+        let mut i = 0;
+        while i < cap {
+            let e = cnt_entry_addr(entries, i);
+            let state = load_i64(e + cnt_entry_state());
+            if state == COUNTER_OCCUPIED() {
+                let v = load_i64(e + cnt_entry_val());
+                if v > best_val {
+                    best_val = v;
+                    best_key = load_i64(e + cnt_entry_key());
+                    0
+                } else { 0 }
+            } else { 0 };
+            i = i + 1;
+            0
+        };
+        best_key
+    }
+};
+
+// Total count across all keys
+fn counter_total(c: i64) -> i64
+  pre c != 0
+  post ret >= 0
+= load_i64(c + cnt_off_total());
+
+// Free the counter
+fn counter_free(c: i64) -> i64
+  pre c != 0
+= {
+    let entries = load_i64(c + cnt_off_entries());
+    let _fe = free(entries);
+    let _fc = free(c);
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic_add() -> i64 = {
+    let c = counter_new();
+    let _a1 = counter_add(c, 10);
+    let _a2 = counter_add(c, 20);
+    let _a3 = counter_add(c, 10);
+    let _a4 = counter_add(c, 10);
+    let v10 = counter_get(c, 10);
+    let v20 = counter_get(c, 20);
+    let v30 = counter_get(c, 30);
+    let _f = counter_free(c);
+    if v10 == 3 and v20 == 1 and v30 == 0 { 1 } else { 0 }
+};
+
+fn test_add_n() -> i64 = {
+    let c = counter_new();
+    let _a1 = counter_add_n(c, 5, 10);
+    let _a2 = counter_add_n(c, 5, 5);
+    let _a3 = counter_add_n(c, 7, 3);
+    let v5 = counter_get(c, 5);
+    let v7 = counter_get(c, 7);
+    let _f = counter_free(c);
+    if v5 == 15 and v7 == 3 { 1 } else { 0 }
+};
+
+fn test_most_common() -> i64 = {
+    let c = counter_new();
+    let _a1 = counter_add(c, 1);
+    let _a2 = counter_add(c, 2);
+    let _a3 = counter_add(c, 2);
+    let _a4 = counter_add(c, 3);
+    let _a5 = counter_add(c, 3);
+    let _a6 = counter_add(c, 3);
+    let mc = counter_most_common(c);
+    let _f = counter_free(c);
+    if mc == 3 { 1 } else { 0 }
+};
+
+fn test_total() -> i64 = {
+    let c = counter_new();
+    let _a1 = counter_add(c, 1);
+    let _a2 = counter_add(c, 2);
+    let _a3 = counter_add(c, 3);
+    let _a4 = counter_add_n(c, 4, 7);
+    let tot = counter_total(c);
+    let _f = counter_free(c);
+    if tot == 10 { 1 } else { 0 }
+};
+
+fn test_empty() -> i64 = {
+    let c = counter_new();
+    let v = counter_get(c, 42);
+    let mc = counter_most_common(c);
+    let tot = counter_total(c);
+    let _f = counter_free(c);
+    if v == 0 and mc == (0 - 1) and tot == 0 { 1 } else { 0 }
+};
+
+fn test_many_keys() -> i64 = {
+    let c = counter_new();
+    let mut i = 0;
+    while i < 30 {
+        let _a = counter_add(c, i);
+        i = i + 1;
+        0
+    };
+    // Add key 15 many more times to make it most common
+    let _a = counter_add_n(c, 15, 100);
+    let mc = counter_most_common(c);
+    let v15 = counter_get(c, 15);
+    let tot = counter_total(c);
+    let _f = counter_free(c);
+    if mc == 15 and v15 == 101 and tot == 130 { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic_add", test_basic_add());
+    let t2 = report("add_n", test_add_n());
+    let t3 = report("most_common", test_most_common());
+    let t4 = report("total", test_total());
+    let t5 = report("empty", test_empty());
+    let t6 = report("many_keys", test_many_keys());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-counter: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

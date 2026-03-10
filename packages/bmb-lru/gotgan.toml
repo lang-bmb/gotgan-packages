@@ -1,0 +1,9 @@
+[package]
+name = "bmb-lru"
+version = "0.1.0"
+description = "LRU (Least Recently Used) cache using doubly-linked list and hash map"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

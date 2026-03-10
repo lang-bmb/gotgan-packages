@@ -1,0 +1,236 @@
+// bmb-disjoint-set: Union-Find (Disjoint Set Union)
+// v0.1.0
+//
+// Supports n elements (0-indexed). Uses path compression and union by rank.
+//
+// Memory layout:
+//   Header (24 bytes): [n, count, _pad]
+//     n     = total number of elements
+//     count = number of disjoint components
+//   parent array: n * 8 bytes  (parent[i] = parent of element i)
+//   rank array:   n * 8 bytes  (rank[i] = upper bound on tree height)
+//
+// Total: 24 + 2*n*8 bytes
+
+// ============================================================================
+// Internal accessors
+// ============================================================================
+
+fn uf_n(uf: i64) -> i64 = load_i64(uf);
+fn uf_set_n(uf: i64, v: i64) -> i64 = store_i64(uf, v);
+fn uf_count_raw(uf: i64) -> i64 = load_i64(uf + 8);
+fn uf_set_count(uf: i64, v: i64) -> i64 = store_i64(uf + 8, v);
+
+fn uf_parent_base(uf: i64) -> i64 = uf + 24;
+fn uf_rank_base(uf: i64) -> i64 = uf + 24 + uf_n(uf) * 8;
+
+fn uf_parent(uf: i64, x: i64) -> i64 = load_i64(uf_parent_base(uf) + x * 8);
+fn uf_set_parent(uf: i64, x: i64, p: i64) -> i64 = store_i64(uf_parent_base(uf) + x * 8, p);
+
+fn uf_rank(uf: i64, x: i64) -> i64 = load_i64(uf_rank_base(uf) + x * 8);
+fn uf_set_rank(uf: i64, x: i64, r: i64) -> i64 = store_i64(uf_rank_base(uf) + x * 8, r);
+
+// ============================================================================
+// Constructor / Destructor
+// ============================================================================
+
+fn uf_new(n: i64) -> i64
+  pre n > 0
+  post ret != 0
+= {
+    let total = 24 + 2 * n * 8;
+    let uf = malloc(total);
+    let _sn = uf_set_n(uf, n);
+    let _sc = uf_set_count(uf, n);
+    // Initialize: each element is its own parent, rank=0
+    let mut i = 0;
+    while i < n {
+        let _sp = uf_set_parent(uf, i, i);
+        let _sr = uf_set_rank(uf, i, 0);
+        i = i + 1;
+        0
+    };
+    uf
+};
+
+fn uf_free(uf: i64) -> i64
+  pre uf != 0
+= { let _f = free(uf); 0 };
+
+// ============================================================================
+// Find with path compression (iterative)
+// ============================================================================
+
+fn uf_find(uf: i64, x: i64) -> i64
+  pre uf != 0 and x >= 0 and x < uf_n(uf)
+  post ret >= 0 and ret < uf_n(uf)
+= {
+    // Find root
+    let mut root = x;
+    let mut done = false;
+    while not done {
+        let p = uf_parent(uf, root);
+        if p == root { done = true; 0 }
+        else { root = p; 0 };
+        0
+    };
+    // Path compression: make every node on path point directly to root
+    let mut cur = x;
+    let mut done2 = false;
+    while not done2 {
+        let p = uf_parent(uf, cur);
+        if p == root { done2 = true; 0 }
+        else {
+            let _sp = uf_set_parent(uf, cur, root);
+            cur = p;
+            0
+        };
+        0
+    };
+    root
+};
+
+// ============================================================================
+// Union by rank
+// ============================================================================
+
+fn uf_union(uf: i64, x: i64, y: i64) -> i64
+  pre uf != 0 and x >= 0 and x < uf_n(uf) and y >= 0 and y < uf_n(uf)
+= {
+    let rx = uf_find(uf, x);
+    let ry = uf_find(uf, y);
+    if rx == ry { 0 }
+    else {
+        let rankx = uf_rank(uf, rx);
+        let ranky = uf_rank(uf, ry);
+        if rankx < ranky {
+            let _sp = uf_set_parent(uf, rx, ry);
+            0
+        } else if rankx > ranky {
+            let _sp = uf_set_parent(uf, ry, rx);
+            0
+        } else {
+            // Equal rank: attach ry under rx, increment rx's rank
+            let _sp = uf_set_parent(uf, ry, rx);
+            let _sr = uf_set_rank(uf, rx, rankx + 1);
+            0
+        };
+        let _sc = uf_set_count(uf, uf_count_raw(uf) - 1);
+        1
+    }
+};
+
+// ============================================================================
+// Query
+// ============================================================================
+
+fn uf_connected(uf: i64, x: i64, y: i64) -> bool
+  pre uf != 0 and x >= 0 and x < uf_n(uf) and y >= 0 and y < uf_n(uf)
+= uf_find(uf, x) == uf_find(uf, y);
+
+fn uf_count(uf: i64) -> i64
+  pre uf != 0
+  post ret >= 1
+= uf_count_raw(uf);
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_basic() -> i64 = {
+    let uf = uf_new(5);
+    // Initially 5 components
+    if uf_count(uf) != 5 { let _f = uf_free(uf); 0 }
+    else {
+        let _u1 = uf_union(uf, 0, 1);
+        let _u2 = uf_union(uf, 2, 3);
+        if uf_count(uf) != 3 { let _f = uf_free(uf); 0 }
+        else if b2i(uf_connected(uf, 0, 1)) != 1 { let _f = uf_free(uf); 0 }
+        else if b2i(uf_connected(uf, 2, 3)) != 1 { let _f = uf_free(uf); 0 }
+        else if b2i(uf_connected(uf, 0, 2)) != 0 { let _f = uf_free(uf); 0 }
+        else { let _f = uf_free(uf); 1 }
+    }
+};
+
+fn test_path_compression() -> i64 = {
+    // Build a chain 0->1->2->3->4 then find root of 0
+    let uf = uf_new(5);
+    let _u1 = uf_union(uf, 0, 1);
+    let _u2 = uf_union(uf, 1, 2);
+    let _u3 = uf_union(uf, 2, 3);
+    let _u4 = uf_union(uf, 3, 4);
+    if uf_count(uf) != 1 { let _f = uf_free(uf); 0 }
+    else if b2i(uf_connected(uf, 0, 4)) != 1 { let _f = uf_free(uf); 0 }
+    else { let _f = uf_free(uf); 1 }
+};
+
+fn test_union_by_rank() -> i64 = {
+    let uf = uf_new(6);
+    let _u1 = uf_union(uf, 0, 1);
+    let _u2 = uf_union(uf, 2, 3);
+    let _u3 = uf_union(uf, 4, 5);
+    let _u4 = uf_union(uf, 0, 2);
+    let _u5 = uf_union(uf, 4, 0);
+    // All connected
+    if b2i(uf_connected(uf, 0, 5)) != 1 { let _f = uf_free(uf); 0 }
+    else if uf_count(uf) != 1 { let _f = uf_free(uf); 0 }
+    else { let _f = uf_free(uf); 1 }
+};
+
+fn test_self_union() -> i64 = {
+    let uf = uf_new(3);
+    let _u = uf_union(uf, 1, 1);
+    // Count unchanged
+    if uf_count(uf) != 3 { let _f = uf_free(uf); 0 }
+    else { let _f = uf_free(uf); 1 }
+};
+
+fn test_disconnected() -> i64 = {
+    let uf = uf_new(4);
+    let _u = uf_union(uf, 0, 1);
+    if b2i(uf_connected(uf, 0, 2)) != 0 { let _f = uf_free(uf); 0 }
+    else if b2i(uf_connected(uf, 2, 3)) != 0 { let _f = uf_free(uf); 0 }
+    else if uf_count(uf) != 3 { let _f = uf_free(uf); 0 }
+    else { let _f = uf_free(uf); 1 }
+};
+
+fn test_large() -> i64 = {
+    let uf = uf_new(10);
+    let mut i = 0;
+    while i < 9 {
+        let _u = uf_union(uf, i, i + 1);
+        i = i + 1;
+        0
+    };
+    if uf_count(uf) != 1 { let _f = uf_free(uf); 0 }
+    else if b2i(uf_connected(uf, 0, 9)) != 1 { let _f = uf_free(uf); 0 }
+    else { let _f = uf_free(uf); 1 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("path_compression", test_path_compression());
+    let t3 = report("union_by_rank", test_union_by_rank());
+    let t4 = report("self_union", test_self_union());
+    let t5 = report("disconnected", test_disconnected());
+    let t6 = report("large", test_large());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-disjoint-set: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

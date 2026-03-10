@@ -1,0 +1,9 @@
+[package]
+name = "bmb-schedule"
+version = "0.1.0"
+description = "Simple job scheduler simulation using a max-priority heap"
+authors = ["BMB Team"]
+license = "MIT"
+repository = "https://github.com/lang-bmb/gotgan-packages"
+
+[dependencies]

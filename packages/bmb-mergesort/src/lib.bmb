@@ -1,0 +1,292 @@
+// bmb-mergesort: Merge sort for arrays of i64
+// v0.1.0
+//
+// Stable, O(n log n) sort using typed pointers (*i64).
+// Supports negative values. Uses temporary buffer for merging.
+//
+// Usage:
+//   let arr = malloc(100 * 8) as *i64;
+//   // ... fill array ...
+//   let _s = merge_sort(arr, 100);
+
+// ============================================================================
+// Utility
+// ============================================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+// ============================================================================
+// Merge Sort
+// ============================================================================
+
+// Main entry point: sort arr[0..n) in ascending order.
+fn merge_sort(arr: *i64, n: i64) -> i64
+  pre n >= 0
+= if n <= 1 { 0 } else { merge_sort_rec(arr, 0, n - 1) };
+
+// Recursively sort arr[lo..hi] (inclusive bounds).
+fn merge_sort_rec(arr: *i64, lo: i64, hi: i64) -> i64 =
+    if lo < hi {
+        let mid = lo + (hi - lo) / 2;
+        let _left = merge_sort_rec(arr, lo, mid);
+        let _right = merge_sort_rec(arr, mid + 1, hi);
+        merge(arr, lo, mid, hi)
+    } else { 0 };
+
+// Merge two sorted halves arr[lo..mid] and arr[mid+1..hi] into arr[lo..hi].
+fn merge(arr: *i64, lo: i64, mid: i64, hi: i64) -> i64 = {
+    let n1 = mid - lo + 1;
+    let n2 = hi - mid;
+    let left = malloc(n1 * 8) as *i64;
+    let right = malloc(n2 * 8) as *i64;
+
+    // Copy left half
+    let mut ci = 0;
+    while ci < n1 {
+        set left[ci] = arr[lo + ci];
+        { ci = ci + 1; 0 }
+    };
+    // Copy right half
+    { ci = 0; 0 };
+    while ci < n2 {
+        set right[ci] = arr[mid + 1 + ci];
+        { ci = ci + 1; 0 }
+    };
+
+    // Merge back
+    let mut i = 0;
+    let mut j = 0;
+    let mut k = lo;
+    while i < n1 and j < n2 {
+        let _s = if left[i] <= right[j] {
+            { set arr[k] = left[i]; i = i + 1; 0 }
+        } else {
+            { set arr[k] = right[j]; j = j + 1; 0 }
+        };
+        { k = k + 1; 0 }
+    };
+
+    // Copy remaining left
+    while i < n1 {
+        set arr[k] = left[i];
+        { i = i + 1; k = k + 1; 0 }
+    };
+    // Copy remaining right
+    while j < n2 {
+        set arr[k] = right[j];
+        { j = j + 1; k = k + 1; 0 }
+    };
+
+    let _f1 = free(left as i64);
+    let _f2 = free(right as i64);
+    0
+};
+
+// ============================================================================
+// Bottom-up (iterative) merge sort variant
+// ============================================================================
+
+// Iterative merge sort: avoids recursion overhead.
+// Merges subarrays of size 1, 2, 4, 8, ... until the whole array is sorted.
+fn merge_sort_iterative(arr: *i64, n: i64) -> i64
+  pre n >= 0
+= {
+    let _r = if n <= 1 { 0 } else {
+        {
+            let mut width = 1;
+            while width < n {
+                let mut lo = 0;
+                while lo < n - width {
+                    let mid = lo + width - 1;
+                    let hi_candidate = lo + 2 * width - 1;
+                    let hi = if hi_candidate < n - 1 { hi_candidate } else { n - 1 };
+                    let _m = merge(arr, lo, mid, hi);
+                    { lo = lo + 2 * width; 0 }
+                };
+                { width = width * 2; 0 }
+            };
+            0
+        }
+    };
+    0
+};
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn is_sorted(arr: *i64, n: i64) -> bool = {
+    let mut i = 0;
+    let mut sorted = true;
+    let mut done = false;
+    while not done {
+        let _r = if i >= n - 1 {
+            { done = true; 0 }
+        } else if arr[i] > arr[i + 1] {
+            { sorted = false; done = true; 0 }
+        } else {
+            { i = i + 1; 0 }
+        };
+        0
+    };
+    sorted
+};
+
+fn fill_reverse(arr: *i64, n: i64) -> i64 = {
+    let mut i = 0;
+    while i < n {
+        set arr[i] = n - i;
+        { i = i + 1; 0 }
+    };
+    0
+};
+
+fn test_basic() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 50;
+    set arr[1] = 20;
+    set arr[2] = 40;
+    set arr[3] = 10;
+    set arr[4] = 30;
+    let _s = merge_sort(arr, 5);
+    let ok = arr[0] == 10 and arr[1] == 20 and arr[2] == 30
+             and arr[3] == 40 and arr[4] == 50;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_reverse() -> i64 = {
+    let arr = malloc(10 * 8) as *i64;
+    let _fill = fill_reverse(arr, 10);
+    let _s = merge_sort(arr, 10);
+    let sorted = is_sorted(arr, 10);
+    let _f = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
+
+fn test_already_sorted() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 1;
+    set arr[1] = 2;
+    set arr[2] = 3;
+    set arr[3] = 4;
+    set arr[4] = 5;
+    let _s = merge_sort(arr, 5);
+    let ok = arr[0] == 1 and arr[1] == 2 and arr[2] == 3
+             and arr[3] == 4 and arr[4] == 5;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_single() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    set arr[0] = 42;
+    let _s = merge_sort(arr, 1);
+    let ok = arr[0] == 42;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_empty() -> i64 = {
+    let arr = malloc(1 * 8) as *i64;
+    let _s = merge_sort(arr, 0);
+    let _f = free(arr as i64);
+    1
+};
+
+fn test_duplicates() -> i64 = {
+    let arr = malloc(6 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 1;
+    set arr[2] = 3;
+    set arr[3] = 1;
+    set arr[4] = 2;
+    set arr[5] = 2;
+    let _s = merge_sort(arr, 6);
+    let ok = arr[0] == 1 and arr[1] == 1 and arr[2] == 2
+             and arr[3] == 2 and arr[4] == 3 and arr[5] == 3;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_negatives() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 3;
+    set arr[1] = 0 - 1;
+    set arr[2] = 4;
+    set arr[3] = 0 - 5;
+    set arr[4] = 2;
+    let _s = merge_sort(arr, 5);
+    let ok = arr[0] == (0 - 5) and arr[1] == (0 - 1) and arr[2] == 2
+             and arr[3] == 3 and arr[4] == 4;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_iterative_basic() -> i64 = {
+    let arr = malloc(5 * 8) as *i64;
+    set arr[0] = 50;
+    set arr[1] = 20;
+    set arr[2] = 40;
+    set arr[3] = 10;
+    set arr[4] = 30;
+    let _s = merge_sort_iterative(arr, 5);
+    let ok = arr[0] == 10 and arr[1] == 20 and arr[2] == 30
+             and arr[3] == 40 and arr[4] == 50;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn test_iterative_reverse() -> i64 = {
+    let arr = malloc(10 * 8) as *i64;
+    let _fill = fill_reverse(arr, 10);
+    let _s = merge_sort_iterative(arr, 10);
+    let sorted = is_sorted(arr, 10);
+    let _f = free(arr as i64);
+    if sorted { 1 } else { 0 }
+};
+
+fn test_stability() -> i64 = {
+    // Merge sort is stable: equal elements preserve original order.
+    // We can verify by sorting values that are equal and checking
+    // the result is still in order.
+    let arr = malloc(4 * 8) as *i64;
+    set arr[0] = 5;
+    set arr[1] = 5;
+    set arr[2] = 5;
+    set arr[3] = 5;
+    let _s = merge_sort(arr, 4);
+    let ok = arr[0] == 5 and arr[1] == 5 and arr[2] == 5 and arr[3] == 5;
+    let _f = free(arr as i64);
+    if ok { 1 } else { 0 }
+};
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn main() -> i64 = {
+    let t1 = report("basic", test_basic());
+    let t2 = report("reverse", test_reverse());
+    let t3 = report("already_sorted", test_already_sorted());
+    let t4 = report("single", test_single());
+    let t5 = report("empty", test_empty());
+    let t6 = report("duplicates", test_duplicates());
+    let t7 = report("negatives", test_negatives());
+    let t8 = report("iterative_basic", test_iterative_basic());
+    let t9 = report("iterative_reverse", test_iterative_reverse());
+    let t10 = report("stability", test_stability());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10;
+    let total = 10;
+    let _p1 = print_str("bmb-mergesort: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

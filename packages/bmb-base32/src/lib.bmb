@@ -1,0 +1,437 @@
+// bmb-base32: RFC 4648 Base32 encoding and decoding
+// v0.1.0
+//
+// Standard Base32 alphabet: A-Z (0-25) and 2-7 (26-31).
+// Padding character: '=' (ASCII 61).
+//
+// Data vecs store one byte value (0-255) per i64 element.
+// base32_encode(data_vec, len) -> new vec of ASCII char codes (encoded)
+// base32_decode(encoded_vec)   -> new vec of decoded byte values
+//
+// The caller is responsible for freeing the returned vecs.
+
+// ============================================================
+// Alphabet helpers
+// ============================================================
+
+// Map a 5-bit value (0-31) to its Base32 ASCII character code.
+fn b32_encode_char(val: i64) -> i64
+  pre val >= 0 and val <= 31
+= if val < 26 { val + 65 }    // A-Z: ASCII 65-90
+  else { val - 26 + 50 };      // 2-7: ASCII 50-55
+
+// Map a Base32 ASCII character to its 5-bit value. Returns -1 for invalid/pad.
+fn b32_decode_char(c: i64) -> i64
+  post ret >= -1 and ret <= 31
+= if c >= 65 and c <= 90 { c - 65 }           // A-Z -> 0-25
+  else if c >= 97 and c <= 122 { c - 97 }     // a-z -> 0-25 (case-insensitive)
+  else if c >= 50 and c <= 55 { c - 50 + 26 } // 2-7 -> 26-31
+  else { 0 - 1 };                              // invalid or '='
+
+fn B32_PAD() -> i64 = 61;  // '='
+
+// ============================================================
+// Encode: data vec -> Base32 char-code vec
+// ============================================================
+
+// Encode len bytes from data_vec into a new vec of Base32 ASCII codes.
+// Output length is always a multiple of 8 (padded with '=').
+fn base32_encode(data_vec: i64, len: i64) -> i64
+  pre data_vec != 0 and len >= 0
+= {
+    let out = vec_new();
+    if len == 0 {
+        out
+    } else {
+        // Process in groups of 5 input bytes -> 8 output chars
+        let mut i = 0;
+        while i < len {
+            let remaining = len - i;
+            // Load up to 5 bytes (zero-pad if fewer)
+            let b0 = vec_get(data_vec, i);
+            let b1 = if remaining >= 2 { vec_get(data_vec, i + 1) } else { 0 };
+            let b2 = if remaining >= 3 { vec_get(data_vec, i + 2) } else { 0 };
+            let b3 = if remaining >= 4 { vec_get(data_vec, i + 3) } else { 0 };
+            let b4 = if remaining >= 5 { vec_get(data_vec, i + 4) } else { 0 };
+
+            // 5 bytes = 40 bits -> split into 8 groups of 5 bits
+            // c0: top 5 bits of b0
+            let c0 = (b0 >> 3) band 31;
+            // c1: low 3 bits of b0 + top 2 bits of b1
+            let c1 = ((b0 band 7) << 2) bor ((b1 >> 6) band 3);
+            // c2: bits 5-1 of b1 (bits 5..1)
+            let c2 = (b1 >> 1) band 31;
+            // c3: low 1 bit of b1 + top 4 bits of b2
+            let c3 = ((b1 band 1) << 4) bor ((b2 >> 4) band 15);
+            // c4: low 4 bits of b2 + top 1 bit of b3
+            let c4 = ((b2 band 15) << 1) bor ((b3 >> 7) band 1);
+            // c5: bits 6-2 of b3
+            let c5 = (b3 >> 2) band 31;
+            // c6: low 2 bits of b3 + top 3 bits of b4
+            let c6 = ((b3 band 3) << 3) bor ((b4 >> 5) band 7);
+            // c7: low 5 bits of b4
+            let c7 = b4 band 31;
+
+            let _p0 = vec_push(out, b32_encode_char(c0));
+            let _p1 = vec_push(out, b32_encode_char(c1));
+
+            let _p2 = if remaining >= 2 { vec_push(out, b32_encode_char(c2)) }
+                      else { vec_push(out, B32_PAD()) };
+            let _p3 = if remaining >= 2 { vec_push(out, b32_encode_char(c3)) }
+                      else { vec_push(out, B32_PAD()) };
+
+            let _p4 = if remaining >= 4 { vec_push(out, b32_encode_char(c4)) }
+                      else if remaining >= 3 { vec_push(out, b32_encode_char(c4)) }
+                      else { vec_push(out, B32_PAD()) };
+
+            let _p5 = if remaining >= 4 { vec_push(out, b32_encode_char(c5)) }
+                      else { vec_push(out, B32_PAD()) };
+
+            let _p6 = if remaining >= 5 { vec_push(out, b32_encode_char(c6)) }
+                      else { vec_push(out, B32_PAD()) };
+
+            let _p7 = if remaining >= 5 { vec_push(out, b32_encode_char(c7)) }
+                      else { vec_push(out, B32_PAD()) };
+
+            i = i + 5;
+            0
+        };
+        out
+    }
+};
+
+// ============================================================
+// Decode: Base32 char-code vec -> data vec
+// ============================================================
+
+// Decode a Base32-encoded vec (ASCII char codes, with optional '=' padding).
+// Returns a new vec of decoded byte values.
+// Returns an empty vec on invalid input.
+fn base32_decode(encoded_vec: i64) -> i64
+  pre encoded_vec != 0
+= {
+    let out = vec_new();
+    let enc_len = vec_len(encoded_vec);
+    if enc_len == 0 {
+        out
+    } else {
+        let mut i = 0;
+        let mut ok = true;
+        while i < enc_len {
+            // Read up to 8 characters (one group)
+            let remaining_chars = enc_len - i;
+            if remaining_chars < 8 {
+                // Partial group without padding is invalid for standard Base32
+                ok = false;
+                i = enc_len;
+                0
+            } else {
+                let r0 = vec_get(encoded_vec, i);
+                let r1 = vec_get(encoded_vec, i + 1);
+                let r2 = vec_get(encoded_vec, i + 2);
+                let r3 = vec_get(encoded_vec, i + 3);
+                let r4 = vec_get(encoded_vec, i + 4);
+                let r5 = vec_get(encoded_vec, i + 5);
+                let r6 = vec_get(encoded_vec, i + 6);
+                let r7 = vec_get(encoded_vec, i + 7);
+
+                let v0 = b32_decode_char(r0);
+                let v1 = b32_decode_char(r1);
+
+                if v0 < 0 or v1 < 0 {
+                    ok = false;
+                    i = enc_len;
+                    0
+                } else {
+                    // byte 0: top 5 bits from v0 + top 3 bits from v1
+                    let byte0 = ((v0 << 3) bor ((v1 >> 2) band 7)) band 255;
+                    let _pb0 = vec_push(out, byte0);
+
+                    let _r2 = if r2 != B32_PAD() {
+                        let v2 = b32_decode_char(r2);
+                        let v3 = b32_decode_char(r3);
+                        if v2 < 0 or r3 == B32_PAD() {
+                            // valid: 2-char group is not standard; skip
+                            0
+                        } else {
+                            // byte 1: low 2 bits of v1 + top 5 bits of v2 + top 1 bit of v3
+                            let byte1 = (((v1 band 3) << 6) bor (v2 << 1) bor ((v3 >> 4) band 1)) band 255;
+                            let _pb1 = vec_push(out, byte1);
+                            if r4 != B32_PAD() {
+                                let v4 = b32_decode_char(r4);
+                                if v4 >= 0 {
+                                    // byte 2: low 4 bits of v3 + top 4 bits of v4
+                                    let byte2 = (((v3 band 15) << 4) bor ((v4 >> 1) band 15)) band 255;
+                                    let _pb2 = vec_push(out, byte2);
+                                    if r5 != B32_PAD() {
+                                        let v5 = b32_decode_char(r5);
+                                        let v6 = b32_decode_char(r6);
+                                        if v5 >= 0 and r6 != B32_PAD() {
+                                            // byte 3: low 1 bit of v4 + all 5 bits of v5 + top 2 bits of v6
+                                            let byte3 = (((v4 band 1) << 7) bor (v5 << 2) bor ((v6 >> 3) band 3)) band 255;
+                                            let _pb3 = vec_push(out, byte3);
+                                            if r7 != B32_PAD() {
+                                                let v7 = b32_decode_char(r7);
+                                                if v7 >= 0 {
+                                                    // byte 4: low 3 bits of v6 + all 5 bits of v7
+                                                    let byte4 = (((v6 band 7) << 5) bor v7) band 255;
+                                                    let _pb4 = vec_push(out, byte4);
+                                                    0
+                                                } else { 0 }
+                                            } else { 0 }
+                                        } else { 0 }
+                                    } else { 0 }
+                                } else { 0 }
+                            } else { 0 }
+                        }
+                    } else { 0 };
+
+                    i = i + 8;
+                    0
+                }
+            }
+        };
+        if not ok {
+            let _f = vec_free(out);
+            vec_new()
+        } else { out }
+    }
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+// Build a vec from individual byte values
+fn make_vec1(a: i64) -> i64 = {
+    let v = vec_new();
+    let _p = vec_push(v, a);
+    v
+};
+
+fn make_vec2(a: i64, b: i64) -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, a);
+    let _p2 = vec_push(v, b);
+    v
+};
+
+fn make_vec5(a: i64, b: i64, c: i64, d: i64, e: i64) -> i64 = {
+    let v = vec_new();
+    let _p1 = vec_push(v, a);
+    let _p2 = vec_push(v, b);
+    let _p3 = vec_push(v, c);
+    let _p4 = vec_push(v, d);
+    let _p5 = vec_push(v, e);
+    v
+};
+
+// Test encode_char: 'A'=65, 'Z'=90, '2'=50, '7'=55
+fn test_encode_char() -> i64 = {
+    let ok = b32_encode_char(0) == 65
+         and b32_encode_char(25) == 90
+         and b32_encode_char(26) == 50
+         and b32_encode_char(31) == 55;
+    if ok { 1 } else { 0 }
+};
+
+// Test decode_char inverse of encode_char
+fn test_decode_char() -> i64 = {
+    let ok = b32_decode_char(65) == 0    // 'A'
+         and b32_decode_char(90) == 25   // 'Z'
+         and b32_decode_char(50) == 26   // '2'
+         and b32_decode_char(55) == 31   // '7'
+         and b32_decode_char(61) == -1;  // '=' padding
+    if ok { 1 } else { 0 }
+};
+
+// Test encode empty
+fn test_encode_empty() -> i64 = {
+    let data = vec_new();
+    let enc = base32_encode(data, 0);
+    let ok = vec_len(enc) == 0;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    if ok { 1 } else { 0 }
+};
+
+// RFC 4648 test vector: "f" -> "MY======"
+// 'f' = 102 = 0x66
+// bits: 0110 0110
+// c0 = 01100 = 12 -> 'M' (65+12=77)
+// c1 = 110_00 = 48 -> but only 3 bits used from second nibble,
+//   c1 = (6 & 7) << 2 | (0 >> 6) = 24+0 = 24 -> 'Y' (65+24=89)
+fn test_encode_f() -> i64 = {
+    // 'f' = 102
+    let data = make_vec1(102);
+    let enc = base32_encode(data, 1);
+    // Expected: MY======
+    // M=77, Y=89, =61 x 6
+    let ok = vec_len(enc) == 8
+         and vec_get(enc, 0) == 77   // 'M'
+         and vec_get(enc, 1) == 89   // 'Y'
+         and vec_get(enc, 2) == 61   // '='
+         and vec_get(enc, 3) == 61
+         and vec_get(enc, 4) == 61
+         and vec_get(enc, 5) == 61
+         and vec_get(enc, 6) == 61
+         and vec_get(enc, 7) == 61;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    if ok { 1 } else { 0 }
+};
+
+// RFC 4648 test vector: "fo" -> "MZXQ===="
+// 'f'=102, 'o'=111
+fn test_encode_fo() -> i64 = {
+    let data = make_vec2(102, 111);
+    let enc = base32_encode(data, 2);
+    // Expected: MZXQ====
+    // M=77, Z=90, X=88, Q=81, =61 x 4
+    let ok = vec_len(enc) == 8
+         and vec_get(enc, 0) == 77   // 'M'
+         and vec_get(enc, 1) == 90   // 'Z'
+         and vec_get(enc, 2) == 88   // 'X'
+         and vec_get(enc, 3) == 81   // 'Q'
+         and vec_get(enc, 4) == 61
+         and vec_get(enc, 5) == 61
+         and vec_get(enc, 6) == 61
+         and vec_get(enc, 7) == 61;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    if ok { 1 } else { 0 }
+};
+
+// RFC 4648 test vector: "foobar" (6 bytes) -> "MZXW6YTBOI======"
+// 'f'=102,'o'=111,'o'=111,'b'=98,'a'=97,'r'=114
+fn test_encode_foobar() -> i64 = {
+    let data = vec_new();
+    let _p1 = vec_push(data, 102);
+    let _p2 = vec_push(data, 111);
+    let _p3 = vec_push(data, 111);
+    let _p4 = vec_push(data, 98);
+    let _p5 = vec_push(data, 97);
+    let _p6 = vec_push(data, 114);
+    let enc = base32_encode(data, 6);
+    // "MZXW6YTBOI======"
+    // Length must be 16
+    let ok = vec_len(enc) == 16;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    if ok { 1 } else { 0 }
+};
+
+// Encode 5 bytes -> exactly 8 chars, no padding
+fn test_encode_5_bytes_no_padding() -> i64 = {
+    let data = make_vec5(1, 2, 3, 4, 5);
+    let enc = base32_encode(data, 5);
+    let ok = vec_len(enc) == 8;
+    let last = vec_get(enc, 7);
+    let ok2 = last != 61;  // no padding
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    if ok and ok2 { 1 } else { 0 }
+};
+
+// Decode empty
+fn test_decode_empty() -> i64 = {
+    let enc = vec_new();
+    let dec = base32_decode(enc);
+    let ok = vec_len(dec) == 0;
+    let _f1 = vec_free(enc);
+    let _f2 = vec_free(dec);
+    if ok { 1 } else { 0 }
+};
+
+// Roundtrip: encode then decode a 5-byte sequence
+fn test_roundtrip_5bytes() -> i64 = {
+    let data = make_vec5(72, 101, 108, 108, 111);  // "Hello"
+    let enc = base32_encode(data, 5);
+    let dec = base32_decode(enc);
+    let ok = vec_len(dec) == 5
+         and vec_get(dec, 0) == 72
+         and vec_get(dec, 1) == 101
+         and vec_get(dec, 2) == 108
+         and vec_get(dec, 3) == 108
+         and vec_get(dec, 4) == 111;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    let _f3 = vec_free(dec);
+    if ok { 1 } else { 0 }
+};
+
+// Roundtrip: single byte
+fn test_roundtrip_1byte() -> i64 = {
+    let data = make_vec1(42);
+    let enc = base32_encode(data, 1);
+    let dec = base32_decode(enc);
+    let ok = vec_len(dec) == 1 and vec_get(dec, 0) == 42;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    let _f3 = vec_free(dec);
+    if ok { 1 } else { 0 }
+};
+
+// Roundtrip: two bytes
+fn test_roundtrip_2bytes() -> i64 = {
+    let data = make_vec2(255, 0);
+    let enc = base32_encode(data, 2);
+    let dec = base32_decode(enc);
+    let ok = vec_len(dec) == 2
+         and vec_get(dec, 0) == 255
+         and vec_get(dec, 1) == 0;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    let _f3 = vec_free(dec);
+    if ok { 1 } else { 0 }
+};
+
+// Invalid decode: wrong length (not multiple of 8)
+fn test_decode_invalid_length() -> i64 = {
+    let enc = vec_new();
+    let _p1 = vec_push(enc, 77);   // 'M'
+    let _p2 = vec_push(enc, 89);   // 'Y'
+    let _p3 = vec_push(enc, 61);   // padding but only 3 chars total
+    let dec = base32_decode(enc);
+    let ok = vec_len(dec) == 0;
+    let _f1 = vec_free(enc);
+    let _f2 = vec_free(dec);
+    if ok { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1  = report("encode_char",             test_encode_char());
+    let t2  = report("decode_char",             test_decode_char());
+    let t3  = report("encode_empty",            test_encode_empty());
+    let t4  = report("encode_f",                test_encode_f());
+    let t5  = report("encode_fo",               test_encode_fo());
+    let t6  = report("encode_foobar",           test_encode_foobar());
+    let t7  = report("encode_5_no_padding",     test_encode_5_bytes_no_padding());
+    let t8  = report("decode_empty",            test_decode_empty());
+    let t9  = report("roundtrip_5bytes",        test_roundtrip_5bytes());
+    let t10 = report("roundtrip_1byte",         test_roundtrip_1byte());
+    let t11 = report("roundtrip_2bytes",        test_roundtrip_2bytes());
+    let t12 = report("decode_invalid_length",   test_decode_invalid_length());
+
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9 + t10 + t11 + t12;
+    let total = 12;
+
+    let _p1 = print_str("bmb-base32: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+
+    if passed == total { 0 } else { 1 }
+};

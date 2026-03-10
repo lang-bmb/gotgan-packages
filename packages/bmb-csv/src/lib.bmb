@@ -1,0 +1,195 @@
+// bmb-csv: Simple CSV-like integer row operations
+// v0.1.0
+//
+// Named wrappers around vec for tabular integer data.
+// Each "row" is a vec of i64 values (fields).
+//
+// csv_new_row()           -> i64  create a new empty row
+// csv_add_field(row, val) -> i64  append a field value
+// csv_get_field(row, idx) -> i64  read field at index
+// csv_field_count(row)    -> i64  number of fields
+// csv_sum_row(row)        -> i64  sum of all fields
+// csv_max_row(row)        -> i64  maximum field value
+// csv_min_row(row)        -> i64  minimum field value
+// csv_free_row(row)       -> i64  release memory
+
+fn csv_new_row() -> i64
+  post ret != 0
+= vec_new();
+
+// Append a field to the row
+fn csv_add_field(row: i64, val: i64) -> i64
+  pre row != 0
+= {
+    let _p = vec_push(row, val);
+    0
+};
+
+// Get field value at index
+fn csv_get_field(row: i64, idx: i64) -> i64
+  pre row != 0 and idx >= 0 and idx < vec_len(row)
+= vec_get(row, idx);
+
+// Number of fields in the row
+fn csv_field_count(row: i64) -> i64
+  pre row != 0
+  post ret >= 0
+= vec_len(row);
+
+// Sum of all field values
+fn csv_sum_row(row: i64) -> i64
+  pre row != 0
+= {
+    let n = vec_len(row);
+    let mut sum = 0;
+    let mut i = 0;
+    while i < n {
+        sum = sum + vec_get(row, i);
+        i = i + 1;
+        0
+    };
+    sum
+};
+
+// Maximum field value (returns 0 for empty row)
+fn csv_max_row(row: i64) -> i64
+  pre row != 0
+= {
+    let n = vec_len(row);
+    if n == 0 { 0 }
+    else {
+        let mut mx = vec_get(row, 0);
+        let mut i = 1;
+        while i < n {
+            let v = vec_get(row, i);
+            if v > mx { mx = v; 0 } else { 0 };
+            i = i + 1;
+            0
+        };
+        mx
+    }
+};
+
+// Minimum field value (returns 0 for empty row)
+fn csv_min_row(row: i64) -> i64
+  pre row != 0
+= {
+    let n = vec_len(row);
+    if n == 0 { 0 }
+    else {
+        let mut mn = vec_get(row, 0);
+        let mut i = 1;
+        while i < n {
+            let v = vec_get(row, i);
+            if v < mn { mn = v; 0 } else { 0 };
+            i = i + 1;
+            0
+        };
+        mn
+    }
+};
+
+// Free the row
+fn csv_free_row(row: i64) -> i64
+  pre row != 0
+= { let _v = vec_free(row); 0 };
+
+// ============================================================================
+// Tests
+// ============================================================================
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+fn test_add_get() -> i64 = {
+    let row = csv_new_row();
+    let _a1 = csv_add_field(row, 10);
+    let _a2 = csv_add_field(row, 20);
+    let _a3 = csv_add_field(row, 30);
+    let cnt = csv_field_count(row);
+    let v0 = csv_get_field(row, 0);
+    let v1 = csv_get_field(row, 1);
+    let v2 = csv_get_field(row, 2);
+    let _f = csv_free_row(row);
+    if cnt == 3 and v0 == 10 and v1 == 20 and v2 == 30 { 1 } else { 0 }
+};
+
+fn test_sum() -> i64 = {
+    let row = csv_new_row();
+    let _a1 = csv_add_field(row, 1);
+    let _a2 = csv_add_field(row, 2);
+    let _a3 = csv_add_field(row, 3);
+    let _a4 = csv_add_field(row, 4);
+    let s = csv_sum_row(row);
+    let _f = csv_free_row(row);
+    if s == 10 { 1 } else { 0 }
+};
+
+fn test_max_min() -> i64 = {
+    let row = csv_new_row();
+    let _a1 = csv_add_field(row, 5);
+    let _a2 = csv_add_field(row, 3);
+    let _a3 = csv_add_field(row, 9);
+    let _a4 = csv_add_field(row, 1);
+    let _a5 = csv_add_field(row, 7);
+    let mx = csv_max_row(row);
+    let mn = csv_min_row(row);
+    let _f = csv_free_row(row);
+    if mx == 9 and mn == 1 { 1 } else { 0 }
+};
+
+fn test_empty_row() -> i64 = {
+    let row = csv_new_row();
+    let cnt = csv_field_count(row);
+    let s = csv_sum_row(row);
+    let mx = csv_max_row(row);
+    let mn = csv_min_row(row);
+    let _f = csv_free_row(row);
+    if cnt == 0 and s == 0 and mx == 0 and mn == 0 { 1 } else { 0 }
+};
+
+fn test_single_field() -> i64 = {
+    let row = csv_new_row();
+    let _a = csv_add_field(row, 42);
+    let mx = csv_max_row(row);
+    let mn = csv_min_row(row);
+    let s = csv_sum_row(row);
+    let _f = csv_free_row(row);
+    if mx == 42 and mn == 42 and s == 42 { 1 } else { 0 }
+};
+
+fn test_negative_values() -> i64 = {
+    let row = csv_new_row();
+    let _a1 = csv_add_field(row, 0 - 5);
+    let _a2 = csv_add_field(row, 0 - 3);
+    let _a3 = csv_add_field(row, 0 - 8);
+    let _a4 = csv_add_field(row, 2);
+    let s = csv_sum_row(row);
+    let mx = csv_max_row(row);
+    let mn = csv_min_row(row);
+    let _f = csv_free_row(row);
+    if s == (0 - 14) and mx == 2 and mn == (0 - 8) { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("add_get", test_add_get());
+    let t2 = report("sum", test_sum());
+    let t3 = report("max_min", test_max_min());
+    let t4 = report("empty_row", test_empty_row());
+    let t5 = report("single_field", test_single_field());
+    let t6 = report("negative_values", test_negative_values());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6;
+    let total = 6;
+    let _p1 = print_str("bmb-csv: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};

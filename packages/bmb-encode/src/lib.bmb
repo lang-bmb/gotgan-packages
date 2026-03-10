@@ -1,0 +1,306 @@
+// bmb-encode: Integer encoding/decoding utilities
+// - Zigzag: maps signed integers to unsigned (for efficient varint encoding)
+// - Varint: variable-length integer encoding (little-endian base-128)
+// - Run-length encoding (RLE): compress repeated values
+
+// ============================================================
+// Zigzag encoding
+// Maps: 0->0, -1->1, 1->2, -2->3, 2->4, ...
+// Formula: (n << 1) ^ (n >> 63)  -- arithmetic shift right fills with sign bit
+// ============================================================
+
+fn zigzag_encode(n: i64) -> i64 = {
+    let shifted = n << 1;
+    // arithmetic right shift: replicate sign bit to all positions
+    let sign_mask = n >> 63;
+    shifted bxor sign_mask
+};
+
+fn zigzag_decode(n: i64) -> i64 = {
+    // (n >>> 1) ^ -(n & 1)
+    // In i64: -(n & 1) = 0 when n is even, -1 (all bits set) when n is odd
+    let low = n band 1;
+    let half = (n >> 1) band 4611686018427387903;  // logical shift: clear top bit
+    // low == 1 means sign was negative: all_ones = -1, else 0
+    // We compute: half ^ (0 - low)
+    // 0 - 0 = 0, 0 - 1 = -1 (all ones)
+    half bxor (0 - low)
+};
+
+// ============================================================
+// Varint encoding (little-endian base-128 / LEB128 for unsigned)
+// Each byte uses 7 bits of data; MSB=1 means more bytes follow.
+// Input n must be non-negative (zigzag-encode signed values first).
+// ============================================================
+
+// Write varint bytes into buf_vec; returns number of bytes written
+fn varint_encode(n: i64, buf_vec: i64) -> i64
+  pre buf_vec != 0 and n >= 0
+= {
+    let mut remaining = n;
+    let mut count = 0;
+    let mut done = false;
+    while not done {
+        let byte_val = remaining band 127;
+        remaining = (remaining >> 7) band 72057594037927935;  // logical shift
+        if remaining == 0 {
+            let _p = vec_push(buf_vec, byte_val);
+            done = true;
+            count = count + 1;
+            0
+        } else {
+            let _p = vec_push(buf_vec, byte_val bor 128);
+            count = count + 1;
+            0
+        }
+    };
+    count
+};
+
+// Read varint from buf_vec starting at index 0; returns decoded value
+fn varint_decode(buf_vec: i64) -> i64
+  pre buf_vec != 0
+= {
+    let len = vec_len(buf_vec);
+    let mut result = 0;
+    let mut shift = 0;
+    let mut i = 0;
+    let mut done = false;
+    while not done {
+        if i >= len {
+            done = true;
+            0
+        } else {
+            let byte_val = vec_get(buf_vec, i);
+            result = result bor ((byte_val band 127) << shift);
+            shift = shift + 7;
+            i = i + 1;
+            if (byte_val band 128) == 0 {
+                done = true;
+                0
+            } else { 0 }
+        }
+    };
+    result
+};
+
+// ============================================================
+// Run-length encoding (RLE)
+// Encodes a sequence as pairs [value, count, value, count, ...]
+// run_length_encode(data_vec, len) -> encoded_vec
+// run_length_decode(encoded_vec) -> decoded_vec
+// ============================================================
+
+fn run_length_encode(data_vec: i64, len: i64) -> i64
+  pre data_vec != 0 and len >= 0
+= {
+    let out = vec_new();
+    if len == 0 {
+        out
+    } else {
+        let mut cur_val = vec_get(data_vec, 0);
+        let mut cur_count = 1;
+        let mut i = 1;
+        while i < len {
+            let v = vec_get(data_vec, i);
+            if v == cur_val {
+                cur_count = cur_count + 1;
+                0
+            } else {
+                let _p1 = vec_push(out, cur_val);
+                let _p2 = vec_push(out, cur_count);
+                cur_val = v;
+                cur_count = 1;
+                0
+            };
+            i = i + 1;
+            0
+        };
+        let _p1 = vec_push(out, cur_val);
+        let _p2 = vec_push(out, cur_count);
+        out
+    }
+};
+
+fn run_length_decode(encoded_vec: i64) -> i64
+  pre encoded_vec != 0
+= {
+    let out = vec_new();
+    let len = vec_len(encoded_vec);
+    let mut i = 0;
+    while i + 1 < len {
+        let val = vec_get(encoded_vec, i);
+        let count = vec_get(encoded_vec, i + 1);
+        let mut j = 0;
+        while j < count {
+            let _p = vec_push(out, val);
+            j = j + 1;
+            0
+        };
+        i = i + 2;
+        0
+    };
+    out
+};
+
+// ============================================================
+// Tests
+// ============================================================
+
+fn b2i(b: bool) -> i64 = if b { 1 } else { 0 };
+
+fn report(name: String, result: i64) -> i64 = {
+    if result == 0 {
+        let _a = print_str("  FAIL: ");
+        let _b = print_str(name);
+        let _c = print_str("\n");
+        0
+    } else { result }
+};
+
+// Zigzag encode/decode round-trip
+fn test_zigzag_basic() -> i64 = {
+    // 0 -> 0, -1 -> 1, 1 -> 2, -2 -> 3, 2 -> 4
+    let e0 = zigzag_encode(0);
+    let e1 = zigzag_encode(-1);
+    let e2 = zigzag_encode(1);
+    let e3 = zigzag_encode(-2);
+    let e4 = zigzag_encode(2);
+    if e0 == 0 and e1 == 1 and e2 == 2 and e3 == 3 and e4 == 4 { 1 } else { 0 }
+};
+
+fn test_zigzag_roundtrip() -> i64 = {
+    let vals = vec_new();
+    let _p1 = vec_push(vals, 0);
+    let _p2 = vec_push(vals, -1);
+    let _p3 = vec_push(vals, 1);
+    let _p4 = vec_push(vals, -100);
+    let _p5 = vec_push(vals, 100);
+    let _p6 = vec_push(vals, -1000000);
+    let _p7 = vec_push(vals, 1000000);
+    let mut ok = true;
+    let mut i = 0;
+    while i < 7 {
+        let v = vec_get(vals, i);
+        let enc = zigzag_encode(v);
+        let dec = zigzag_decode(enc);
+        if dec != v { ok = false; 0 } else { 0 };
+        i = i + 1;
+        0
+    };
+    let _f = vec_free(vals);
+    if ok { 1 } else { 0 }
+};
+
+// Varint encode/decode round-trip
+fn test_varint_small() -> i64 = {
+    let buf = vec_new();
+    let _n = varint_encode(1, buf);
+    let dec = varint_decode(buf);
+    let _f = vec_free(buf);
+    if dec == 1 { 1 } else { 0 }
+};
+
+fn test_varint_medium() -> i64 = {
+    // 300 in varint: 300 = 0x12C
+    // byte 0: (300 & 127) | 128 = 172 (0xAC), byte 1: 300 >> 7 = 2
+    let buf = vec_new();
+    let n = varint_encode(300, buf);
+    let dec = varint_decode(buf);
+    let _f = vec_free(buf);
+    if dec == 300 and n == 2 { 1 } else { 0 }
+};
+
+fn test_varint_large() -> i64 = {
+    let buf = vec_new();
+    let _n = varint_encode(123456789, buf);
+    let dec = varint_decode(buf);
+    let _f = vec_free(buf);
+    if dec == 123456789 { 1 } else { 0 }
+};
+
+fn test_varint_zero() -> i64 = {
+    let buf = vec_new();
+    let n = varint_encode(0, buf);
+    let dec = varint_decode(buf);
+    let _f = vec_free(buf);
+    if dec == 0 and n == 1 { 1 } else { 0 }
+};
+
+// RLE encode/decode
+fn test_rle_basic() -> i64 = {
+    // [1,1,2,2,2,3] -> [1,2, 2,3, 3,1]
+    let data = vec_new();
+    let _p1 = vec_push(data, 1);
+    let _p2 = vec_push(data, 1);
+    let _p3 = vec_push(data, 2);
+    let _p4 = vec_push(data, 2);
+    let _p5 = vec_push(data, 2);
+    let _p6 = vec_push(data, 3);
+    let enc = run_length_encode(data, 6);
+    let ok = vec_len(enc) == 6
+        and vec_get(enc, 0) == 1 and vec_get(enc, 1) == 2
+        and vec_get(enc, 2) == 2 and vec_get(enc, 3) == 3
+        and vec_get(enc, 4) == 3 and vec_get(enc, 5) == 1;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rle_roundtrip() -> i64 = {
+    // [5,5,5,5,7,7,9]
+    let data = vec_new();
+    let _p1 = vec_push(data, 5);
+    let _p2 = vec_push(data, 5);
+    let _p3 = vec_push(data, 5);
+    let _p4 = vec_push(data, 5);
+    let _p5 = vec_push(data, 7);
+    let _p6 = vec_push(data, 7);
+    let _p7 = vec_push(data, 9);
+    let enc = run_length_encode(data, 7);
+    let dec = run_length_decode(enc);
+    let ok = vec_len(dec) == 7
+        and vec_get(dec, 0) == 5 and vec_get(dec, 3) == 5
+        and vec_get(dec, 4) == 7 and vec_get(dec, 5) == 7
+        and vec_get(dec, 6) == 9;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    let _f3 = vec_free(dec);
+    if ok { 1 } else { 0 }
+};
+
+fn test_rle_no_repeats() -> i64 = {
+    // [1,2,3] -> [1,1, 2,1, 3,1]
+    let data = vec_new();
+    let _p1 = vec_push(data, 1);
+    let _p2 = vec_push(data, 2);
+    let _p3 = vec_push(data, 3);
+    let enc = run_length_encode(data, 3);
+    let ok = vec_len(enc) == 6
+        and vec_get(enc, 1) == 1
+        and vec_get(enc, 3) == 1
+        and vec_get(enc, 5) == 1;
+    let _f1 = vec_free(data);
+    let _f2 = vec_free(enc);
+    if ok { 1 } else { 0 }
+};
+
+fn main() -> i64 = {
+    let t1 = report("zigzag_basic", test_zigzag_basic());
+    let t2 = report("zigzag_roundtrip", test_zigzag_roundtrip());
+    let t3 = report("varint_small", test_varint_small());
+    let t4 = report("varint_medium", test_varint_medium());
+    let t5 = report("varint_large", test_varint_large());
+    let t6 = report("varint_zero", test_varint_zero());
+    let t7 = report("rle_basic", test_rle_basic());
+    let t8 = report("rle_roundtrip", test_rle_roundtrip());
+    let t9 = report("rle_no_repeats", test_rle_no_repeats());
+    let passed = t1 + t2 + t3 + t4 + t5 + t6 + t7 + t8 + t9;
+    let total = 9;
+    let _p1 = print_str("bmb-encode: ");
+    let _p2 = print(passed);
+    let _p3 = print_str("/");
+    let _p4 = print(total);
+    let _p5 = print_str(" tests passed\n");
+    if passed == total { 0 } else { 1 }
+};
